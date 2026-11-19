@@ -1,0 +1,185 @@
+# Architecture — Splunk Use Case Manager
+
+## 1. Shape
+
+A single Splunk app (`splunk_use_case_manager/`) — a modular monolith:
+
+```
+Splunk Web (Simple XML 1.1 + app JS)          Background (modular input)
+        │  /splunkd/__raw/services/ucm/*              ucm_sync_worker://default
+        ▼                                                    │
+  bin/ucm_rest.py  (persistent REST handler, caller's token) │
+                   (system token only for audit + secrets)  │
+        │                                                    │
+        ▼                                                    ▼
+  lib/splunk_ucm ──────────────── application services ──────────────────
+   api/        request routing, input validation, JSON responses
+   content/    ContentProvider ABC, FenreJsonProvider, OfflineBundleProvider,
+               validation (schema subset + safety), normalizer, SyncService
+   catalog/    CatalogQueryService (filters → KV query, paging), detail view
+   spl/        static SPL analysis (requirements extraction, safety hints)
+   storage/    SplunkdTransport, KVStore client, repositories
+   platform/   capability detection (Enterprise/Cloud adapters)
+   audit.py    AuditService
+   config.py   app configuration (ucm.conf via REST)
+   logging     structured JSON log → var/log/splunk/splunk_use_case_manager.log
+        │
+        ▼
+  KV Store collections (uc_*), storage/passwords (GitHub token)
+```
+
+Dependency direction: `api → services → (storage, platform, content providers)`.
+Services depend on interfaces (`SplunkdTransport`, `ContentProvider`,
+repository classes), never on `splunk.*` modules directly, so everything is
+unit-testable outside Splunk. Only `storage/transport.py` imports `splunk.rest`;
+the HTTP transport used by tools and live tests is `tools/splunkd_http.py` and is
+not packaged.
+
+## 2. Components and status
+
+| # | Service | Module | WP | Status |
+|---|---|---|---|---|
+| 1 | Content Provider | `content/provider.py`, `content/fenre/provider.py`, `content/bundle.py` | WP1 | Implemented |
+| 2 | Content Normalization | `content/fenre/normalizer.py`, `model/canonical.py` | WP1 | Implemented |
+| 3 | Content Synchronization | `content/sync.py`, `bin/ucm_sync_worker.py` | WP1 | Implemented |
+| 4 | Environment Discovery | `discovery/` | WP2 | Planned |
+| 5 | Data Source Mapping | `mapping/` | WP2 | Planned |
+| 6 | Readiness Assessment | `readiness/` | WP3 | Planned |
+| 7 | Use Case Selection | `selection/` | WP4 | Planned |
+| 8 | SPL Validation | `spl/` (static analysis implemented in WP1) | WP4 | Partial |
+| 9 | Deployment Manager | `deployment/` | WP5 | Planned |
+| 10 | Framework Mapping | `frameworks/` | WP6 | Planned (mappings captured in WP1) |
+| 11 | Dashboard Templates | `dashboards/` | WP6 | Planned |
+| 12 | Audit | `audit.py` | WP1 | Implemented |
+| 13 | Platform Capability Adapter | `platform/` | WP1 (basic) / WP2 | Partial |
+
+## 3. Content flow
+
+```
+Provider.get_manifest() ─▶ ProviderManifest(version, commit, schema_version, categories[tree_sha])
+SyncService.plan(categories) ─▶ compare tree_sha / blob_sha with uc_categories / uc_content
+Provider.iter_records(category, known_hashes) ─▶ ProviderRecord(raw, blob_sha, path, url)
+Validator.validate(raw) ─▶ errors / warnings        (rejects never reach storage)
+Normalizer.normalize(raw, provenance) ─▶ UseCase    (canonical)
+Stage per category ─▶ batch_save uc_content + uc_catalog, upsert uc_categories
+Mark disappeared records `withdrawn`; record job in uc_sync_state; audit
+```
+
+Imported SPL is data. It is never dispatched by the content subsystem.
+
+## 4. Canonical model (`ucm.usecase/1`)
+
+Python dataclasses in `model/canonical.py`; serialised as plain dicts.
+
+* **identity** — `content_id` (`fenre:UC-1.1.1`), `key` (`fenre_UC-1.1.1`),
+  `provider`, `provider_record_id`, `title`, `description`, `provider_version`,
+  `source_ref` (commit), `source_url`, `source_hash` (sha256 of canonical JSON),
+  `source_blob_sha`, `source_schema`, `imported_at`, `normalizer_version`.
+* **classification** — `domains[]` (canonical enum), `category_key`,
+  `category_name`, `subcategory`, `tags[]`, `criticality`, `difficulty`,
+  `business_value`, `products[]`, `monitoring_types[]`, `pillar`.
+* **requirements[]** — `Requirement(req_id, type, value, level, source,
+  confidence, notes)`; types: `data_source, index, sourcetype, field,
+  event_condition, freshness, addon, product, cim_model, datamodel_acceleration,
+  spl_validity, permission, macro, lookup, version, other`. Plus
+  `data_sources_text`, `required_fields[]`, `cim_models[]`, `addons[]`,
+  `premium_apps[]`, `splunk_versions[]`, `prerequisite_use_cases[]`.
+* **implementation** — `spl`, `cim_spl`, `spl_variants[]`, `macros[]`,
+  `lookups[]`, `instructions`, `detailed_instructions`, `visualization`,
+  `script_example`, `schedule` (null unless provided).
+* **frameworks** — `mappings[]` of `FrameworkMapping(framework, framework_version,
+  object_type, object_id)`; `not_applicable_reasons[]`. Version may be `null`
+  until WP6 resolves it — UI must show "unversioned", never "undefined".
+* **quality** — `review_status`, `spl_status`, `last_reviewed`, `reviewer`,
+  `references[]`, `known_false_positives`, `provider_extras{}` (unmapped
+  upstream fields kept verbatim).
+
+Customer-owned state (selection, bookmarks, readiness, deployment, local SPL
+overrides) lives in **separate collections** keyed by `content_id`; sync never
+writes to them.
+
+## 5. KV Store schema
+
+All collections are app-scoped (`nobody` owner) and replicated in SHC.
+
+| Collection | Key | Shared/user | Written by | Contents |
+|---|---|---|---|---|
+| `uc_catalog` | `fenre_UC-1.1.1` | shared | sync | Canonical summary + filter fields (`domains`, `category_key`, `criticality`, `criticality_rank`, `difficulty`, `sourcetypes`, `indexes`, `datamodels`, `addons`, `mitre_ids`, `provider_status`, `search_text`, `sort_key`). ~1–2 KB. |
+| `uc_content` | same | shared | sync | `raw_json` (verbatim record as JSON text; KV Store forbids `$`/`.` in keys, e.g. `$schema`), `provenance`, `normalizer_version`, `source_hash`. ~10–80 KB. |
+| `uc_categories` | `fenre_cat-01` | shared | sync | Category metadata, `tree_sha`, `selected`, counts, `last_synced_at`. |
+| `uc_sync_state` | `provider::fenre` / `job::<uuid>` | shared | REST, worker | Provider state (pin, last-good commit/version, schema version) and job records (status, counts, errors). Retain last 200 jobs. |
+| `uc_audit` | uuid | shared (append) | all services | `time, actor, action, object_type, object_id, outcome, details`. Retention: 365 days (purge in WP7). |
+| `uc_environment_sources` | — | shared | WP2 | Planned |
+| `uc_readiness` | — | shared | WP3 | Planned |
+| `uc_selections` | `<user>::<content_id>` | per-user rows | WP4 | Planned |
+| `uc_deployments` | — | shared | WP5 | Planned |
+| `uc_frameworks` | — | shared | WP6 | Planned |
+
+Accelerated fields (`collections.conf`): `uc_catalog` on `category_key`,
+`criticality_rank`, `provider_status`, `sort_key`; `uc_sync_state` on
+`doc_type, requested_at`; `uc_audit` on `time`.
+
+Concurrency: sync writes are idempotent upserts by stable key. `enqueue` refuses
+a job while another job for the same provider is queued or running; the worker
+runs jobs sequentially, and on a search head cluster only the captain runs
+them. A stale `running` job older than `job_timeout_seconds` is marked failed.
+KV Store has no conditional update, so two workers racing on one job are
+prevented by these guards, not by an atomic claim (SHC validation pending).
+
+Upgrades: every document carries `schema_version`; the normalizer version is
+stored per content document so a newer app can re-derive catalogue summaries
+from `raw_json` without network access (`POST /ucm/catalog/reindex`, WP1).
+
+## 6. REST API (`/services/ucm/...`)
+
+| Method & path | Capability (role) | Purpose |
+|---|---|---|
+| `GET ucm/catalog` | read collections | Filtered, paged catalogue (`q, domain, category, criticality, difficulty, sourcetype, mitre, status, sort, offset, count`). |
+| `GET ucm/usecase?id=` | read | Canonical detail (normalized on read) + provenance. |
+| `GET ucm/categories` | read | Category list with sync state. |
+| `GET ucm/sync` | read | Provider state + recent jobs. |
+| `POST ucm/sync` | `ucm_manage_content` | Queue a sync job (`categories`, optional `ref`). |
+| `POST ucm/import` | `ucm_manage_content` | Import an offline bundle (JSON body). |
+| `POST ucm/catalog/reindex` | `ucm_manage_content` | Re-derive summaries from stored raw records. |
+| `GET ucm/provider/manifest` | `ucm_manage_content` | Resolve the remote manifest (optional `ref`) without importing. |
+| `GET ucm/platform` | read | Capability report. |
+| `GET ucm/audit` | `ucm_manage_content` or `ucm_admin` | Recent audit events (`limit`, `prefix`). |
+
+Writes check an app capability (`authorize.conf`) from the request context in
+addition to collection ACLs (defence in depth). Request bodies must be sent as
+`Content-Type: application/json`; splunkd rejects other bodies before the
+handler runs. Errors are JSON `{"error": {code, message, details}}`.
+
+## 7. Platform adapter
+
+`platform/capabilities.py` probes, with the caller's token: server info
+(`server/info`: version, `instance_type` = `cloud` on Splunk Cloud), KV Store
+status, the caller's capabilities (`authentication/current-context`), and
+configured outbound access. Results are reported to the UI; unsupported
+operations return HTTP 409 with a machine-readable reason, never silent failure.
+
+## 8. Security
+
+Full model: `docs/SECURITY.md`.
+
+
+* Upstream content is untrusted: size limits, JSON-only parsing, schema +
+  safety validation, URL scheme allowlist, HTML-escaped rendering, no SPL
+  execution in the content subsystem.
+* Outbound HTTP only to configured https hosts (allowlist), TLS verified,
+  per-response size caps, timeouts, retries with backoff.
+* GitHub token (optional) read from `storage/passwords`; never logged or stored
+  in conf/KV.
+* Audit every import, sync request, sync outcome and configuration change.
+
+## 9. Known limitations
+
+* Total counts use a keys-only KV query and are therefore bounded by
+  `max_rows_per_query` (50,000 by default).
+* Free-text search is a case-insensitive substring match (all terms must
+  match) over a precomputed `search_text` field holding id, title,
+  sourcetypes, tags and MITRE ids; descriptions are not searched. No ranking.
+* Derived requirements are lexical hypotheses (D-013), not evidence.
+
+See also `docs/IMPLEMENTATION_PLAN.md` "Validation status" and
+`docs/PROJECT_DISCOVERY.md` §6.

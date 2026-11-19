@@ -1,0 +1,56 @@
+name: ci
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  unit:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        # The interpreters bundled with Splunk Enterprise 10.x / Splunk Cloud.
+        python: ["3.9", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - name: Unit tests (mocked; no Splunk, no network)
+        working-directory: tests
+        run: python -m unittest discover -s unit -t . -v
+      - name: App code compiles and imports only the standard library
+        run: |
+          python -m compileall -q splunk_use_case_manager
+          ! grep -rnE "subprocess|os\.system|pickle|_create_unverified_context" splunk_use_case_manager
+
+  package:
+    runs-on: ubuntu-latest
+    needs: unit
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Build package
+        run: ./tools/package.sh
+      - name: AppInspect (cloud tags)
+        run: |
+          pip install splunk-appinspect
+          splunk-appinspect inspect dist/*.tar.gz --mode precert --included-tags cloud \
+            --output-file appinspect.json --data-format json
+          python - <<'EOF'
+          import json, sys
+          s = json.load(open("appinspect.json"))["summary"]
+          print(s)
+          sys.exit(1 if s["failure"] or s["error"] else 0)
+          EOF
+      - uses: actions/upload-artifact@v4
+        with:
+          name: splunk_use_case_manager
+          path: |
+            dist/*.tar.gz
+            appinspect.json

@@ -1,0 +1,24 @@
+[]
+access = read : [ * ], write : [ admin, sc_admin ]
+export = none
+
+[collections/uc_catalog]
+access = read : [ * ], write : [ admin, sc_admin, ucm_content_manager, ucm_admin ]
+
+[collections/uc_content]
+access = read : [ * ], write : [ admin, sc_admin, ucm_content_manager, ucm_admin ]
+
+[collections/uc_categories]
+access = read : [ * ], write : [ admin, sc_admin, ucm_content_manager, ucm_admin ]
+
+[collections/uc_sync_state]
+access = read : [ * ], write : [ admin, sc_admin, ucm_content_manager, ucm_admin ]
+
+[collections/uc_audit]
+access = read : [ admin, sc_admin, ucm_admin, ucm_content_manager ], write : [ admin, sc_admin ]
+
+[transforms/ucm_audit_lookup]
+access = read : [ admin, sc_admin, ucm_admin, ucm_content_manager ], write : [ admin, sc_admin ]
+
+[ucm]
+access = read : [ * ], write : [ admin, sc_admin, ucm_admin ]

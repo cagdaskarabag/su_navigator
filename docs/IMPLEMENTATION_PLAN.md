@@ -1,0 +1,79 @@
+# Implementation Plan
+
+Work packages follow the master specification. Each WP ends with tests, updated
+docs and a commit. Status: ✅ done · 🟡 partial · ⬜ not started.
+
+## WP0 — Project foundation ✅
+* Workspace/environment inspection → `PROJECT_DISCOVERY.md`.
+* App skeleton (`app.conf`, `app.manifest`, nav, metadata, `README/*.spec`).
+* Structured logging, configuration (`ucm.conf`), test harness (`unittest`,
+  runnable by Splunk's python3.9/3.13), CI workflow, packaging script.
+
+## WP1 — Content provider and catalogue (first vertical slice) ✅
+1. Canonical model + requirement model.
+2. `ContentProvider` ABC; `FenreJsonProvider` (git trees + raw sidecars, pinned
+   commit, blob-SHA verification, retry/backoff, host allowlist, size caps).
+3. Schema-subset validator + safety checks (D-007).
+4. Fenre normalizer + SPL static analysis for derived requirements (D-013).
+5. KV Store repositories; `SyncService` (category-atomic, incremental,
+   last-known-good, withdrawn marking, history).
+6. Offline bundle provider + `POST ucm/import`; CLI bundle builder.
+7. REST API (catalog, detail, categories, sync, manifest, import, reindex,
+   platform, audit). Facet counts were deferred (not implemented).
+8. Sync worker modular input.
+9. UI: Overview, Content Catalogue (server-side filter/paging), Use Case
+   detail, Content Administration (sync/import status).
+10. Tests: 102 mocked unit tests (validator, schema subset, normalizer, SPL
+    analysis, HTTP client, Fenre provider against a fake GitHub, sync engine,
+    bundles, catalogue/detail/reindex, KV client, REST routing and
+    capabilities, worker), run on Python 3.9, 3.12 and 3.13; 7 opt-in live
+    tests against Splunk 10.2.9 (KV Store operator parity, import and read
+    paths, RBAC, errors, platform, remote manifest).
+11. Tooling: `tools/ucm_cli.py` (build-bundle, validate, manifest),
+    `tools/package.sh`, `tools/perf_catalog.py`, CI workflow, AppInspect.
+
+Remaining WP1 gaps (carried forward): facet counts for the filter bar; UI
+screens are verified by headless-browser rendering only, with no automated UI
+tests; SHC and Splunk Cloud behaviour are unvalidated.
+
+## WP2 — Data discovery ⬜
+Platform adapter (Enterprise/Cloud), bounded discovery jobs (`tstats` by
+index/sourcetype with time window and limits; `| rest` for indexes/apps/data
+models), `uc_environment_sources`, mapping registry with confidence, inventory
+dashboard with data age.
+
+## WP3 — Readiness engine ⬜
+Requirement evaluators (one per type), evidence model, `uc_readiness`, weighted
+scoring with critical-requirement veto, readiness dashboard.
+
+## WP4 — Selection and validation ⬜
+Bookmarks/selection (`uc_selections`), backlog, SPL validation (parser via
+`search/parser`, macro/lookup checks, bounded preview jobs).
+
+## WP5 — Deployment engine ⬜
+State machine, approval, disabled-first saved searches in an app namespace,
+verification, enable/disable/rollback, audit.
+
+## WP6 — Frameworks and dashboards ⬜
+Generic framework model, versioned ATT&CK Enterprise/ICS, matrix, dashboard
+templates, domain dashboards, operational coverage.
+
+## WP7 — Hardening and release ⬜
+RBAC review, SHC worker election, Cloud vetting, upgrade tests, retention
+purges (audit, job history). AppInspect and a 20k-record catalogue check were
+already run in WP1 and are repeated here.
+
+## Validation status (keep current)
+
+"Live" means Splunk Enterprise 10.2.9, single instance, in the development VM.
+
+| Area | Mocked tests | Live single instance | SHC / distributed | Splunk Cloud |
+|---|---|---|---|---|
+| Validator / normalizer / SPL analysis | ✅ | ✅ full upstream corpus (16,726 records, 0 invalid) via in-memory store | n/a | n/a |
+| KV Store client and repositories | ✅ in-memory store with KV key rules | ✅ operator parity test; 20k-document catalogue, every UI query under 100 ms | ⬜ | ⬜ |
+| Fenre provider (GitHub) | ✅ fake GitHub with real blob SHAs | ✅ categories 18 and 23 (140 records) synced from commit `3b8024a`; re-sync unchanged; re-normalize without download | ⬜ | ⬜ (egress per stack) |
+| Offline bundle import | ✅ | ✅ 24-record demo bundle through REST; idempotent re-import | ⬜ | ⬜ |
+| Sync worker (modular input) | ✅ worker logic | ✅ registered, runs under python3.13, executes queued jobs | ⬜ captain-only election | ⬜ |
+| REST handler and RBAC | ✅ router and capability checks | ✅ viewer denied writes (403), direct KV writes denied, JSON errors | ⬜ | ⬜ |
+| Dashboards | n/a | ✅ rendered in headless Chrome with live data, no app JS errors | ⬜ | ⬜ |
+| Packaging | n/a | ✅ AppInspect 4.4.0 precert (all checks and cloud tags): 0 failures | n/a | ⬜ vetting |

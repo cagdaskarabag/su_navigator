@@ -1,0 +1,42 @@
+{
+  "description": "Fenre category id -> canonical monitoring domains (docs/DECISIONS.md D-014). Unknown categories map to 'other'.",
+  "version": 1,
+  "categories": {
+    "1": ["infrastructure", "endpoint"],
+    "2": ["infrastructure"],
+    "3": ["infrastructure", "cloud"],
+    "4": ["cloud"],
+    "5": ["network"],
+    "6": ["infrastructure"],
+    "7": ["database"],
+    "8": ["application"],
+    "9": ["identity", "security"],
+    "10": ["security"],
+    "11": ["application"],
+    "12": ["application"],
+    "13": ["observability"],
+    "14": ["ot_ics"],
+    "15": ["infrastructure"],
+    "16": ["application"],
+    "17": ["security", "network"],
+    "18": ["network"],
+    "19": ["infrastructure"],
+    "20": ["business", "infrastructure"],
+    "21": ["other"],
+    "22": ["compliance"],
+    "23": ["business"],
+    "24": ["application", "business"],
+    "25": ["other"]
+  },
+  "security_domain": {
+    "endpoint": "endpoint",
+    "network": "network",
+    "identity": "identity",
+    "access": "identity",
+    "cloud": "cloud"
+  },
+  "pillar": {
+    "Security": "security",
+    "Observability": "observability"
+  }
+}

@@ -1,0 +1,90 @@
+<dashboard version="1.1" theme="light" stylesheet="ucm.css">
+  <label>Overview</label>
+  <description>Content imported into this Splunk deployment. Figures come from the local catalogue, not from the remote provider.</description>
+  <row>
+    <panel>
+      <single>
+        <title>Active use cases</title>
+        <search>
+          <query>| inputlookup ucm_catalog_lookup where provider_status="active" | stats count</query>
+        </search>
+        <option name="drilldown">none</option>
+      </single>
+    </panel>
+    <panel>
+      <single>
+        <title>Categories imported</title>
+        <search>
+          <query>| inputlookup ucm_categories_lookup | where imported_count&gt;0 | stats count</query>
+        </search>
+        <option name="drilldown">none</option>
+      </single>
+    </panel>
+    <panel>
+      <single>
+        <title>Content version (last good)</title>
+        <search>
+          <query>| inputlookup ucm_sync_state_lookup where doc_type="provider_state" | eval version=coalesce(last_good_version, "none imported") | table version</query>
+        </search>
+        <option name="drilldown">none</option>
+      </single>
+    </panel>
+    <panel>
+      <single>
+        <title>Last successful synchronization (UTC)</title>
+        <search>
+          <query>| inputlookup ucm_sync_state_lookup where doc_type="provider_state" | eval last=coalesce(last_success_at, "never") | table last</query>
+        </search>
+        <option name="drilldown">none</option>
+      </single>
+    </panel>
+  </row>
+  <row>
+    <panel>
+      <title>Use cases by monitoring domain</title>
+      <chart>
+        <search>
+          <query>| inputlookup ucm_catalog_lookup where provider_status="active" | stats count by domains | sort - count | rename domains as domain</query>
+        </search>
+        <option name="charting.chart">bar</option>
+        <option name="charting.legend.placement">none</option>
+        <option name="charting.drilldown">none</option>
+      </chart>
+    </panel>
+    <panel>
+      <title>Use cases by criticality</title>
+      <chart>
+        <search>
+          <query>| inputlookup ucm_catalog_lookup where provider_status="active" | stats count by criticality criticality_rank | sort - criticality_rank | fields criticality count</query>
+        </search>
+        <option name="charting.chart">column</option>
+        <option name="charting.legend.placement">none</option>
+        <option name="charting.drilldown">none</option>
+      </chart>
+    </panel>
+  </row>
+  <row>
+    <panel>
+      <title>Readiness, validation and deployment</title>
+      <html>
+        <div class="ucm-notice">
+          <strong>Not assessed.</strong> Readiness, validation and deployment figures are shown only once
+          environment discovery and readiness assessment have run against this deployment. No use case is
+          reported as ready, validated or enabled until there is evidence for it.
+        </div>
+      </html>
+    </panel>
+  </row>
+  <row>
+    <panel>
+      <title>Recent synchronization and import jobs</title>
+      <table>
+        <search>
+          <query>| inputlookup ucm_sync_state_lookup where doc_type="job" | sort - requested_at | head 10 | table requested_at source status requested_by provider_version source_ref finished_at</query>
+        </search>
+        <option name="drilldown">none</option>
+        <option name="count">10</option>
+      </table>
+    </panel>
+  </row>
+</dashboard>

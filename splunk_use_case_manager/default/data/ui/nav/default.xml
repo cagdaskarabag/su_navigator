@@ -1,0 +1,8 @@
+<nav search_view="search" color="#1F4E79">
+  <view name="ucm_overview" default="true" />
+  <view name="ucm_catalogue" />
+  <collection label="Administration">
+    <view name="ucm_content_admin" />
+  </collection>
+  <view name="search" />
+</nav>

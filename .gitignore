@@ -1,0 +1,7 @@
+__pycache__/
+*.pyc
+dist/
+appinspect.json
+splunk_use_case_manager/local/
+splunk_use_case_manager/metadata/local.meta
+.DS_Store

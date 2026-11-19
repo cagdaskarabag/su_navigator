@@ -1,0 +1,49 @@
+.ucm-root { font-size: 13px; line-height: 1.45; color: #2b3033; }
+.ucm-loading { padding: 24px; color: #5c6773; }
+.ucm-notice { padding: 12px 16px; background: #f2f7fb; border-left: 4px solid #1f4e79; }
+
+.ucm-toolbar { display: flex; flex-wrap: wrap; gap: 8px; align-items: flex-end; margin-bottom: 12px; }
+.ucm-field { display: flex; flex-direction: column; gap: 2px; }
+.ucm-field label { font-size: 11px; color: #5c6773; text-transform: uppercase; letter-spacing: .03em; }
+.ucm-field input, .ucm-field select { min-width: 140px; height: 30px; padding: 2px 6px; border: 1px solid #c3cbd4; border-radius: 3px; }
+.ucm-field input.ucm-search { min-width: 280px; }
+
+.ucm-summary-line { color: #5c6773; margin: 6px 0 10px; }
+table.ucm-table { width: 100%; border-collapse: collapse; }
+table.ucm-table th { text-align: left; font-weight: 600; background: #f4f6f8; border-bottom: 1px solid #d6dce2; padding: 6px 8px; white-space: nowrap; }
+table.ucm-table td { border-bottom: 1px solid #e8ecef; padding: 6px 8px; vertical-align: top; }
+table.ucm-table tr:hover td { background: #fafbfc; }
+.ucm-title a { font-weight: 600; color: #1f4e79; }
+.ucm-sub { color: #5c6773; font-size: 12px; }
+.ucm-mono { font-family: Menlo, Consolas, monospace; font-size: 12px; }
+
+.ucm-badge { display: inline-block; padding: 1px 7px; margin: 1px 3px 1px 0; border-radius: 10px; font-size: 11px; white-space: nowrap; background: #e8ecef; color: #2b3033; }
+.ucm-badge-critical { background: #b3261e; color: #fff; }
+.ucm-badge-high { background: #e3792b; color: #fff; }
+.ucm-badge-medium { background: #f2c94c; color: #2b3033; }
+.ucm-badge-low { background: #9fb7c8; color: #fff; }
+.ucm-badge-chip { background: #eef3f7; color: #1f4e79; }
+.ucm-badge-ok { background: #2e7d32; color: #fff; }
+.ucm-badge-warn { background: #f2c94c; color: #2b3033; }
+.ucm-badge-error { background: #b3261e; color: #fff; }
+.ucm-badge-info { background: #dbe8f4; color: #1f4e79; }
+.ucm-more { color: #5c6773; font-size: 11px; }
+
+.ucm-pager { display: flex; gap: 10px; align-items: center; justify-content: flex-end; margin-top: 10px; }
+.ucm-state { padding: 16px; border-radius: 4px; margin: 8px 0; }
+.ucm-state-empty { background: #f4f6f8; }
+.ucm-state-error { background: #fdecea; color: #7f1d1d; }
+.ucm-state-info { background: #f2f7fb; }
+
+.ucm-header h2 { margin: 0 0 4px; font-size: 20px; }
+.ucm-section { margin: 18px 0; }
+.ucm-section h3 { font-size: 15px; margin: 0 0 8px; border-bottom: 1px solid #e8ecef; padding-bottom: 4px; }
+.ucm-pre { white-space: pre-wrap; word-break: break-word; }
+pre.ucm-spl { background: #1e2327; color: #e8ecef; padding: 10px 12px; border-radius: 4px; overflow-x: auto; white-space: pre-wrap; }
+.ucm-kv { display: grid; grid-template-columns: max-content 1fr; gap: 4px 16px; }
+.ucm-kv dt { color: #5c6773; }
+.ucm-kv dd { margin: 0; word-break: break-all; }
+.ucm-cards { display: flex; flex-wrap: wrap; gap: 12px; }
+.ucm-card { flex: 1 1 260px; border: 1px solid #e1e6eb; border-radius: 4px; padding: 12px; background: #fff; }
+.ucm-actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin: 8px 0; }
+details.ucm-details > summary { cursor: pointer; color: #1f4e79; margin: 4px 0; }
