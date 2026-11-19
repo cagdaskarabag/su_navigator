@@ -40,6 +40,7 @@ class SyncServiceTest(unittest.TestCase):
         state = self.svc.state.provider_state("fenre")
         self.assertEqual(state["last_good_ref"], self.gh.commit)
         self.assertEqual(state["schema_version"], "1.11.0")
+        self.assertEqual(state["last_good_source"], "manual")
         audit = [a["action"] for a in self.store.query(C.AUDIT)]
         self.assertIn("content.sync.completed", audit)
 

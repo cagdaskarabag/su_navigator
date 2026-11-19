@@ -30,6 +30,7 @@ require([
                 el("dt", { text: "Remote sync" }), el("dd", {}, statusBadge(data.remote_sync_enabled ? "available" : "unavailable")),
                 el("dt", { text: "Last good version" }), el("dd", { text: s.last_good_version || "none" }),
                 el("dt", { text: "Last good commit" }), el("dd", { "class": "ucm-mono", text: s.last_good_ref || "none" }),
+                el("dt", { text: "Last good source" }), el("dd", { text: s.last_good_source || (s.last_good_ref ? "unknown" : "none") }),
                 el("dt", { text: "Schema version" }), el("dd", { text: s.schema_version || "unknown" }),
                 el("dt", { text: "Last success (UTC)" }), el("dd", { text: s.last_success_at || "never" }),
                 el("dt", { text: "Last attempt" }), el("dd", {}, s.last_attempt_at ? s.last_attempt_at + " " : "never ",
@@ -41,8 +42,8 @@ require([
         ucm.clear(jobsBox).appendChild(el("h3", { text: "Synchronization and import history" }));
         if (!jobs.length) { jobsBox.appendChild(ucm.stateBox("empty", "No jobs yet.")); return false; }
         var head = el("tr", {});
-        ["Requested (UTC)", "Source", "Status", "Requested by", "Version", "Commit", "Added", "Updated", "Unchanged",
-            "Withdrawn", "Invalid", "Errors"].forEach(function (h) { head.appendChild(el("th", { text: h })); });
+        ["Requested (UTC)", "Source", "Status", "Requested by", "Version", "Commit", "Added", "Updated", "Re-normalized",
+            "Unchanged", "Withdrawn", "Invalid", "Errors"].forEach(function (h) { head.appendChild(el("th", { text: h })); });
         var body = el("tbody", {});
         var active = false;
         jobs.forEach(function (j) {
@@ -59,6 +60,7 @@ require([
                 el("td", { text: j.requested_by }), el("td", { text: j.provider_version || "" }),
                 el("td", { "class": "ucm-mono", text: ucm.shortSha(j.source_ref) }),
                 el("td", { text: t.added === undefined ? "" : t.added }), el("td", { text: t.updated === undefined ? "" : t.updated }),
+                el("td", { text: t.renormalized === undefined ? "" : t.renormalized }),
                 el("td", { text: t.unchanged === undefined ? "" : t.unchanged }),
                 el("td", { text: t.withdrawn === undefined ? "" : t.withdrawn }),
                 el("td", { text: t.invalid === undefined ? "" : t.invalid }),

@@ -177,6 +177,7 @@ class SyncService:
         state["last_source"] = job["source"]
         if job["status"] == JOB_SUCCEEDED:
             state.update({"last_good_ref": manifest.source_ref, "last_good_version": manifest.provider_version,
+                          "last_good_source": job["source"],
                           "requested_ref": manifest.requested_ref, "schema_version": manifest.schema_version,
                           "last_success_at": self.clock()})
         elif not state.get("schema_version"):
