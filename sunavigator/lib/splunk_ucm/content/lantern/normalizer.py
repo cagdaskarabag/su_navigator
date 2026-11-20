@@ -177,7 +177,7 @@ class LanternNormalizer(Normalizer):
             visualization="\n".join(_s(d.get("title")) for d in _objs(raw.get("dashboards")) if _s(d.get("title"))),
             framework_mappings=mappings, framework_na_reasons=[],
             review_status="unknown", spl_status="extracted" if blocks else "none",
-            last_reviewed=_s(raw.get("modified")), reviewer="",
+            last_reviewed="", reviewer="",
             references=references, known_false_positives="",
             provider_extras={"lantern": {
                 "source_title": _s(raw.get("title")),

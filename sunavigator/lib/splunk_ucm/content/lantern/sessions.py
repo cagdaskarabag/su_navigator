@@ -365,15 +365,14 @@ class LanternSessionService:
 
     def process(self, session: Dict[str, Any], fetcher: LanternFetcher,
                 monotonic: Callable[[], float] = time.monotonic) -> Dict[str, Any]:
+        discarded = {"session_id": session["session_id"], "status": "discarded"}
         session["status"] = S_RUNNING
-        self._save(session)
+        if not self._save_progress(session):
+            return discarded
         deadline = monotonic() + self.settings.worker_time_budget_seconds
         before = fetcher.requests_made
         while session.get("pending"):
-            fresh = self.store.get(C.LANTERN, session["_key"])
-            if fresh is None:
-                return {"session_id": session["session_id"], "status": "discarded"}
-            if fresh.get("cancel_requested"):
+            if session.get("cancel_requested"):
                 self._finish_pending(session, cancelled=True)
                 break
             if monotonic() > deadline:
@@ -397,17 +396,32 @@ class LanternSessionService:
             session["progress"]["done"] = int(session["progress"].get("done") or 0) + 1
             session["requests_made"] = int(session.get("requests_made") or 0) + (fetcher.requests_made - before)
             before = fetcher.requests_made
-            self._save(session)
+            if not self._save_progress(session):
+                return discarded
         if session.get("pending"):
             session["status"] = S_QUEUED
         elif session.get("page"):
             session["status"] = S_READY
         else:
             session["status"] = S_FAILED
+        if self.store.get(C.LANTERN, session["_key"]) is None:
+            self._delete_session(session["session_id"])
+            return discarded
         session["cancel_requested"] = False
         self._save(session)
         return {"session_id": session["session_id"], "status": session["status"],
                 "requests": session.get("requests_made")}
+
+    def _save_progress(self, session: Dict[str, Any]) -> bool:
+        """Save worker progress unless the user discarded the session; carries over cancel requests."""
+        fresh = self.store.get(C.LANTERN, session["_key"])
+        if fresh is None:
+            self._delete_session(session["session_id"])
+            return False
+        if fresh.get("cancel_requested"):
+            session["cancel_requested"] = True
+        self._save(session)
+        return True
 
     def _finish_pending(self, session: Dict[str, Any], cancelled: bool) -> None:
         queued = {p["url"] for p in session.get("pending") or []}
@@ -457,7 +471,9 @@ class LanternSessionService:
         duplicate = next((other for other in session["items"]
                           if other is not item and other.get("record_id") == raw["id"]
                           and other.get("state") in (ITEM_FETCHED, ITEM_IMPORTED)), None)
-        item["url"], item["record_id"] = raw["source_url"], raw["id"]
+        item["record_id"], item["canonical_url"] = raw["id"], raw["source_url"]
+        if not any(other is not item and other["url"] == raw["source_url"] for other in session["items"]):
+            item["url"] = raw["source_url"]
         item["kind"] = P.KIND_ARTICLE
         if duplicate is not None:
             item["state"] = ITEM_DUPLICATE

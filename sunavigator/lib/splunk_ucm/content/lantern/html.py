@@ -19,6 +19,8 @@ _IMPLIED_CLOSE = {"li": {"li"}, "dt": {"dt", "dd"}, "dd": {"dt", "dd"}, "tr": {"
                   "td": {"td", "th"}, "th": {"td", "th"}, "option": {"option"}}
 MAX_NODES = 150000
 MAX_DEPTH = 300
+_TEXT_BREAK_TAGS = {"p", "div", "li", "tr", "td", "th", "dt", "dd", "h1", "h2", "h3", "h4", "h5", "h6",
+                    "section", "article", "blockquote", "pre", "ul", "ol", "table"}
 _WS = re.compile(r"\s+")
 
 Child = Union["Node", str]
@@ -59,7 +61,7 @@ class Node:
                 return node
         return None
 
-    def raw_text(self) -> str:
+    def raw_text(self, block_breaks: bool = False) -> str:
         parts: List[str] = []
         stack: List[Child] = [self]
         while stack:
@@ -69,11 +71,15 @@ class Node:
             else:
                 if item.tag == "br":
                     parts.append("\n")
-                stack.extend(reversed(item.children))
+                children = list(item.children)
+                if block_breaks and item.tag in _TEXT_BREAK_TAGS:
+                    parts.append(" ")
+                    children.append(" ")
+                stack.extend(reversed(children))
         return "".join(parts)
 
     def text(self) -> str:
-        return _WS.sub(" ", self.raw_text()).strip()
+        return _WS.sub(" ", self.raw_text(block_breaks=True)).strip()
 
     def ancestors(self) -> Iterator["Node"]:
         node = self.parent

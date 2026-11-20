@@ -62,7 +62,7 @@ def _canonical_path(raw_path: str, url: str) -> str:
     segments = path.split("/")
     if any(seg in ("..", ".") for seg in segments):
         raise LanternUrlError("malformed", "The URL path must not contain '.' or '..' segments.", url)
-    path = posixpath.normpath(path)
+    path = posixpath.normpath(re.sub(r"/{2,}", "/", path))
     if path != "/":
         path = path.rstrip("/")
     return path

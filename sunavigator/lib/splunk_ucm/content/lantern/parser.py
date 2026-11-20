@@ -366,6 +366,10 @@ def looks_like_spl(text: str) -> bool:
     return bool(_SPL_START.match(sample)) or len(_SPL_COMMANDS.findall(sample)) >= 1
 
 
+def _product_key(name: str) -> str:
+    return re.sub(r"^splunk\s+", "", clean(name).lower())
+
+
 def _section_role(heading: str) -> str:
     lowered = heading.lower().strip()
     if lowered in ("data", "data required"):
@@ -541,8 +545,13 @@ def render_text(blocks: List[Dict[str, Any]]) -> str:
         elif kind == "paragraph":
             lines.append(block["text"])
         elif kind == "list":
-            for idx, item in enumerate(block["items"], 1):
-                lines.append(("%d. " % idx if block.get("ordered") else "- ") + item)
+            number = 0
+            for item in block["items"]:
+                if item.startswith(" "):
+                    lines.append(item)
+                    continue
+                number += 1
+                lines.append(("%d. " % number if block.get("ordered") else "- ") + item)
         elif kind == "table":
             if block.get("header"):
                 lines.append(" | ".join(block["header"]))
@@ -617,7 +626,9 @@ def extract_article(page: ParsedPage, retrieved_at: str) -> Dict[str, Any]:
         candidates = [block["text"]] if block["type"] == "heading" else (
             block["items"] if block["type"] == "list" else [])
         for text in candidates:
-            if "dashboard" in text.lower() and len(text) <= 150 and text.lower() not in named:
+            lowered = text.lower().strip()
+            if "dashboard" in lowered and len(text) <= 150 and lowered not in named \
+                    and lowered not in ("dashboard", "dashboards"):
                 named.add(text.lower())
                 dashboards.append({"title": text.strip(), "url": ""})
     for entry in internal + related + resources:
@@ -630,9 +641,9 @@ def extract_article(page: ParsedPage, retrieved_at: str) -> Dict[str, Any]:
         addons.insert(0, {"name": name, "splunkbase_id": "", "url": "", "role": "primary", "source": "classification"})
     for name in classifications.get("Technical App", []):
         addons.append({"name": name, "splunkbase_id": "", "url": "", "role": "app", "source": "classification"})
-    products = list(classifications.get("Applies To", []))
-    for text in _texts(blocks, "software"):
-        if len(text) <= 120 and text.lower() not in {p.lower() for p in products}:
+    products: List[str] = []
+    for text in list(classifications.get("Applies To", [])) + _texts(blocks, "software"):
+        if len(text) <= 120 and _product_key(text) not in {_product_key(p) for p in products}:
             products.append(text)
 
     data_sources = [t for t in _texts(blocks, "data") if len(t) <= 300]
@@ -654,7 +665,7 @@ def extract_article(page: ParsedPage, retrieved_at: str) -> Dict[str, Any]:
         warnings.append("The Lantern page template was not recognised.")
     text_size = sum(len(b.get("text", "")) + sum(len(i) for i in b.get("items", [])) for b in blocks)
     if text_size < 300:
-        score -= 0.3
+        score -= 0.35 if text_size >= 120 else 0.5
         warnings.append("Very little text was extracted.")
     if not any(b["type"] == "heading" for b in blocks):
         score -= 0.15
