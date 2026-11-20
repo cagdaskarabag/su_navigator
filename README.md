@@ -5,9 +5,9 @@ deploy monitoring use cases. Content comes from pluggable providers; the first
 is the [Fenre monitoring use-case catalogue](https://github.com/fenre/splunk-monitoring-use-cases)
 (MIT).
 
-**Status: WP1, content ingestion and searchable catalogue.** Readiness
-assessment, selection and deployment are not implemented yet. See
-[docs/IMPLEMENTATION_PLAN.md](docs/IMPLEMENTATION_PLAN.md).
+**Status: WP2, content ingestion, searchable catalogue and environment
+discovery.** Readiness assessment, selection and deployment are not
+implemented yet. See [docs/IMPLEMENTATION_PLAN.md](docs/IMPLEMENTATION_PLAN.md).
 
 ## What works today
 
@@ -20,7 +20,9 @@ assessment, selection and deployment are not implemented yet. See
 - Provider-independent canonical model with labelled, confidence-rated
   requirements derived from provider fields and lexical SPL analysis.
 - Server-side filtered and paged catalogue, use-case detail, content
-  administration and an overview dashboard.
+  administration, overview and a data-inventory dashboard (counts and data
+  age from a bounded `tstats`, never from imported SPL).
+- Source-mapping registry: local mappings are never overwritten by discovery.
 - Capability-based access control and an audit trail.
 
 ## Layout

@@ -154,3 +154,32 @@ stanza; `server.conf` replicates `ucm.conf` on search head clusters. The
 packaged app contains no process spawning and no unverified-TLS code; the
 splunkd HTTP transport for tools and tests lives in `tools/`. AppInspect
 4.4.0 (precert, cloud tags): 0 failures, 0 errors.
+
+## D-020 Metadata via management REST, counts via constructed tstats
+**Context.** The WP2 spec named `| rest` for indexes/apps/data models and
+`tstats` for index/sourcetype counts. `| rest /services/data/indexes` is a
+search wrapping the management endpoint.
+**Decision.** Index, app and data-model metadata are read with GET
+`/services/data/indexes`, `/services/apps/local` and `/services/data/models`
+(verified on Splunk 10.2.9). Event counts use a generating `| tstats count
+min(_time) as first_time max(_time) as last_time where (index=a OR index=b)
+earliest=-7d latest=now by index, sourcetype` over **validated** index names
+from that listing, chunked at 40 indexes, with `max_pairs` and a search
+timeout. Imported SPL is never interpolated. `index=*` is not used.
+Internal indexes are excluded unless `include_internal` is true. Metric
+indexes are recorded from REST but not sent to `tstats`.
+
+## D-021 Discovery jobs run in the existing modular input
+Discovery jobs (`doc_type=discovery_job`) are queued like content sync jobs
+and executed by `ucm_sync_worker` after the worker is idle of content work.
+They use the modular-input session (typically admin) so results reflect that
+identity's index permissions; the requester is recorded on the job and in
+the audit log. On a search head cluster only the captain runs them (same
+leader gate as content sync; SHC still unvalidated).
+
+## D-022 Local mappings are never overwritten by discovery
+Auto mappings (`auto_exact` / `auto_heuristic`) match discovered values to
+catalogue fields and are labelled medium/low confidence. A mapping with
+`origin=local` is left untouched. Auto mappings cannot be deleted; create a
+local override instead. Presence of a source is inventory evidence, not a
+readiness score (WP3).

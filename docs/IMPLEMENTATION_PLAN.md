@@ -36,11 +36,20 @@ Remaining WP1 gaps (carried forward): facet counts for the filter bar; UI
 screens are verified by headless-browser rendering only, with no automated UI
 tests; SHC and Splunk Cloud behaviour are unvalidated.
 
-## WP2 — Data discovery ⬜
-Platform adapter (Enterprise/Cloud), bounded discovery jobs (`tstats` by
-index/sourcetype with time window and limits; `| rest` for indexes/apps/data
-models), `uc_environment_sources`, mapping registry with confidence, inventory
-dashboard with data age.
+## WP2 — Data discovery ✅
+1. Platform adapter probes index/app/datamodel listing and the `search`
+   capability (Enterprise vs Cloud reported; Cloud vetting still pending).
+2. Bounded discovery jobs: metadata from `/services/data/indexes`,
+   `/services/apps/local`, `/services/data/models`; event counts from a
+   constructed `tstats` (D-020) with time window, index-name allowlist, chunking
+   and `max_pairs`.
+3. `uc_environment_sources` (index, pair, app, datamodel) with data age;
+   disappeared sources marked `missing`.
+4. Mapping registry `uc_source_mappings` with local-over-auto (D-022).
+5. Inventory dashboard, coverage vs catalogue, use-case detail overlay
+   ("present" / "not seen", not a readiness score).
+6. Jobs run in `ucm_sync_worker` (D-021). `ucm_analyst` receives
+   `ucm_run_discovery`.
 
 ## WP3 — Readiness engine ⬜
 Requirement evaluators (one per type), evidence model, `uc_readiness`, weighted
@@ -76,4 +85,6 @@ already run in WP1 and are repeated here.
 | Sync worker (modular input) | ✅ worker logic | ✅ registered, runs under python3.13, executes queued jobs | ⬜ captain-only election | ⬜ |
 | REST handler and RBAC | ✅ router and capability checks | ✅ viewer denied writes (403), direct KV writes denied, JSON errors | ⬜ | ⬜ |
 | Dashboards | n/a | ✅ rendered in headless Chrome with live data, no app JS errors | ⬜ | ⬜ |
+| Discovery tstats + inventory REST | ✅ fake inventory/search; SPL construction rejects injection | ✅ include_internal job: 31 pairs, 12 indexes, 0 missing; viewer 403 | ⬜ | ⬜ |
+| Mapping registry | ✅ local never overwritten | ✅ local create + delete through REST | ⬜ | ⬜ |
 | Packaging | n/a | ✅ AppInspect 4.4.0 precert (all checks and cloud tags): 0 failures | n/a | ⬜ vetting |

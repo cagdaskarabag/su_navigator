@@ -40,11 +40,20 @@ require([
     function requirementsTable(reqs) {
         if (!reqs.length) { return text("", "No requirements could be derived from this record."); }
         var head = el("tr", {});
-        ["Type", "Requirement", "Level", "Source", "Confidence", "Notes", "Status"].forEach(function (h) {
+        ["Type", "Requirement", "Level", "Source", "Confidence", "Notes", "In this deployment"].forEach(function (h) {
             head.appendChild(el("th", { text: h }));
         });
         var body = el("tbody", {});
         reqs.forEach(function (r) {
+            var env = r.environment || {};
+            var envBadge;
+            if (!env.applicable) {
+                envBadge = ucm.badge("n/a", "neutral");
+            } else if (env.present) {
+                envBadge = ucm.badge("present", "ok");
+            } else {
+                envBadge = ucm.badge("not seen", "warn");
+            }
             body.appendChild(el("tr", {},
                 el("td", { text: r.type }),
                 el("td", { "class": "ucm-mono", text: r.value }),
@@ -52,7 +61,7 @@ require([
                 el("td", { text: r.source.replace("_", " ") }),
                 el("td", { text: r.confidence }),
                 el("td", { "class": "ucm-sub", text: r.notes || "" }),
-                el("td", {}, ucm.badge("not assessed", "neutral"))));
+                el("td", {}, envBadge)));
         });
         return el("table", { "class": "ucm-table" }, el("thead", {}, head), body);
     }
@@ -130,10 +139,15 @@ require([
                 uc.provider_status === "withdrawn" ? ucm.badge("withdrawn upstream", "warn") : null),
             el("div", { "class": "ucm-sub", text: [uc.category_name, uc.subcategory].filter(Boolean).join(" › ") })));
 
+        var env = uc.environment_summary || {};
+        var envNote = env.requirements_applicable
+            ? (env.requirements_present + " of " + env.requirements_applicable +
+                " inventory-related requirements match a discovered source. This is not a readiness score.")
+            : "No inventory-related requirements, or discovery has not been run.";
         root.appendChild(ucm.stateBox("info", "Readiness: not assessed",
             "This use case has not been evaluated against this deployment. Requirements below are taken from the " +
             "provider record or derived from its SPL; derived requirements are hypotheses, not evidence. " +
-            "Deployment state: not selected, not deployed."));
+            "Deployment state: not selected, not deployed. " + envNote));
 
         root.appendChild(section("Description", text(uc.description)));
         root.appendChild(section("Business value", text(uc.business_value)));

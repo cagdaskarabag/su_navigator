@@ -121,6 +121,20 @@ class PlatformProbe:
         caps.append(Capability("offline_import", AVAILABLE, "always supported (no network required)"))
         caps.append(Capability("manage_content", AVAILABLE if "ucm_manage_content" in user_caps else UNAVAILABLE,
                                "caller capability ucm_manage_content"))
+        caps.append(Capability("run_discovery", AVAILABLE if "ucm_run_discovery" in user_caps else UNAVAILABLE,
+                               "caller capability ucm_run_discovery"))
+        for name, path in (("index_listing", "/services/data/indexes"),
+                           ("app_listing", "/services/apps/local"),
+                           ("datamodel_listing", "/services/data/models")):
+            try:
+                self.t.json("GET", path, {"count": "1"})
+                caps.append(Capability(name, AVAILABLE, path))
+            except StorageError as exc:
+                status = UNAVAILABLE if exc.status in (403, 404, 402) else UNKNOWN
+                caps.append(Capability(name, status, path, {"status": exc.status}))
+        caps.append(Capability(
+            "adhoc_search", AVAILABLE if "search" in user_caps else UNAVAILABLE,
+            "caller capability search (tstats is attempted only when a discovery job runs)"))
         shc = self.is_shc_member()
         return PlatformReport(platform=platform, version=str(info.get("version", "")), server_roles=roles,
                               shc_member=bool(shc), capabilities=caps, user=user, user_capabilities=user_caps)

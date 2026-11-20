@@ -48,7 +48,8 @@ class RouterTest(unittest.TestCase):
         self.assertEqual(call(ctx, "GET", "catalog")[0], 200)
         for method, path, body in (("POST", "sync", {"categories": ["9"]}), ("POST", "import", self.bundle),
                                    ("POST", "catalog/reindex", b"{}"), ("GET", "provider/manifest", b""),
-                                   ("GET", "audit", b"")):
+                                   ("GET", "audit", b""), ("POST", "discovery", {"include_internal": True}),
+                                   ("POST", "mappings", {"kind": "index", "value": "main"})):
             status, payload = call(ctx, method, path, body=body)
             self.assertEqual(status, 403, path)
             self.assertEqual(payload["error"]["code"], "permission_denied")

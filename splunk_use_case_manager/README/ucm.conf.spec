@@ -34,3 +34,17 @@ max_bundle_mb = <integer>
 
 [catalog]
 max_page_size = <integer>
+
+[discovery]
+earliest = <relative-time>
+* Relative earliest bound for the discovery tstats (e.g. -7d, -24h). Default -7d.
+latest = <relative-time>
+* Relative latest bound. Default now.
+include_internal = <boolean>
+* Include Splunk internal indexes (_internal, _audit, ...). Default false.
+max_pairs = <integer>
+* Maximum index/sourcetype pairs stored per job.
+search_timeout_seconds = <integer>
+job_timeout_seconds = <integer>
+schedule_interval_hours = <integer>
+* 0 disables scheduled discovery.

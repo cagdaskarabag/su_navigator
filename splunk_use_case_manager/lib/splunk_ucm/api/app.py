@@ -19,7 +19,14 @@ from ..content.importer import BundleImportService
 from ..content.registry import remote_provider
 from ..content.reindex import ReindexService
 from ..content.sync import SyncService, SyncSettings, new_job
+from ..discovery.inventory import SplunkInventory
+from ..discovery.mapping import MappingService
+from ..discovery.overlay import attach_environment
+from ..discovery.query import InventoryFilter, InventoryQueryService, coverage
+from ..discovery.service import DiscoveryService, new_job as new_discovery_job
+from ..discovery.worker import settings_from_config
 from ..errors import PermissionDenied, UcmError, UnsupportedOperation, ValidationError
+from ..platform.search import SearchClient
 from ..log import get_logger
 from ..platform.capabilities import PlatformProbe
 from ..secrets import get_secret
@@ -31,6 +38,7 @@ log = get_logger(__name__)
 
 CAP_MANAGE_CONTENT = "ucm_manage_content"
 CAP_ADMIN = "ucm_admin"
+CAP_RUN_DISCOVERY = "ucm_run_discovery"
 
 
 @dataclasses.dataclass
@@ -122,6 +130,11 @@ class Context:
             job_timeout_seconds=cfg.get_int("sync", "job_timeout_seconds", 3600, 60, 86400))
         return SyncService(self.store, self.audit, settings)
 
+    def discovery_service(self) -> DiscoveryService:
+        return DiscoveryService(
+            self.store, self.audit, SplunkInventory(self.user_transport),
+            SearchClient(self.user_transport), settings_from_config(self.config))
+
 
 Handler = Callable[[Context, Request], Response]
 
@@ -167,7 +180,8 @@ def get_catalog(ctx: Context, req: Request) -> Response:
 
 def get_usecase(ctx: Context, req: Request) -> Response:
     service = UseCaseDetailService(ContentRepository(ctx.store), CategoryRepository(ctx.store))
-    return Response(200, service.get(req.arg("id")))
+    detail = service.get(req.arg("id"))
+    return Response(200, attach_environment(detail, ctx.store))
 
 
 def get_categories(ctx: Context, req: Request) -> Response:
@@ -253,6 +267,80 @@ def get_audit(ctx: Context, req: Request) -> Response:
     return Response(200, {"events": ctx.audit.recent(limit, req.arg("prefix"))})
 
 
+def get_inventory(ctx: Context, req: Request) -> Response:
+    f = InventoryFilter(
+        kind=req.arg("kind", "pair"), status=req.arg("status", "active"), q=req.arg("q").strip(),
+        index=req.arg("index").strip(), sourcetype=req.arg("sourcetype").strip(),
+        stale_hours=_int(req.arg("stale_hours"), 0, "stale_hours"),
+        sort=req.arg("sort", "count"), offset=_int(req.arg("offset"), 0, "offset"),
+        count=_int(req.arg("count"), 25, "count"), with_total=req.arg("total", "1") != "0")
+    max_page = ctx.config.get_int("catalog", "max_page_size", 100, 10, 500)
+    return Response(200, InventoryQueryService(ctx.store, max_page).search(f))
+
+
+def get_inventory_coverage(ctx: Context, req: Request) -> Response:
+    return Response(200, coverage(ctx.store))
+
+
+def get_discovery(ctx: Context, req: Request) -> Response:
+    svc = ctx.discovery_service()
+    return Response(200, {
+        "state": svc.state.state(),
+        "jobs": svc.state.jobs(limit=_int(req.arg("limit"), 20, "limit")),
+        "settings": {
+            "earliest": ctx.config.get("discovery", "earliest", "-7d"),
+            "latest": ctx.config.get("discovery", "latest", "now"),
+            "include_internal": ctx.config.get_bool("discovery", "include_internal", False),
+            "max_pairs": ctx.config.get_int("discovery", "max_pairs", 5000, 100, 20000),
+        },
+    })
+
+
+def post_discovery(ctx: Context, req: Request) -> Response:
+    ctx.require(CAP_RUN_DISCOVERY)
+    body = req.json()
+    include = body.get("include_internal")
+    if include is not None:
+        include = _bool(include)
+    earliest = str(body.get("earliest") or "")
+    latest = str(body.get("latest") or "")
+    job = new_discovery_job(ctx.user, include_internal=include, earliest=earliest, latest=latest)
+    ctx.discovery_service().enqueue(job)
+    return Response(202, {"job": job})
+
+
+def get_mappings(ctx: Context, req: Request) -> Response:
+    kind = req.arg("kind")
+    origin = req.arg("origin")
+    offset = _int(req.arg("offset"), 0, "offset")
+    count = max(1, min(200, _int(req.arg("count"), 50, "count")))
+    rows = MappingService(ctx.store).repo.list(kind or None, origin or None, offset, count + 1)
+    return Response(200, {"items": rows[:count], "offset": offset, "count": min(count, len(rows[:count])),
+                          "has_more": len(rows) > count})
+
+
+def post_mappings(ctx: Context, req: Request) -> Response:
+    ctx.require(CAP_RUN_DISCOVERY)
+    body = req.json()
+    doc = MappingService(ctx.store).upsert_local(
+        str(body.get("kind") or ""), str(body.get("value") or ""),
+        str(body.get("canonical_value") or body.get("value") or ""), ctx.user,
+        str(body.get("notes") or ""), str(body.get("confidence") or "high"))
+    ctx.audit.record(ctx.user, "discovery.mapping.upsert", "mapping", doc["_key"],
+                     details={"kind": doc["kind"], "value": doc["value"]})
+    return Response(200, {"mapping": doc})
+
+
+def post_mappings_delete(ctx: Context, req: Request) -> Response:
+    ctx.require(CAP_RUN_DISCOVERY)
+    body = req.json()
+    MappingService(ctx.store).delete_local(str(body.get("kind") or ""), str(body.get("value") or ""),
+                                           ctx.user)
+    ctx.audit.record(ctx.user, "discovery.mapping.delete", "mapping",
+                     "%s:%s" % (body.get("kind"), body.get("value")))
+    return Response(200, {"deleted": True})
+
+
 def build_router() -> Router:
     router = Router()
     router.add("GET", "catalog", get_catalog)
@@ -265,4 +353,11 @@ def build_router() -> Router:
     router.add("POST", "catalog/reindex", post_reindex)
     router.add("GET", "platform", get_platform)
     router.add("GET", "audit", get_audit)
+    router.add("GET", "inventory", get_inventory)
+    router.add("GET", "inventory/coverage", get_inventory_coverage)
+    router.add("GET", "discovery", get_discovery)
+    router.add("POST", "discovery", post_discovery)
+    router.add("GET", "mappings", get_mappings)
+    router.add("POST", "mappings", post_mappings)
+    router.add("POST", "mappings/delete", post_mappings_delete)
     return router

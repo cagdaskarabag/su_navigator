@@ -1,14 +1,15 @@
 # Security model
 
-Status: WP1 (content ingestion and catalogue). Later work packages extend
-this document when they add discovery, selection and deployment.
+Status: WP2 (content ingestion, catalogue, environment discovery). Later work
+packages extend this document when they add selection and deployment.
 
 ## Trust boundaries
 
 | Boundary | Treatment |
 | --- | --- |
 | Upstream content (GitHub, offline bundles) | Untrusted. Size-capped, git-blob-SHA verified, schema- and safety-validated, normalized by allowlisted field mapping. Stored as opaque JSON text (`raw_json`). |
-| Imported SPL | Displayed only, labelled "untrusted". Never executed by the catalogue. SPL analysis is lexical (no search is dispatched). Side-effect commands (`delete`, `outputlookup`, `collect`, ...) are flagged. |
+| Imported SPL | Displayed only, labelled "untrusted". Never executed by the catalogue or by discovery. SPL analysis is lexical (no search is dispatched). Side-effect commands (`delete`, `outputlookup`, `collect`, ...) are flagged. |
+| Discovery searches | Only a constructed `tstats` template over index names from `/services/data/indexes`, validated against `^[A-Za-z0-9_][A-Za-z0-9_-]{0,79}$`. Relative time window and result cap are required. |
 | Reference links | Rendered as links only when absolute `http(s)`; other values are dropped or shown as plain repository paths. |
 | Browser → app API | Splunk Web proxy (`/splunkd/__raw/services/ucm/*`), Splunk session + CSRF form key. All inputs are validated against allowlists; KV queries are built from structured filters, free text is regex-escaped. |
 | App → GitHub | HTTPS only, host allowlist (`api.github.com`, `raw.githubusercontent.com` by default, configurable), TLS verification on, optional proxy / CA bundle, response size caps, bounded retries, rate-limit aware. |
@@ -17,16 +18,16 @@ this document when they add discovery, selection and deployment.
 
 | Capability | Grants |
 | --- | --- |
-| *(none)* | Read catalogue, categories, use-case detail, sync status, platform report. |
+| *(none)* | Read catalogue, categories, use-case detail, sync status, platform report, inventory, mappings, discovery status. |
 | `ucm_manage_content` | Remote sync, provider manifest check, offline import, catalogue reindex, audit read. |
-| `ucm_run_discovery` | Reserved for WP2 (environment discovery). Grants nothing yet. |
+| `ucm_run_discovery` | Queue discovery jobs; create and delete **local** source mappings. |
 | `ucm_deploy` | Reserved for WP5 (guided deployment). Grants nothing yet. |
 | `ucm_admin` | Audit read; app administration in later WPs. |
 
 | Role | Imports | Capabilities |
 | --- | --- | --- |
 | `ucm_viewer` | `user` | none |
-| `ucm_analyst` | `ucm_viewer` | none (WP2+ adds analyst actions) |
+| `ucm_analyst` | `ucm_viewer` | `ucm_run_discovery` |
 | `ucm_content_manager` | `ucm_analyst` | `ucm_manage_content` |
 | `ucm_deployment_operator` | `ucm_analyst` | `ucm_deploy` |
 | `ucm_admin` | content manager + deployment operator | all |

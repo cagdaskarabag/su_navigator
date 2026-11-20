@@ -42,8 +42,8 @@ not packaged.
 | 1 | Content Provider | `content/provider.py`, `content/fenre/provider.py`, `content/bundle.py` | WP1 | Implemented |
 | 2 | Content Normalization | `content/fenre/normalizer.py`, `model/canonical.py` | WP1 | Implemented |
 | 3 | Content Synchronization | `content/sync.py`, `bin/ucm_sync_worker.py` | WP1 | Implemented |
-| 4 | Environment Discovery | `discovery/` | WP2 | Planned |
-| 5 | Data Source Mapping | `mapping/` | WP2 | Planned |
+| 4 | Environment Discovery | `discovery/` | WP2 | Implemented |
+| 5 | Data Source Mapping | `discovery/mapping.py` | WP2 | Implemented |
 | 6 | Readiness Assessment | `readiness/` | WP3 | Planned |
 | 7 | Use Case Selection | `selection/` | WP4 | Planned |
 | 8 | SPL Validation | `spl/` (static analysis implemented in WP1) | WP4 | Partial |
@@ -51,7 +51,7 @@ not packaged.
 | 10 | Framework Mapping | `frameworks/` | WP6 | Planned (mappings captured in WP1) |
 | 11 | Dashboard Templates | `dashboards/` | WP6 | Planned |
 | 12 | Audit | `audit.py` | WP1 | Implemented |
-| 13 | Platform Capability Adapter | `platform/` | WP1 (basic) / WP2 | Partial |
+| 13 | Platform Capability Adapter | `platform/` | WP1 / WP2 | Implemented (SHC captain and Cloud vetting still pending) |
 
 ## 3. Content flow
 
@@ -66,6 +66,8 @@ Mark disappeared records `withdrawn`; record job in uc_sync_state; audit
 ```
 
 Imported SPL is data. It is never dispatched by the content subsystem.
+Discovery searches are a constructed ``tstats`` template over index names
+returned by ``/services/data/indexes`` (D-020, D-021).
 
 ## 4. Canonical model (`ucm.usecase/1`)
 
@@ -109,7 +111,8 @@ All collections are app-scoped (`nobody` owner) and replicated in SHC.
 | `uc_categories` | `fenre_cat-01` | shared | sync | Category metadata, `tree_sha`, `selected`, counts, `last_synced_at`. |
 | `uc_sync_state` | `provider::fenre` / `job::<uuid>` | shared | REST, worker | Provider state (pin, last-good commit/version, schema version) and job records (status, counts, errors). Retain last 200 jobs. |
 | `uc_audit` | uuid | shared (append) | all services | `time, actor, action, object_type, object_id, outcome, details`. Retention: 365 days (purge in WP7). |
-| `uc_environment_sources` | — | shared | WP2 | Planned |
+| `uc_environment_sources` | `src_<kind>_<hash>` | shared | discovery | Index, index/sourcetype pair, app and data-model rows with window counts and data age. Missing sources are marked, never deleted. |
+| `uc_source_mappings` | `map_<kind>_<hash>` | shared | discovery / analyst | Local and auto mappings. Local rows are never overwritten by discovery. |
 | `uc_readiness` | — | shared | WP3 | Planned |
 | `uc_selections` | `<user>::<content_id>` | per-user rows | WP4 | Planned |
 | `uc_deployments` | — | shared | WP5 | Planned |
@@ -144,6 +147,13 @@ from `raw_json` without network access (`POST /ucm/catalog/reindex`, WP1).
 | `GET ucm/provider/manifest` | `ucm_manage_content` | Resolve the remote manifest (optional `ref`) without importing. |
 | `GET ucm/platform` | read | Capability report. |
 | `GET ucm/audit` | `ucm_manage_content` or `ucm_admin` | Recent audit events (`limit`, `prefix`). |
+| `GET ucm/inventory` | read | Filtered, paged environment sources (`kind, status, q, index, sourcetype, stale_hours, sort, offset, count`). |
+| `GET ucm/inventory/coverage` | read | Catalogue requirement values vs discovered sources. |
+| `GET ucm/discovery` | read | Discovery state and recent jobs. |
+| `POST ucm/discovery` | `ucm_run_discovery` | Queue a bounded discovery job (`include_internal`, `earliest`, `latest`). |
+| `GET ucm/mappings` | read | Source mappings. |
+| `POST ucm/mappings` | `ucm_run_discovery` | Create or update a **local** mapping. |
+| `POST ucm/mappings/delete` | `ucm_run_discovery` | Delete a local mapping (auto mappings cannot be deleted). |
 
 Writes check an app capability (`authorize.conf`) from the request context in
 addition to collection ACLs (defence in depth). Request bodies must be sent as

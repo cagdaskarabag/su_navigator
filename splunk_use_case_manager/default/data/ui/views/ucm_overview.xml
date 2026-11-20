@@ -65,6 +65,35 @@
   </row>
   <row>
     <panel>
+      <single>
+        <title>Discovered index/sourcetype pairs</title>
+        <search>
+          <query>| inputlookup ucm_sources_lookup where kind="pair" status="active" | stats count</query>
+        </search>
+        <option name="drilldown">none</option>
+      </single>
+    </panel>
+    <panel>
+      <single>
+        <title>Sources older than 7 days (in last discovery window)</title>
+        <search>
+          <query>| inputlookup ucm_sources_lookup where kind="pair" status="active" | where age_seconds&gt;604800 | stats count</query>
+        </search>
+        <option name="drilldown">none</option>
+      </single>
+    </panel>
+    <panel>
+      <single>
+        <title>Local source mappings</title>
+        <search>
+          <query>| inputlookup ucm_mappings_lookup where origin="local" | stats count</query>
+        </search>
+        <option name="drilldown">none</option>
+      </single>
+    </panel>
+  </row>
+  <row>
+    <panel>
       <title>Readiness, validation and deployment</title>
       <html>
         <div class="ucm-notice">

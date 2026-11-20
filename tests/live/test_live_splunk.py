@@ -128,7 +128,9 @@ class LiveApiTest(unittest.TestCase):
 
     def test_viewer_denied_changes(self):
         for method, path, body in (("POST", "sync", {"categories": ["9"]}), ("POST", "catalog/reindex", {}),
-                                   ("GET", "audit", None), ("GET", "provider/manifest", None)):
+                                   ("GET", "audit", None), ("GET", "provider/manifest", None),
+                                   ("POST", "discovery", {"include_internal": True}),
+                                   ("POST", "mappings", {"kind": "index", "value": "main"})):
             status, payload = api(self.viewer, method, path, body=body)
             self.assertEqual(status, 403, (path, payload))
         status, _ = self.viewer.request(
@@ -148,6 +150,47 @@ class LiveApiTest(unittest.TestCase):
         caps = {c["name"]: c["status"] for c in body["capabilities"]}
         self.assertEqual(caps.get("kvstore"), "available")
         self.assertIn("offline_import", caps)
+        self.assertEqual(caps.get("index_listing"), "available")
+        self.assertEqual(caps.get("adhoc_search"), "available")
+        self.assertEqual(caps.get("run_discovery"), "available")
+
+    def test_discovery_inventory_and_local_mapping(self):
+        self.wait_idle()
+        for _ in range(60):
+            _, body = api(self.admin, "GET", "discovery")
+            if not any(j["status"] in ("queued", "running") for j in body["jobs"]):
+                break
+            time.sleep(5)
+        else:
+            self.fail("existing discovery job did not finish")
+        status, body = api(self.admin, "POST", "discovery", body={"include_internal": True, "earliest": "-15m"})
+        self.assertEqual(status, 202, body)
+        job_id = body["job"]["job_id"]
+        for _ in range(60):
+            _, state = api(self.admin, "GET", "discovery")
+            job = next((j for j in state["jobs"] if j["job_id"] == job_id), None)
+            if job and job["status"] not in ("queued", "running"):
+                break
+            time.sleep(5)
+        else:
+            self.fail("discovery job did not finish")
+        self.assertEqual(job["status"], "succeeded", job)
+        self.assertGreater(job["totals"]["pairs"], 0)
+        status, inv = api(self.admin, "GET", "inventory", {"kind": "pair", "count": "50"})
+        self.assertEqual(status, 200)
+        self.assertGreater(inv["total"], 0)
+        self.assertTrue(any(i.get("index", "").startswith("_") for i in inv["items"]))
+        marker = "ucm_test_st_" + uuid.uuid4().hex[:8]
+        status, mapped = api(self.admin, "POST", "mappings",
+                             body={"kind": "sourcetype", "value": marker, "canonical_value": marker,
+                                   "notes": "live test"})
+        self.assertEqual(status, 200, mapped)
+        self.assertEqual(mapped["mapping"]["origin"], "local")
+        status, body = api(self.admin, "POST", "mappings/delete", body={"kind": "sourcetype", "value": marker})
+        self.assertEqual(status, 200, body)
+        status, usecase = api(self.admin, "GET", "usecase", {"id": "fenre:UC-9.1.1"})
+        if status == 200:
+            self.assertIn("environment_summary", usecase)
 
     @unittest.skipUnless(os.environ.get("UCM_LIVE_REMOTE") == "1", "set UCM_LIVE_REMOTE=1 for GitHub access")
     def test_remote_manifest_through_splunkd(self):

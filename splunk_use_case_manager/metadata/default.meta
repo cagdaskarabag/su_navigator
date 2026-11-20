@@ -12,13 +12,19 @@ access = read : [ * ], write : [ admin, sc_admin, ucm_content_manager, ucm_admin
 access = read : [ * ], write : [ admin, sc_admin, ucm_content_manager, ucm_admin ]
 
 [collections/uc_sync_state]
-access = read : [ * ], write : [ admin, sc_admin, ucm_content_manager, ucm_admin ]
+access = read : [ * ], write : [ admin, sc_admin, ucm_content_manager, ucm_admin, ucm_analyst ]
 
 [collections/uc_audit]
 access = read : [ admin, sc_admin, ucm_admin, ucm_content_manager ], write : [ admin, sc_admin ]
 
 [transforms/ucm_audit_lookup]
 access = read : [ admin, sc_admin, ucm_admin, ucm_content_manager ], write : [ admin, sc_admin ]
+
+[collections/uc_environment_sources]
+access = read : [ * ], write : [ admin, sc_admin, ucm_admin, ucm_analyst ]
+
+[collections/uc_source_mappings]
+access = read : [ * ], write : [ admin, sc_admin, ucm_admin, ucm_analyst ]
 
 [ucm]
 access = read : [ * ], write : [ admin, sc_admin, ucm_admin ]
