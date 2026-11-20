@@ -1,14 +1,14 @@
 # SUNavigator (Splunk Use Case Navigator)
 
-[![Version](https://img.shields.io/badge/version-0.7.1-blue.svg)](docs/OPERATOR_GUIDE.md#0-what-changed-in-071)
+[![Version](https://img.shields.io/badge/version-0.8.0-blue.svg)](docs/OPERATOR_GUIDE.md#0-what-changed-in-080)
 [![Splunk Compatibility](https://img.shields.io/badge/splunk-Enterprise%2010.x%20%7C%20Cloud-orange.svg)](docs/OPERATOR_GUIDE.md#2-requirements)
 [![Python Support](https://img.shields.io/badge/python-3.9%20%7C%203.13-brightgreen.svg)](docs/DECISIONS.md#d-005-stdlib-only-python-compatible-with-39313)
-[![Tests](https://img.shields.io/badge/unit%20tests-202%20passed-success.svg)](tests/)
+[![Tests](https://img.shields.io/badge/unit%20tests-287%20passed-success.svg)](tests/)
 [![AppInspect](https://img.shields.io/badge/Splunk%20AppInspect-Clean-brightgreen.svg)](docs/DECISIONS.md#d-019-packaging-constraints-from-appinspect)
 
 **SUNavigator** is a native Splunk application for Enterprise and Cloud that bridges the gap between external security detection catalogues and live production environments. It empowers SOC and detection engineering teams to **discover**, **assess**, **backlog**, **validate**, and **safely deploy** monitoring use cases with built-in four-eyes governance.
 
-Content is ingested from pluggable detection providers, with out-of-the-box support for the [Fenre monitoring use-case catalogue](https://github.com/fenre/splunk-monitoring-use-cases).
+Content is ingested from pluggable detection providers, with out-of-the-box support for the [Fenre monitoring use-case catalogue](https://github.com/fenre/splunk-monitoring-use-cases) (primary) and user-selected articles from [Splunk Lantern](https://lantern.splunk.com) (secondary, since 0.8.0).
 
 ---
 
@@ -42,6 +42,7 @@ Content is ingested from pluggable detection providers, with out-of-the-box supp
 ## Key Capabilities
 
 - 📥 **Curated Content Ingestion**: Synchronizes use cases from GitHub pinned to immutable commit hashes with per-record git blob SHA-1 verification. Supports atomic, category-level transactions, incremental sync, and automatic withdrawal of removed upstream rules.
+- 🏮 **Splunk Lantern Import (0.8.0)**: Paste a Lantern article or collection URL, review the articles grouped by category, preview each extraction (SPL kept verbatim, confidence and warnings shown), and import only what you confirm. Imported articles keep their Lantern provenance, duplicates are detected by canonical URL, and updates are shown as a diff and applied only on request, never touching backlog, readiness or deployment state.
 - 🔍 **Safe Bounded Data Discovery**: Discovers active index and sourcetype pairs, event volume, and data freshness using constructed, bounded `tstats` queries—never running untrusted imported SPL. Preserves local source mappings without overwriting operator customizations.
 - 📊 **Evidence-Based Readiness Engine**: Evaluates whether required sourcetypes, fields, CIM data models, macros, and add-ons exist in your environment. Produces deterministic readiness scores (0–100) and enforces a veto when critical requirements are missing.
 - 🎯 **Operator Backlog & Syntax Validation**: Provides per-user selection, bookmarking, and triage. Validates SPL against Splunk's native search parser, inspects command syntax, and provides safe, bounded previews with `fieldsummary` sampling.
@@ -67,11 +68,12 @@ Content is ingested from pluggable detection providers, with out-of-the-box supp
 ## How It Works
 
 ```
-┌───────────────────────────────┐
-│ Upstream Catalogue (Fenre/Git)│
-└───────────────┬───────────────┘
-                │ Pinned commit + git blob SHA verification
-                ▼
+┌───────────────────────────────┐   ┌───────────────────────────────┐
+│ Upstream Catalogue (Fenre/Git)│   │ Splunk Lantern (user-selected)│
+└───────────────┬───────────────┘   └───────────────┬───────────────┘
+                │ Pinned commit + blob SHA          │ Exact-host https, robots.txt,
+                │                                   │ preview + explicit confirm
+                ▼◄──────────────────────────────────┘
 ┌───────────────────────────────┐        ┌───────────────────────────────┐
 │   Background Sync Worker      │◄───────┤ Data Inventory Discovery      │
 │  (ucm_sync_worker modular in) │        │ (Bounded tstats, active pairs)│
@@ -127,7 +129,7 @@ Package the production `.tar.gz` bundle from this repository:
 git clone https://github.com/cagdaskarabag/sun_navigator.git
 cd sun_navigator
 ./tools/package.sh
-# Output: dist/sunavigator-0.7.1.tar.gz
+# Output: dist/sunavigator-0.8.0.tar.gz
 ```
 
 ### CLI Installation (Recommended)
@@ -135,7 +137,7 @@ cd sun_navigator
 Splunk Web's UI upload times out on packages over standard browser HTTP limits. Install via the Splunk CLI:
 
 ```bash
-$SPLUNK_HOME/bin/splunk install app dist/sunavigator-0.7.1.tar.gz \
+$SPLUNK_HOME/bin/splunk install app dist/sunavigator-0.8.0.tar.gz \
   -auth "$SPLUNK_USER:$SPLUNK_PASSWORD"
 
 $SPLUNK_HOME/bin/splunk restart
@@ -155,6 +157,7 @@ $SPLUNK_HOME/bin/splunk display app sunavigator \
 3. Under **Remote synchronization**, click **Check provider for categories**, select Category `9` (Identity & Access Management), and click **Synchronize selected**.
 4. Go to **Data Inventory** and click **Run discovery** to catalog active indexes and sourcetypes in your environment.
 5. Visit **Readiness** to see automatic telemetry match rates, or open **Content Catalogue** to start selecting detections.
+6. *(Optional)* Open **Import Use Cases → From Splunk Lantern**, paste a URL such as `https://lantern.splunk.com/Splunk_and_Cisco_Use_Cases`, pick articles and confirm the import ([Operator Guide §5.4](docs/OPERATOR_GUIDE.md#54-import-from-splunk-lantern-optional-secondary-provider)). Needs outbound HTTPS from the search head to `lantern.splunk.com`.
 
 *(Optional)* Configure a GitHub personal access token to prevent API rate limiting:
 
@@ -209,7 +212,7 @@ SUNavigator implements a safe, four-eyes deployment state machine:
 | 📖 **[Operator Guide](docs/OPERATOR_GUIDE.md)** | Comprehensive manual covering installation, configuration, role assignment, first-run sync, view-by-view usage, upgrading, and troubleshooting. |
 | 🏗️ **[Architecture Specification](docs/ARCHITECTURE.md)** | Technical reference for software components, KV Store collection schemas, and REST endpoints. |
 | 🔒 **[Security & RBAC Model](docs/SECURITY.md)** | Detailed trust boundaries, Splunk capability definitions, and credential handling. |
-| 📜 **[Architecture Decision Records (ADRs)](docs/DECISIONS.md)** | Recorded technical decisions and trade-offs (D-001 through D-036). |
+| 📜 **[Architecture Decision Records (ADRs)](docs/DECISIONS.md)** | Recorded technical decisions and trade-offs (D-001 through D-037). |
 | 📋 **[Implementation Plan](docs/IMPLEMENTATION_PLAN.md)** | Work package breakdown (WP0–WP7) and validation test matrices. |
 
 ---
@@ -225,6 +228,7 @@ sun_navigator/
 │   ├── lib/splunk_ucm/           # Core Python engine (stdlib only)
 │   │   ├── catalog/              # Catalogue search, summary, and query engine
 │   │   ├── content/              # Ingestion, normalization, and bundle verification
+│   │   │   └── lantern/          # Splunk Lantern URL policy, fetcher, parser, import sessions
 │   │   ├── deployment/           # Four-eyes workflow, savedsearch writer, drift verifier
 │   │   ├── discovery/            # Bounded tstats data discovery
 │   │   ├── frameworks/           # MITRE ATT&CK & regulatory matrix engines
@@ -232,7 +236,7 @@ sun_navigator/
 │   └── appserver/static/         # Simple XML JS modules and styles
 ├── tools/                        # Development, packaging, and bundle CLI tools
 ├── tests/                        # Automated test suites
-│   ├── unit/                     # 202 mocked unit tests (runs without Splunk)
+│   ├── unit/                     # 287 mocked unit tests (no Splunk, no network)
 │   └── live/                     # Integration tests against live Splunk instances
 └── docs/                         # Specifications, ADRs, operator guide, and screenshots
 ```
@@ -258,6 +262,12 @@ UCM_SPLUNK_VERIFY_TLS=0 \
 python3 -m unittest discover -s live -t .
 ```
 
+To run the read-only checks against the real Splunk Lantern site (a few requests, at least 5 s apart):
+
+```bash
+UCM_LIVE_LANTERN=1 python3 -m unittest live.test_live_lantern
+```
+
 For rapid local search-head deployment during development:
 
 ```bash
@@ -269,6 +279,7 @@ SPLUNK_HOME=/opt/splunk ./tools/dev_deploy.sh --restart
 ## Upgrades & Migrations
 
 - **Upgrading from 0.7.0 (`splunk_use_case_manager`)**: Version 0.7.1 introduces the official `sunavigator` app ID. Because Splunk treats this as a distinct application, follow the migration procedure in [Operator Guide §8](docs/OPERATOR_GUIDE.md#8-upgrade-and-uninstall) (retire previous deployments, remove old app, install SUNavigator, and resync).
+- **Upgrading from 0.7.1 to 0.8.0**: In place. Adds the `uc_lantern` collection and `[provider:lantern]` settings; the worker re-derives catalogue summaries once without network access. Customer state is not modified.
 - **Upgrades within 0.7.1+**: Upgrades preserve `local/` configurations and automatically execute pending KV Store migrations via the background maintenance worker.
 
 ---
@@ -283,5 +294,6 @@ SPLUNK_HOME=/opt/splunk ./tools/dev_deploy.sh --restart
 
 ## Third-Party Attributions
 
+- Splunk Lantern articles are published by Splunk at [lantern.splunk.com](https://lantern.splunk.com). SUNavigator stores only articles a user explicitly imports, links every one back to its source page and records when it was retrieved; the content remains Splunk's.
 - Detection content provided by the [Fenre Monitoring Use Cases project](https://github.com/fenre/splunk-monitoring-use-cases), licensed under the MIT License.
 - MITRE ATT&CK® Enterprise and ICS matrices © The MITRE Corporation. Reproduced and distributed with the permission of The MITRE Corporation under the [ATT&CK terms of use](https://attack.mitre.org/resources/legal-and-branding/terms-of-use/).

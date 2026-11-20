@@ -1,10 +1,10 @@
-# SUNavigator 0.7.1 — operator guide
+# SUNavigator 0.8.0 — operator guide
 
 **SUNavigator** (short for **Splunk use case navigator**) discovers, assesses,
 selects, validates and deploys monitoring use cases in Splunk.
 
 This is the install, usage and troubleshooting guide for **SUNavigator
-0.7.1**. It is written for a single Splunk Enterprise instance
+0.8.0**. It is written for a single Splunk Enterprise instance
 (search head + indexer on one host), including a local macOS install. Search
 head clusters and Splunk Cloud are **not** validated in this version.
 
@@ -20,7 +20,26 @@ Related documents (design, not how-to):
 
 ---
 
-## 0. What changed in 0.7.1
+## 0. What changed in 0.8.0
+
+0.8.0 adds **Splunk Lantern** as a second, user-directed content provider.
+Nothing that already worked changes, and Fenre stays the primary provider.
+
+| Area | 0.8.0 |
+| --- | --- |
+| New view | **Import Use Cases → From Splunk Lantern** (`ucm_lantern_import`). Paste a `https://lantern.splunk.com/...` URL, review the page, pick articles, preview the extraction, confirm. See §5.4. |
+| Catalogue | New **Source** filter (Fenre / Splunk Lantern), a `Lantern` badge and a `needs review` badge on low-confidence extractions. |
+| Use-case page | Lantern articles show the original link, retrieval and update dates, who imported them, extraction confidence, prerequisites, dashboards, related articles and the article text as extracted. |
+| Deployment | Lantern articles with several searches offer a search picker; articles without SPL say there is nothing to deploy. The approval workflow is unchanged. |
+| KV Store | New collection `uc_lantern` (import sessions, staged extractions, rate-limit state). Admin-write only. |
+| Configuration | New stanza `[provider:lantern]` (§7). |
+| Migration | Catalogue summaries are re-derived once by the worker (summary version 3). Content, selections, readiness, validation and deployments are not modified. |
+
+Lantern is never crawled. SUN reads only the pages you ask for, follows
+`robots.txt`, waits at least 5 seconds between requests and never imports
+anything without an explicit confirmation.
+
+### 0.1 Earlier: the 0.7.1 rename
 
 0.7.1 renames the application from **Splunk Use Case Manager** (0.7.0 and
 earlier) to **SUNavigator**. The feature set is unchanged.
@@ -53,14 +72,15 @@ data, so the readiness scores come from synthetic sample events: 60
 `splunk add oneshot` into the `main` index. The screenshots use two accounts:
 an admin account that submits and browses, and an `approver` account with the
 `ucm_deployment_operator` role that approves and deploys. Times in the app are
-UTC.
+UTC. The Lantern import view is new in 0.8.0 and has no screenshot yet.
 
 ## 1. What this version does
 
 The app is a workflow around a monitoring-use-case catalogue (the first
 provider is [Fenre](https://github.com/fenre/splunk-monitoring-use-cases)):
 
-1. **Import** detections (GitHub sync or an offline JSON bundle).
+1. **Import** detections (GitHub sync or an offline JSON bundle), and
+   optionally individual articles from **Splunk Lantern** (§5.4).
 2. **Discover** which indexes and sourcetypes exist on this Splunk instance.
 3. **Score readiness** of each use case against that inventory.
 4. **Select** use cases into a per-user backlog and **preview** SPL safely.
@@ -73,7 +93,7 @@ commands (`delete`, `outputlookup`, `collect`, script, and similar). Deployed
 searches have **no email, webhook or script alert actions**; the default
 alert mode only writes to Splunk's Triggered Alerts.
 
-**Not in 0.7.1:** PDF export of coverage, a bundled regulation-control
+**Not in 0.8.0:** PDF export of coverage, a bundled regulation-control
 catalogue, validated SHC behaviour, Splunk Cloud vetting submission.
 
 ---
@@ -85,8 +105,8 @@ catalogue, validated SHC behaviour, Splunk Cloud vetting submission.
 | Splunk | Enterprise 10.x (validated on 10.2.9 in development; tested by operators on 10.4.3 Darwin arm64). Python 3.9 or 3.13 in Splunk. |
 | KV Store | Must reach `status: ready`. The app stores catalogue, inventory, readiness, selections, deployments and audit in KV collections. |
 | Role | First-time setup needs `admin` (or `sc_admin` on Cloud). |
-| Disk | The 0.7.1 package is a few megabytes. Category 9 of Fenre is about 120 records; the full Fenre corpus is tens of thousands of records. |
-| Network | Optional. Remote sync needs HTTPS to `api.github.com` and `raw.githubusercontent.com`. Offline import needs none. |
+| Disk | The package is a few megabytes. Category 9 of Fenre is about 120 records; the full Fenre corpus is tens of thousands of records. |
+| Network | Optional. Remote sync needs HTTPS to `api.github.com` and `raw.githubusercontent.com`. Lantern import needs HTTPS to `lantern.splunk.com` from the search head. Offline import needs none. |
 | Browser | Splunk Web. The app is a set of Simple XML views plus JavaScript under `/en-US/app/sunavigator/`. |
 
 Placeholders used below:
@@ -102,7 +122,7 @@ Placeholders used below:
 
 ```bash
 ./tools/package.sh
-# writes dist/sunavigator-0.7.1.tar.gz
+# writes dist/sunavigator-0.8.0.tar.gz
 ```
 
 The tarball has a single top-level folder `sunavigator/`
@@ -120,11 +140,11 @@ then fails in the UI with `500 Internal Server Error` even though splunkd is
 still unpacking. Use the CLI:
 
 ```bash
-$SPLUNK_HOME/bin/splunk install app /path/to/sunavigator-0.7.1.tar.gz \
+$SPLUNK_HOME/bin/splunk install app /path/to/sunavigator-0.8.0.tar.gz \
   -auth "$SPLUNK_USER:$SPLUNK_PASSWORD"
 # first install: omit -update
 # upgrade of an existing copy:
-$SPLUNK_HOME/bin/splunk install app /path/to/sunavigator-0.7.1.tar.gz \
+$SPLUNK_HOME/bin/splunk install app /path/to/sunavigator-0.8.0.tar.gz \
   -update 1 -auth "$SPLUNK_USER:$SPLUNK_PASSWORD"
 
 $SPLUNK_HOME/bin/splunk restart
@@ -312,6 +332,147 @@ Default `[sync] schedule_interval_hours = 0` (off). To poll Fenre on a
 timer, set the interval in `$SPLUNK_HOME/etc/apps/sunavigator/local/ucm.conf`
 and restart, or reload the `ucm` stanza. Pin `ref` to a tag or SHA for
 reproducible content; `main` moves.
+
+### 5.4 Import from Splunk Lantern (optional, secondary provider)
+
+[Splunk Lantern](https://lantern.splunk.com) publishes use-case articles and
+collections of articles. SUN imports **only the articles you pick**, keeps
+their Lantern provenance, and never changes Fenre content.
+
+Who can use it: `ucm_content_manager`, `ucm_admin`, `admin`, `sc_admin`
+(capability `ucm_manage_content`). Other roles see a "not permitted" message.
+Non-admins see only their own import sessions.
+
+Open **Import Use Cases → From Splunk Lantern**. The page walks through five
+steps.
+
+1. **Paste URL.** Paste an exact Lantern address, for example
+   `https://lantern.splunk.com/Splunk_and_Cisco_Use_Cases`, and click
+   **Inspect page**. Only `https://lantern.splunk.com/...` is accepted:
+   `http://`, other hosts and look-alikes (`lantern.splunk.com.example.net`),
+   IP addresses, user names or passwords in the URL, non-default ports,
+   Lantern service pages (`Special:`, `/@api`, `/deki/`) and file links are
+   refused before anything is requested. `?title=` links and trailing
+   slashes are normalized.
+2. **Review page.** The worker (within about a minute) reads `robots.txt`
+   and the page, then shows what it found:
+   - **Article** — one item, already fetched and previewed.
+   - **Collection** — a table of the linked articles grouped by category and
+     subcategory, as the page lays them out. Navigation, "explore more"
+     buttons, survey and tip boxes, external links, files and links
+     outside lists are ignored. An article listed under several categories
+     appears once, with "Also listed under".
+   - **Unsupported** — for example the Lantern home page; the reason is shown.
+3. **Select and preview.** Tick articles (or **Select all** / **Deselect
+   all**, optionally filtered by category) and click **Fetch and preview
+   selected**. Up to 25 articles per step (`max_articles_per_fetch`).
+   Collection pages that link to further collections (for example
+   *Security Use Cases*) list them as sub-collections: tick them and click
+   **List articles in selected sub-collections**. Only one level deeper is
+   allowed (`max_expand_depth`). Each fetched article shows a status:
+   `new`, `already in SUN, unchanged`, `update available` (with **What
+   changed**), `duplicate` or `error`. **Preview** shows the extracted
+   fields, the requirements SUN will assess, the SPL searches and the
+   article text block by block, plus the extraction **confidence** and any
+   warnings. Selecting an article does not import it.
+4. **Confirm import.** **Review import** shows the counts (new, unchanged,
+   updates, errors, not fetched, flagged for review). Tick **I reviewed the
+   selection and want to write it to the SUN catalogue** and click
+   **Confirm import**. Unchanged articles are skipped. Articles with
+   different content are only replaced when you ticked **apply update** on
+   that row.
+5. **Done.** The results table lists every article as imported, updated,
+   skipped (with the reason), conflict or failed. Imported articles are in
+   the **Content Catalogue** (filter **Source → Splunk Lantern**), search,
+   readiness, backlog, validation, deployment and coverage like any other
+   use case.
+
+**What is extracted.** Title, description (the introduction), breadcrumb
+section and subcategory, Lantern tags and classification (products,
+add-ons), data-source and prerequisite lists, business value ("Possible
+outcomes"), implementation steps, every SPL code block verbatim, dashboards
+that the article names, related Lantern articles, external resources,
+MITRE ATT&CK ids mentioned in the text, and the published/updated dates.
+Headings, lists, tables and code are kept as structure. Fields the article
+does not state stay empty: SUN does not invent criticality, difficulty,
+schedules or review status (all `unknown`). Requirements derived from SPL
+are marked low or medium confidence, as for Fenre.
+
+**Confidence.** Each extraction gets `high`, `medium` or `low` from simple
+checks (standard Lantern template found, enough text, headings present,
+not truncated). Anything below `high` is flagged **needs review** in the
+catalogue and on the use-case page.
+
+**Identity and updates.** A Lantern use case's id is `lantern:LN-` plus a
+hash of the canonical URL, so the same article always maps to the same use
+case, however it was reached. A content hash over the extracted content
+detects changes. To check an imported article for changes, use **Check for
+updates** on the use-case page or in **Imported Lantern content**; it opens
+the import page with the URL filled in. An update replaces only the Lantern
+content. Your backlog selection, notes and priority, readiness results,
+validation records, source mappings and deployments are not touched. If
+someone else imported a newer version after your preview, the import
+reports a **conflict** instead of overwriting it; inspect the page again.
+
+**Sessions.** An import session (the pasted page, the listed and fetched
+articles and their staged extractions) is kept for 24 hours
+(`session_ttl_hours`) and then deleted by the worker. **Discard** deletes it
+at once. **Cancel** stops a running fetch after the current page.
+
+**Network behaviour.** Requests come from the search head's background
+worker only, never from your browser or while a page renders. They use TLS
+certificate verification, resolve `lantern.splunk.com` and refuse private,
+loopback and link-local addresses, follow at most 3 redirects (each must
+stay on `https://lantern.splunk.com`), accept only HTML up to 3 MB, time
+out after 15 seconds, honour `robots.txt` (including its crawl delay) and
+space requests at least 5 seconds apart across all users. A session makes
+at most 150 requests. Set `proxy_url` / `ca_bundle` in `[provider:lantern]`
+when the search head needs a proxy. Set `remote_fetch_enabled = false` to
+turn off retrieval.
+
+#### 5.4.1 Acceptance walk-through
+
+These three checks match the release acceptance tests. Each takes a few
+minutes because of Lantern's 5-second crawl delay and the one-minute worker
+interval.
+
+**Test 1 — a single article.**
+
+1. Paste
+   `https://lantern.splunk.com/Splunk_and_Cisco_Use_Cases/Sharing_information_in_a_global_operation`
+   (or any Lantern article) → **Inspect page**.
+2. The page card says **Article**; the single row is `new`. Click
+   **Preview** and check the title, SPL and confidence.
+3. Tick the row → **Review import** → tick the confirmation → **Confirm
+   import**. Result: `imported 1`.
+4. **Content Catalogue → Source: Splunk Lantern** lists it with the Lantern
+   badge. Open it: the banner links to the original article.
+
+**Test 2 — select from a collection.**
+
+1. Paste `https://lantern.splunk.com/Splunk_and_Cisco_Use_Cases` →
+   **Inspect page**.
+2. The page card says **Collection** and lists categories such as
+   *Correlate network domains* and *Security, identity, and compliance*.
+3. Use the category filter, tick two or three articles from different
+   categories → **Fetch and preview selected**. Only those pages are
+   requested.
+4. **Review import** → confirm. Only the selected, fetched articles are
+   imported; unselected rows stay `not fetched`.
+
+**Test 3 — duplicate, then update without losing work.**
+
+1. Import an article (Test 1). On its use-case page, add it to your backlog
+   with a note, run readiness, and optionally draft a deployment.
+2. Paste the same URL again → **Inspect page**. The row shows **already in
+   SUN, unchanged**; confirming skips it (`unchanged`).
+3. When Lantern changes the article later (or after an extraction upgrade),
+   the row shows **update available** with **What changed**. Importing
+   without **apply update** skips it (`update_not_confirmed`). Tick **apply
+   update** and confirm: the result says `updated`.
+4. Your backlog note, priority, readiness results and deployment are still
+   there. Readiness is re-assessed automatically within a worker interval
+   because the content changed.
 
 ---
 
@@ -526,7 +687,7 @@ Most non-admin roles cannot. The UI then reports run status **not
 available**, not “no runs”. Tick **Include run status** only if your role
 can search `_internal`.
 
-Regulation controls have no bundled catalogue in 0.7.1; only controls that
+Regulation controls have no bundled catalogue in 0.8.0; only controls that
 appear on imported use cases are listed.
 
 ### 6.8 Dashboards
@@ -583,6 +744,13 @@ Common stanzas:
 | `[deployment] allow_self_approval` | `false` | Submitter may click Approve. |
 | `[deployment] block_enable_states` | `blocked` | Readiness states that need an enable override. |
 | `[retention] audit_days` | `365` | `0` keeps audit forever. Also indexed in `_internal` via the app log. |
+| `[provider:lantern] enabled` | `true` | `false` hides the Lantern import (existing Lantern use cases stay). |
+| `[provider:lantern] remote_fetch_enabled` | `true` | `false` on stacks that must not contact lantern.splunk.com. |
+| `[provider:lantern] min_request_interval_seconds` | `5` | Larger to be gentler; values below 5 are raised to 5. |
+| `[provider:lantern] max_articles_per_fetch` / `max_pages_per_session` | `25` / `150` | Per-step and per-session request limits. |
+| `[provider:lantern] max_expand_depth` | `1` | Sub-collection levels a user may list (0–2). |
+| `[provider:lantern] session_ttl_hours` | `24` | How long import sessions and staged extractions are kept. |
+| `[provider:lantern] proxy_url` / `ca_bundle` | empty | HTTP CONNECT proxy or custom CA for Lantern. |
 
 The worker interval is 60 seconds (`default/inputs.conf`). Do not disable
 `ucm_sync_worker://default` unless you intend to stop all background jobs
@@ -620,7 +788,7 @@ app. Do the steps in this order:
    $SPLUNK_HOME/bin/splunk restart
    ```
 
-4. **Install SUNavigator 0.7.1** as in §3.2. The first install omits
+4. **Install SUNavigator (0.7.1 or later)** as in §3.2. The first install omits
    `-update`, because `sunavigator` is a new app ID.
 5. **Re-create the GitHub token** if you use one (§3.6). It must be stored in
    realm `sunavigator`. The 0.7.0 token in realm `splunk_use_case_manager` is
@@ -631,6 +799,15 @@ app. Do the steps in this order:
    the same content and the same data give the same scores.
 7. **Re-deploy** the use cases you still need through the approval workflow
    (§6.6). New saved searches are named `SUN - …`.
+
+### Upgrade from 0.7.1 to 0.8.0
+
+In place, with the command below. 0.8.0 adds the `uc_lantern` collection and
+the `[provider:lantern]` stanza. On its first run the worker re-derives the
+catalogue summaries (summary version 3, which adds the source URL and the
+needs-review flag). The migration reads stored content only, makes no
+network requests and changes no selections, readiness, validation or
+deployments. Running it again is a no-op.
 
 ### Upgrade within 0.7.1 and later
 
@@ -772,8 +949,8 @@ $SPLUNK_HOME/bin/splunk btool inputs list ucm_sync_worker --debug
 tail -50 "$SPLUNK_HOME/var/log/splunk/sunavigator.log"
 ```
 
-On a search head cluster only the captain runs jobs (not validated in
-0.7.1). On a single instance `standalone = 1` is expected.
+On a search head cluster only the captain runs jobs (not validated as of
+0.8.0). On a single instance `standalone = 1` is expected.
 
 ### 9.4 Provider could not be reached
 
@@ -891,6 +1068,30 @@ of truth. Do not re-deploy only because the Settings page is empty. If REST also
 returns nothing, check **Deployments → Verify now** for drift or a missing
 search, and see §9.9.
 
+### 9.16 Splunk Lantern import
+
+| Message on the import page | Meaning | What to do |
+| --- | --- | --- |
+| Invalid URL | The address failed validation (reason shown: not https, other host, IP address, credentials, port, service page or file). Nothing was requested. | Copy the article address from the browser bar on lantern.splunk.com. |
+| Unsupported page | The page is neither an article nor a collection (for example the home page). | Open a use-case category or article and paste that address. |
+| Page unavailable | Lantern returned 404/410. | Check the address; the article may have moved. |
+| Splunk Lantern unavailable / Request timed out | Network error, HTTP 5xx, `robots.txt` not retrievable, or no answer within 15 s. | Check search-head egress to `lantern.splunk.com:443`; set `proxy_url` if needed. |
+| Blocked network destination | DNS for lantern.splunk.com returned a private, loopback or link-local address. | Fix DNS on the search head; SUN refuses such destinations on purpose. |
+| TLS verification failed | The certificate chain was not trusted (TLS-intercepting proxy). | Set `ca_bundle` to the proxy's CA file. |
+| Redirect refused | The page redirected outside `https://lantern.splunk.com`, or more than 3 times. | Paste the final article address instead. |
+| Not allowed by Lantern's robots.txt | Lantern asks automated clients not to read that path. | Not overridable. |
+| Rate limited by Lantern / Request limit reached | Lantern answered 429, or the session used its 150 requests. | Wait, or import the current selection and start a new session. |
+| Not an HTML page / Page too large | Wrong content type or over 3 MB. | Paste an article address, not a file. |
+| Parse failure | The page could not be processed. The session stays usable for other articles. | Report the URL; the article may use a template SUN does not know. |
+| Collection with no articles | The page lists no article links SUN recognises. | Open a sub-page with article lists. |
+| Partial extraction / needs review | Low or medium confidence. | Read the warnings in **Preview** and on the use-case page before you deploy anything. |
+| Result `conflict` | Someone imported a different version after your preview. | Inspect the page again and review the new differences. |
+| Result `failed` (`stage_missing`) | The staged extraction expired or did not match the preview. | Fetch the article again. |
+| Session stays `queued` | The worker has not run yet, or is not the captain. | Wait one interval; check §9.3. |
+
+Lantern activity is audited as `content.lantern.*` events (inspect, fetch,
+expand, imported, discarded) in **Administration → Content audit trail**.
+
 ### 9.15 Logs to collect
 
 | File | What |
@@ -945,6 +1146,29 @@ curl -k -u "approver:$SPLUNK_PASSWORD" \
   https://127.0.0.1:8089/services/ucm/deployment/approve
 ```
 
+Lantern import over REST (needs `ucm_manage_content`; the worker does the
+retrieval, so poll the session until it is `ready`):
+
+```bash
+# 1. inspect a page (returns a session id; HTTP 202)
+curl -k -u "$SPLUNK_USER:$SPLUNK_PASSWORD" -H "Content-Type: application/json" \
+  -d '{"url":"https://lantern.splunk.com/Splunk_and_Cisco_Use_Cases"}' \
+  https://127.0.0.1:8089/services/ucm/lantern/inspect
+# 2. poll
+curl -k -u "$SPLUNK_USER:$SPLUNK_PASSWORD" \
+  "https://127.0.0.1:8089/services/ucm/lantern/session?id=<session id>"
+# 3. fetch selected articles, poll again, then import with explicit confirmation
+curl -k -u "$SPLUNK_USER:$SPLUNK_PASSWORD" -H "Content-Type: application/json" \
+  -d '{"id":"<session id>","urls":["https://lantern.splunk.com/..."]}' \
+  https://127.0.0.1:8089/services/ucm/lantern/fetch
+curl -k -u "$SPLUNK_USER:$SPLUNK_PASSWORD" -H "Content-Type: application/json" \
+  -d '{"id":"<session id>","confirm":true,"items":[{"url":"https://lantern.splunk.com/..."}]}' \
+  https://127.0.0.1:8089/services/ucm/lantern/import
+```
+
+Use `{"url": "...", "action": "update"}` in `items` to apply an available
+update.
+
 Full table: [ARCHITECTURE.md §6](ARCHITECTURE.md).
 
 ---
@@ -960,12 +1184,15 @@ Full table: [ARCHITECTURE.md §6](ARCHITECTURE.md).
   not send those actions itself until someone copies them into a revision
   (it will not: alert actions are out of scope).
 - GitHub tokens belong in `storage/passwords` only.
+- Lantern pages are untrusted input too. SPL from Lantern is stored as text,
+  labelled untrusted and never run by the import. Review it in the
+  deployment workflow like any other search.
 - Audit records older than `[retention] audit_days` (365) are purged. The
   same events are in `sunavigator.log` / `_internal`.
 
 ---
 
-## 12. Known limitations (0.7.1)
+## 12. Known limitations (0.8.0)
 
 - Catalogue total counts are bounded by KV `max_rows_per_query` (50,000).
 - Catalogue search does not rank and does not search descriptions.
@@ -977,12 +1204,18 @@ Full table: [ARCHITECTURE.md §6](ARCHITECTURE.md).
 - The Settings → Searches listing did not show `SUN - …` searches in the lab
   (§9.14). Use the REST search in §6.6.
 - Default four-eyes blocks a single `admin` from approving their own draft.
+- Lantern: retrieval runs in the background worker, so each step takes up to
+  one worker interval (60 s) plus 5 s per page. Lantern's "Recommended
+  articles" boxes are loaded by browser JavaScript and are not extracted.
+  Extraction relies on Lantern's current page template; unrecognised layouts
+  get low confidence rather than guessed fields. Lantern articles are not
+  re-checked automatically; use **Check for updates**.
 
 ---
 
 ## 13. Quick start checklist
 
-1. `splunk install app sunavigator-0.7.1.tar.gz` then `splunk restart`.
+1. `splunk install app sunavigator-0.8.0.tar.gz` then `splunk restart`.
 2. `splunk show kvstore-status` → `ready` (macOS: §9.2 if stuck on `starting`).
 3. Open **SUNavigator → Administration**; all platform pills green.
 4. **Check provider for categories** → tick **9** → **Synchronize**, **or**
@@ -995,3 +1228,5 @@ Full table: [ARCHITECTURE.md §6](ARCHITECTURE.md).
 10. **Deploy (disabled)** → confirm `SUN - …` with the REST search in §6.6.
 11. Enable only after reviewing SPL and readiness.
 12. **Coverage** for ATT&CK; **Dashboards** if you want a generated view.
+13. Optional: **Import Use Cases → From Splunk Lantern** for individual
+    Lantern articles (§5.4).
