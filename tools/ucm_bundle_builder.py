@@ -13,7 +13,7 @@ import sys
 from typing import Any, Dict, List, Optional, Sequence
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..",
-                                "splunk_use_case_manager", "lib"))
+                                "sunavigator", "lib"))
 
 from splunk_ucm.content.bundle import BUNDLE_FORMAT, BUNDLE_VERSION  # noqa: E402
 from splunk_ucm.errors import ValidationError  # noqa: E402

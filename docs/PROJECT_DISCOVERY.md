@@ -1,4 +1,4 @@
-# Project Discovery — Splunk Use Case Manager
+# Project Discovery — SUNavigator
 
 Status: Phase Zero complete (2026-11-19). Update this document whenever an
 assumption recorded here is confirmed or disproved.

@@ -20,7 +20,7 @@ UC = "fenre:UC-9.1.1"
 class FakeSavedSearches:
     """In-memory stand-in for /servicesNS/nobody/<app>/saved/searches with the fields we read."""
 
-    app = "splunk_use_case_manager"
+    app = "sunavigator"
 
     def __init__(self):
         self.items = {}
@@ -98,7 +98,7 @@ class SpecTest(unittest.TestCase):
 
     def test_name_is_sanitized_and_bounded(self):
         name = saved_search_name("9.1.1", 'Brute force <script>/"x" ' + "y" * 200)
-        self.assertTrue(name.startswith("UCM - 9.1.1 - Brute force script x"))
+        self.assertTrue(name.startswith("SUN - 9.1.1 - Brute force script x"))
         self.assertLessEqual(len(name), 100)
         self.assertNotIn("/", name)
 
@@ -122,7 +122,7 @@ class WorkflowTest(unittest.TestCase):
         self.assertEqual(doc["state"], "draft")
         self.assertEqual(doc["revision"], 1)
         self.assertTrue(doc["revisions"][0]["parse_ok"])
-        self.assertEqual(set(svc.search.parse_apps), {"splunk_use_case_manager"})
+        self.assertEqual(set(svc.search.parse_apps), {"sunavigator"})
         doc = svc.submit("alice", UC)
         self.assertEqual(doc["state"], "pending_approval")
         with self.assertRaises(PermissionDenied):

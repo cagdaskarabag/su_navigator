@@ -237,12 +237,12 @@ class DashboardTest(unittest.TestCase):
             render("nope", {}, {})
         with self.assertRaises(ValidationError):
             render("deployed_searches", {}, {"deployed": []})
-        deployed = [{"title": 'A <b>&"x"', "saved_search": 'UCM - 1 - "q" <x>', "live_status": "enabled",
+        deployed = [{"title": 'A <b>&"x"', "saved_search": 'SUN - 1 - "q" <x>', "live_status": "enabled",
                      "domains": ["security"]}]
         out = render("deployed_searches", {"domain": "security"}, {"deployed": deployed})
         root = ET.fromstring(out["xml"])
         refs = [s.get("ref") for s in root.iter("search") if s.get("ref")]
-        self.assertEqual(refs, ['UCM - 1 - "q" <x>'])
+        self.assertEqual(refs, ['SUN - 1 - "q" <x>'])
         self.assertEqual(view_name("domain_overview", {"domain": "ot_ics"}), "ucm_gen_domain_overview_ot_ics")
 
     def test_create_update_delete_and_conflicts(self):

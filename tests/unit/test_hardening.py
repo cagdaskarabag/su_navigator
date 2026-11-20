@@ -31,7 +31,7 @@ RESTRICTED_GETS = {"audit", "provider/manifest"}
 
 
 def _load_worker_module():
-    path = os.path.join(helpers.ROOT, "splunk_use_case_manager", "bin", "ucm_sync_worker.py")
+    path = os.path.join(helpers.ROOT, "sunavigator", "bin", "ucm_sync_worker.py")
     spec = importlib.util.spec_from_file_location("ucm_sync_worker", path)
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)

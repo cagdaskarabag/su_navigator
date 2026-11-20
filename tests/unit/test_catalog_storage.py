@@ -135,7 +135,7 @@ class KVStoreRestTest(unittest.TestCase):
         KVStore(t).query("uc_catalog", {"a": 1}, sort=[("sort_key", 1), ("t", -1)], skip=5, limit=10,
                          fields=["_key", "title"])
         method, path, params, _ = t.calls[0]
-        self.assertEqual(path, "/servicesNS/nobody/splunk_use_case_manager/storage/collections/data/uc_catalog")
+        self.assertEqual(path, "/servicesNS/nobody/sunavigator/storage/collections/data/uc_catalog")
         self.assertEqual(params["sort"], "sort_key:1,t:-1")
         self.assertEqual(json.loads(params["query"]), {"a": 1})
         self.assertEqual((params["skip"], params["limit"], params["fields"]), (5, 10, "_key,title"))

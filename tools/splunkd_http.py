@@ -14,7 +14,7 @@ import urllib.parse
 import urllib.request
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..",
-                                "splunk_use_case_manager", "lib"))
+                                "sunavigator", "lib"))
 
 from splunk_ucm.errors import StorageError  # noqa: E402
 from splunk_ucm.storage.transport import SplunkdTransport  # noqa: E402

@@ -86,13 +86,13 @@ allowlists; imported SPL never appears in a generated dashboard.
 Retention (D-034): audit records are purged after `audit_days` (default
 365). Set it to 0, or forward audit to an index, where longer retention is
 required; the app's structured log
-(`var/log/splunk/splunk_use_case_manager.log`) also carries every audit event
+(`var/log/splunk/sunavigator.log`) also carries every audit event
 and is indexed into `_internal` by default.
 
 ## Secrets
 
 The optional GitHub token is stored in Splunk's credential store
-(`storage/passwords`, realm `splunk_use_case_manager`, name `github_token`) and
+(`storage/passwords`, realm `sunavigator`, name `github_token`) and
 read with the system token. It is never written to `.conf` files, KV
 collections, logs or API responses, is sent only to the configured API host
 (not to the raw-content host), and the CLI reads it from the

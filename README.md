@@ -1,16 +1,23 @@
-# Splunk Use Case Manager
+# SUNavigator
 
-A Splunk app (Enterprise and Cloud) to discover, assess, select, validate and
-deploy monitoring use cases. Content comes from pluggable providers; the first
+SUNavigator (short for **Splunk use case navigator**) is a Splunk app for
+Enterprise and Cloud to discover, assess, select, validate and deploy
+monitoring use cases. Content comes from pluggable providers; the first
 is the [Fenre monitoring use-case catalogue](https://github.com/fenre/splunk-monitoring-use-cases)
 (MIT).
 
-**Status: 0.7.0 (WP7).** Content ingestion, catalogue, discovery, readiness,
+**Status: 0.7.1.** Content ingestion, catalogue, discovery, readiness,
 selection, SPL validation, guided deployment, coverage and generated
-dashboards.
+dashboards. 0.7.1 renames the application from "Splunk Use Case Manager"
+to SUNavigator; see the operator guide for the upgrade path.
 
 - **Install, use and troubleshooting:** [docs/OPERATOR_GUIDE.md](docs/OPERATOR_GUIDE.md)
 - Work packages and validation: [docs/IMPLEMENTATION_PLAN.md](docs/IMPLEMENTATION_PLAN.md)
+
+![SUNavigator overview dashboard on a lab instance (synthetic sample data)](docs/images/03-overview.png)
+
+The screenshots in the operator guide come from a lab instance with synthetic
+sample events, not from production data.
 
 ## What works today
 
@@ -50,8 +57,8 @@ Not yet validated on a search head cluster or a Splunk Cloud stack; see
 
 | Path | Contents |
 | --- | --- |
-| `splunk_use_case_manager/` | The Splunk app (the only thing that is packaged). |
-| `splunk_use_case_manager/lib/splunk_ucm/` | Python services (stdlib only, Python 3.9 and 3.13). |
+| `sunavigator/` | The Splunk app (the only thing that is packaged). |
+| `sunavigator/lib/splunk_ucm/` | Python services (stdlib only, Python 3.9 and 3.13). |
 | `tools/` | Operator CLI, bundle builder, packaging, dev deploy, perf check. |
 | `tests/unit/` | Mocked tests: no Splunk, no network. |
 | `tests/live/` | Tests against a real Splunk instance (opt-in). |
@@ -60,12 +67,12 @@ Not yet validated on a search head cluster or a Splunk Cloud stack; see
 ## Install (development)
 
 ```bash
-./tools/package.sh                       # dist/splunk_use_case_manager-<version>.tar.gz
+./tools/package.sh                       # dist/sunavigator-<version>.tar.gz
 # or, for a local dev instance:
 SPLUNK_HOME=/opt/splunk ./tools/dev_deploy.sh --restart
 ```
 
-Then open **Use Case Manager → Administration**, check the manifest, select
+Then open **SUNavigator → Administration**, check the manifest, select
 categories and synchronize, or import an offline bundle. Full steps,
 roles, configuration and troubleshooting (including Splunk Web install
 timeouts and macOS KV Store certificate trust) are in
@@ -75,8 +82,8 @@ Optional GitHub token (raises the API rate limit). It is stored in Splunk's
 credential store, never in configuration files:
 
 ```bash
-curl -k -u admin https://localhost:8089/servicesNS/nobody/splunk_use_case_manager/storage/passwords \
-  -d name=github_token -d realm=splunk_use_case_manager --data-urlencode password@-
+curl -k -u admin https://localhost:8089/servicesNS/nobody/sunavigator/storage/passwords \
+  -d name=github_token -d realm=sunavigator --data-urlencode password@-
 ```
 
 ## Offline bundles
@@ -92,12 +99,12 @@ records it does not list.
 
 ## Upgrades
 
-Install the new package over the old one (`splunk install app <tgz> -update 1`
-or Manage Apps) and restart. `local/` settings are kept. Within one worker
-interval (60 s) the background worker applies pending migrations, such as
-re-deriving catalogue summaries, and records the version in `uc_sync_state`
-key `app::state`. Downgrades are not supported: Splunk drops the data of KV
-collections that the older version does not define.
+Versions from 0.7.1 on use the app ID `sunavigator`. Upgrading from
+`splunk_use_case_manager` (0.7.0 and earlier) is a new app, not an in-place
+upgrade: retire deployments, remove the old app, then install SUNavigator.
+Within one worker interval (60 s) the background worker applies pending
+migrations and records the version in `uc_sync_state` key `app::state`.
+Downgrades are not supported. See the operator guide, section 8.
 
 ## Tests
 
@@ -119,7 +126,7 @@ automatically, and secrets live only in Splunk's credential store.
 
 ## Third-party content
 
-`splunk_use_case_manager/lib/splunk_ucm/frameworks/data/` contains reduced
+`sunavigator/lib/splunk_ucm/frameworks/data/` contains reduced
 copies of MITRE ATT&CK® Enterprise and ICS 20.1 (ids, names, tactic
 membership, revocations). © The MITRE Corporation. Reproduced and distributed
 with the permission of The MITRE Corporation under the

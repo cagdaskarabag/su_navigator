@@ -1,8 +1,8 @@
-# Architecture — Splunk Use Case Manager
+# Architecture — SUNavigator
 
 ## 1. Shape
 
-A single Splunk app (`splunk_use_case_manager/`) — a modular monolith:
+A single Splunk app (`sunavigator/`) — a modular monolith:
 
 ```
 Splunk Web (Simple XML 1.1 + app JS)          Background (modular input)
@@ -22,7 +22,7 @@ Splunk Web (Simple XML 1.1 + app JS)          Background (modular input)
    platform/   capability detection (Enterprise/Cloud adapters)
    audit.py    AuditService
    config.py   app configuration (ucm.conf via REST)
-   logging     structured JSON log → var/log/splunk/splunk_use_case_manager.log
+   logging     structured JSON log → var/log/splunk/sunavigator.log
         │
         ▼
   KV Store collections (uc_*), storage/passwords (GitHub token)

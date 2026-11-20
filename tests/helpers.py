@@ -12,7 +12,7 @@ os.environ.setdefault("UCM_LOG_LEVEL", "CRITICAL")
 os.environ.pop("SPLUNK_HOME", None)
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-LIB = os.path.join(ROOT, "splunk_use_case_manager", "lib")
+LIB = os.path.join(ROOT, "sunavigator", "lib")
 TOOLS = os.path.join(ROOT, "tools")
 for _p in (LIB, TOOLS):
     if _p not in sys.path:

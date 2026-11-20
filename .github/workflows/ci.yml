@@ -24,8 +24,8 @@ jobs:
         run: python -m unittest discover -s unit -t . -v
       - name: App code compiles and imports only the standard library
         run: |
-          python -m compileall -q splunk_use_case_manager
-          ! grep -rnE "subprocess|os\.system|pickle|_create_unverified_context" splunk_use_case_manager
+          python -m compileall -q sunavigator
+          ! grep -rnE "subprocess|os\.system|pickle|_create_unverified_context" sunavigator
 
   package:
     runs-on: ubuntu-latest
@@ -50,7 +50,7 @@ jobs:
           EOF
       - uses: actions/upload-artifact@v4
         with:
-          name: splunk_use_case_manager
+          name: sunavigator
           path: |
             dist/*.tar.gz
             appinspect.json

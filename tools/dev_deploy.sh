@@ -4,8 +4,8 @@
 # app is copied (local/ and the KV Store data are preserved).
 set -euo pipefail
 SPLUNK_HOME="${SPLUNK_HOME:-/opt/splunk}"
-SRC="$(cd "$(dirname "$0")/.." && pwd)/splunk_use_case_manager"
-DEST="$SPLUNK_HOME/etc/apps/splunk_use_case_manager"
+SRC="$(cd "$(dirname "$0")/.." && pwd)/sunavigator"
+DEST="$SPLUNK_HOME/etc/apps/sunavigator"
 
 if [ -L "$DEST" ]; then rm "$DEST"; fi
 mkdir -p "$DEST"

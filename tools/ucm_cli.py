@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Operator CLI for Use Case Manager content tasks performed outside Splunk.
+"""Operator CLI for SUNavigator content tasks performed outside Splunk.
 
   build-bundle  Build an offline content bundle from a local Fenre-layout checkout.
   validate      Validate every record of a local checkout without importing it.
@@ -15,7 +15,7 @@ import os
 import sys
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..",
-                                "splunk_use_case_manager", "lib"))
+                                "sunavigator", "lib"))
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from splunk_ucm.config import DEFAULTS  # noqa: E402

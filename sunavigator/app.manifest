@@ -1,0 +1,52 @@
+{
+  "schemaVersion": "2.0.0",
+  "info": {
+    "title": "SUNavigator",
+    "id": {
+      "group": null,
+      "name": "sunavigator",
+      "version": "0.7.1"
+    },
+    "author": [
+      {
+        "name": "SUNavigator contributors",
+        "email": null,
+        "company": null
+      }
+    ],
+    "releaseDate": null,
+    "description": "SUNavigator (Splunk use case navigator). Discover, assess, select, validate and deploy monitoring use cases across Splunk Enterprise and Splunk Cloud.",
+    "classification": {
+      "intendedAudience": "IT and Security Operations",
+      "categories": ["Utilities"],
+      "developmentStatus": "Alpha"
+    },
+    "commonInformationModels": null,
+    "license": {
+      "name": null,
+      "text": null,
+      "uri": null
+    },
+    "privacyPolicy": {
+      "name": null,
+      "text": null,
+      "uri": null
+    },
+    "releaseNotes": {
+      "name": null,
+      "text": null,
+      "uri": null
+    }
+  },
+  "dependencies": null,
+  "tasks": null,
+  "inputGroups": null,
+  "incompatibleApps": null,
+  "platformRequirements": {
+    "splunk": {
+      "Enterprise": ">=9.2"
+    }
+  },
+  "supportedDeployments": ["_standalone", "_distributed", "_search_head_clustering"],
+  "targetWorkloads": ["_search_heads"]
+}
