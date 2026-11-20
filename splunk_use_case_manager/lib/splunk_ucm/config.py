@@ -31,6 +31,10 @@ DEFAULTS: Dict[str, Dict[str, str]] = {
         "auto_assess": "true", "stale_hours": "24", "ready_threshold": "90", "partial_threshold": "50",
         "min_coverage": "0.5", "job_timeout_seconds": "3600",
     },
+    "validation": {
+        "earliest": "-15m", "latest": "now", "preview_max_events": "50",
+        "preview_timeout_seconds": "30", "sample_events": "200", "sample_timeout_seconds": "30",
+    },
 }
 
 _TRUE = {"1", "true", "t", "yes", "y", "on"}

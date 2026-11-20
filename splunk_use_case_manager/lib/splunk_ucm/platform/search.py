@@ -1,9 +1,11 @@
-"""Ad-hoc search client over splunkd's search/jobs endpoint.
+"""Ad-hoc search client over splunkd's search/jobs and search/parser endpoints.
 
-Discovery jobs use this to run a *constructed* ``tstats`` template. Imported
-SPL is never passed here.
+Discovery uses ``oneshot`` only for constructed generating searches (``| tstats``).
+Imported SPL is parsed with ``parse`` and is dispatched only by ``preview`` after
+a side-effect gate (WP4).
 """
 
+import json
 from typing import Any, Dict, List, Optional
 
 from ..errors import StorageError, UnsupportedOperation, ValidationError
@@ -15,27 +17,80 @@ class SearchResult:
         self.rows = rows
         self.messages = messages
         self.truncated = truncated
-        self.errors = [m.get("text", "") for m in messages if m.get("type") == "ERROR"]
+        self.errors = [m.get("text", "") for m in messages if m.get("type") in ("ERROR", "FATAL")]
+
+
+class ParseResult:
+    def __init__(self, ok: bool, commands: List[str], messages: List[Dict[str, str]],
+                 remote_search: str = "", normalized: str = "", raw: Optional[Dict[str, Any]] = None):
+        self.ok = ok
+        self.commands = commands
+        self.messages = messages
+        self.remote_search = remote_search
+        self.normalized = normalized
+        self.raw = raw or {}
+        self.errors = [m.get("text", "") for m in messages if m.get("type") in ("ERROR", "FATAL")]
 
 
 class SearchClient:
     def __init__(self, transport: SplunkdTransport):
         self.t = transport
 
-    def oneshot(self, search: str, timeout: float = 120.0, max_count: int = 5000) -> SearchResult:
+    def oneshot(self, search: str, timeout: float = 120.0, max_count: int = 5000,
+                earliest: str = "", latest: str = "") -> SearchResult:
         if not search.startswith("|"):
             raise ValidationError("only generating searches are permitted")
+        return self._oneshot(search, timeout, max_count, earliest, latest)
+
+    def preview(self, search: str, timeout: float = 30.0, max_count: int = 100,
+                earliest: str = "-15m", latest: str = "now") -> SearchResult:
+        """Dispatch a *user-approved* bounded search. Caller must have gated side effects."""
+        text = (search or "").strip()
+        if not text:
+            raise ValidationError("empty search")
+        return self._oneshot(text, timeout, max_count, earliest, latest)
+
+    def parse(self, q: str) -> ParseResult:
+        """POST /services/search/parser with parse_only. 400 is a parse failure, not a transport error."""
+        status, body = self.t.request(
+            "POST", "/services/search/parser",
+            query={"output_mode": "json", "parse_only": "true"},
+            form={"q": q}, timeout=30.0)
+        if status not in (200, 400):
+            if status in (403, 402):
+                raise UnsupportedOperation("search parser is not available", {"status": status})
+            raise StorageError("splunkd returned HTTP %d" % status, status, {"path": "/services/search/parser"})
         try:
-            data = self.t.json(
-                "POST", "/services/search/jobs",
-                form={
-                    "search": search,
-                    "exec_mode": "oneshot",
-                    "max_count": str(int(max_count)),
-                    "timeout": str(max(1, int(timeout))),
-                    "adhoc_search_level": "fast",
-                },
-                timeout=timeout + 15.0)
+            data = json.loads(body.decode("utf-8") if body else "{}")
+        except ValueError as exc:
+            raise StorageError("invalid JSON from search/parser") from exc
+        if not isinstance(data, dict):
+            data = {}
+        messages = [m for m in (data.get("messages") or []) if isinstance(m, dict)]
+        commands = []
+        for cmd in data.get("commands") or []:
+            if isinstance(cmd, dict) and cmd.get("command"):
+                commands.append(str(cmd["command"]).lower())
+        ok = status == 200 and not any(m.get("type") in ("ERROR", "FATAL") for m in messages)
+        parsed = ParseResult(ok, commands, messages, str(data.get("remoteSearch") or ""),
+                             str(data.get("normalizedSearch") or ""), data)
+        return parsed
+
+    def _oneshot(self, search: str, timeout: float, max_count: int,
+                 earliest: str, latest: str) -> SearchResult:
+        form: Dict[str, Any] = {
+            "search": search,
+            "exec_mode": "oneshot",
+            "max_count": str(int(max_count)),
+            "timeout": str(max(1, int(timeout))),
+            "adhoc_search_level": "fast",
+        }
+        if earliest:
+            form["earliest_time"] = earliest
+        if latest:
+            form["latest_time"] = latest
+        try:
+            data = self.t.json("POST", "/services/search/jobs", form=form, timeout=timeout + 15.0)
         except StorageError as exc:
             if exc.status in (403, 402, 409):
                 raise UnsupportedOperation("ad-hoc search is not available",

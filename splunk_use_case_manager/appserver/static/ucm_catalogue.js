@@ -15,6 +15,7 @@ require([
         offset: parseInt(initial.offset || "0", 10) || 0
     };
     var categories = [];
+    var selections = {};
     var requestSeq = 0;
     var results = el("div", { "class": "ucm-results" });
 
@@ -74,7 +75,15 @@ require([
             el("td", { text: item.difficulty || "" }),
             el("td", { "class": "ucm-mono" }, ucm.chips(item.sourcetypes, 3)),
             el("td", { "class": "ucm-mono" }, ucm.chips(item.mitre_ids, 3)),
-            el("td", {}, ucm.badge(item.review_status || "unknown", "info")));
+            el("td", {}, ucm.badge(item.review_status || "unknown", "info")),
+            el("td", {},
+                selections[item.content_id] ? ucm.badge(selections[item.content_id].intent, "ok") : null,
+                el("button", { "class": "btn", type: "button", text: "Select", onclick: function (e) {
+                    e.preventDefault();
+                    ucm.post("selections", { id: item.content_id, intent: "select" }).done(function () {
+                        loadSelections().done(load);
+                    }).fail(function (err) { window.alert(err.message); });
+                } })));
     }
 
     function renderResults(data) {
@@ -92,7 +101,7 @@ require([
         var total = data.total === null ? "" : data.total + " use cases";
         results.appendChild(el("div", { "class": "ucm-summary-line", text: total }));
         var head = el("tr", {});
-        ["ID", "Use case", "Domains", "Category", "Criticality", "Difficulty", "Sourcetypes (from SPL)", "MITRE", "Review"]
+        ["ID", "Use case", "Domains", "Category", "Criticality", "Difficulty", "Sourcetypes (from SPL)", "MITRE", "Review", "Backlog"]
             .forEach(function (h) { head.appendChild(el("th", { text: h })); });
         var body = el("tbody", {});
         data.items.forEach(function (item) { body.appendChild(row(item)); });
@@ -118,11 +127,18 @@ require([
         });
     }
 
+    function loadSelections() {
+        return ucm.get("selections", { count: 500 }).done(function (data) {
+            selections = {};
+            (data.items || []).forEach(function (s) { selections[s.content_id] = s; });
+        });
+    }
+
     ucm.get("categories").always(function (data) {
         categories = (data && data.categories) || [];
         ucm.clear(root);
         root.appendChild(toolbar());
         root.appendChild(results);
-        load();
+        loadSelections().always(load);
     });
 });

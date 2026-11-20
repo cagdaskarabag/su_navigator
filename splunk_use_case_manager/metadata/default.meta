@@ -29,5 +29,11 @@ access = read : [ * ], write : [ admin, sc_admin, ucm_admin, ucm_analyst ]
 [collections/uc_readiness]
 access = read : [ * ], write : [ admin, sc_admin, ucm_admin, ucm_analyst ]
 
+[collections/uc_selections]
+access = read : [ * ], write : [ admin, sc_admin, ucm_admin, ucm_analyst, ucm_viewer ]
+
+[collections/uc_validation]
+access = read : [ * ], write : [ admin, sc_admin, ucm_admin, ucm_analyst ]
+
 [ucm]
 access = read : [ * ], write : [ admin, sc_admin, ucm_admin ]

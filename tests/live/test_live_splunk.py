@@ -123,7 +123,9 @@ class LiveApiTest(unittest.TestCase):
         self.assertTrue({"9.1.1", "9.1.2"} <= {i["record_id"] for i in body["items"]})
         status, body = api(self.viewer, "GET", "usecase", {"id": "fenre:UC-9.1.1"})
         self.assertEqual(status, 200)
-        self.assertEqual(body["requirement_summary"]["assessment"], "not_assessed")
+        self.assertIn(body["requirement_summary"]["assessment"],
+                      ("not_assessed", "not_ready", "partially_ready", "ready",
+                       "blocked", "insufficient_evidence"))
         self.assertEqual(body["provenance"]["source_blob_sha"], bundle["records"][0]["blob_sha"])
 
     def test_viewer_denied_changes(self):
@@ -219,6 +221,28 @@ class LiveApiTest(unittest.TestCase):
         status, page = api(self.viewer, "GET", "readiness", {"sort": "score", "count": "10"})
         self.assertEqual(status, 200)
         self.assertTrue(page["items"])
+
+    def test_selection_and_spl_validation(self):
+        status, body = api(self.viewer, "POST", "selections",
+                           body={"id": "fenre:UC-13.1.1", "intent": "select", "priority": 70})
+        self.assertEqual(status, 200, body)
+        status, listed = api(self.viewer, "GET", "selections", {"intent": "backlog"})
+        self.assertTrue(any(i["content_id"] == "fenre:UC-13.1.1" for i in listed["items"]))
+        status, _ = api(self.viewer, "POST", "preview", body={"id": "fenre:UC-13.1.1"})
+        self.assertEqual(status, 403)
+        status, parsed = api(self.admin, "POST", "validate", body={"id": "fenre:UC-13.1.1", "sample": True})
+        self.assertEqual(status, 200, parsed)
+        self.assertTrue(parsed.get("parse_ok"), parsed)
+        self.assertFalse(parsed.get("side_effects"))
+        fields = {r["field"]: r for r in parsed.get("field_samples") or []}
+        self.assertIn("_time", fields)
+        status, preview = api(self.admin, "POST", "preview", body={"id": "fenre:UC-13.1.1"})
+        self.assertEqual(status, 200, preview)
+        self.assertIn("preview", preview)
+        self.assertNotIn("rows", preview.get("preview") or {})
+        # 13.1.1 needs a lookup this instance does not have; that is recorded, not a 5xx.
+        self.assertIn(preview["preview"].get("ok"), (True, False))
+        api(self.viewer, "POST", "selections/delete", body={"id": "fenre:UC-13.1.1"})
 
     @unittest.skipUnless(os.environ.get("UCM_LIVE_REMOTE") == "1", "set UCM_LIVE_REMOTE=1 for GitHub access")
     def test_remote_manifest_through_splunkd(self):

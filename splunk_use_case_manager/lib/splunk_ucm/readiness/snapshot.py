@@ -17,8 +17,15 @@ def _lower(value: Any) -> str:
 
 class EnvironmentSnapshot:
     def __init__(self, sources: List[Dict[str, Any]], mappings: List[Dict[str, Any]],
-                 discovery_state: Dict[str, Any]):
+                 discovery_state: Dict[str, Any], validations: Optional[List[Dict[str, Any]]] = None):
         self.discovery = discovery_state or {}
+        self.validations: Dict[str, Dict[str, Any]] = {}
+        for v in validations or []:
+            cid = v.get("content_id") or v.get("_key")
+            if cid:
+                self.validations[cid] = v
+                if v.get("_key"):
+                    self.validations[v["_key"]] = v
         self.pairs_active: Dict[str, List[Dict[str, Any]]] = {}
         self.pairs_missing: Dict[str, List[Dict[str, Any]]] = {}
         self.indexes: Dict[str, Dict[str, Any]] = {}
@@ -51,7 +58,10 @@ class EnvironmentSnapshot:
     def load(cls, store: DocumentStore) -> "EnvironmentSnapshot":
         sources = store.query(C.ENVIRONMENT_SOURCES)
         mappings = store.query(C.SOURCE_MAPPINGS)
-        return cls(sources, mappings, DiscoveryStateRepository(store).state())
+        validations = store.query(C.VALIDATION, fields=[
+            "_key", "content_id", "parse_ok", "parse_error", "side_effects", "commands",
+            "field_samples", "sampled_at", "source_hash", "cim_parse_ok"])
+        return cls(sources, mappings, DiscoveryStateRepository(store).state(), validations)
 
     @property
     def discovered(self) -> bool:
@@ -80,3 +90,16 @@ class EnvironmentSnapshot:
     def app(self, name: str) -> Optional[Dict[str, Any]]:
         key = _lower(name)
         return self.apps.get(key) or self.app_labels.get(key)
+
+    def validation(self, content_id: str, key: str = "") -> Optional[Dict[str, Any]]:
+        return self.validations.get(content_id) or self.validations.get(key)
+
+    def field_sample(self, content_id: str, field: str, key: str = "") -> Optional[Dict[str, Any]]:
+        doc = self.validation(content_id, key)
+        if not doc:
+            return None
+        want = _lower(field)
+        for row in doc.get("field_samples") or []:
+            if _lower(row.get("field")) == want:
+                return row
+        return None

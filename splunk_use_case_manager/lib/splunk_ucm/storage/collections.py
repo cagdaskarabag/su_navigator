@@ -9,6 +9,7 @@ ENVIRONMENT_SOURCES = "uc_environment_sources"
 SOURCE_MAPPINGS = "uc_source_mappings"
 READINESS = "uc_readiness"
 SELECTIONS = "uc_selections"
+VALIDATION = "uc_validation"
 DEPLOYMENTS = "uc_deployments"
 FRAMEWORKS = "uc_frameworks"
 

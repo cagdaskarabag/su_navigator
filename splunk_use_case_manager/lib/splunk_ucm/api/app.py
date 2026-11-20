@@ -30,6 +30,8 @@ from ..platform.search import SearchClient
 from ..readiness.query import ReadinessFilter, ReadinessQueryService
 from ..readiness.service import ReadinessService, new_job as new_readiness_job
 from ..readiness.worker import settings_from_config as readiness_settings
+from ..selection.service import SelectionService
+from ..validation.service import ValidationService, ValidationSettings
 from ..log import get_logger
 from ..platform.capabilities import PlatformProbe
 from ..secrets import get_secret
@@ -141,6 +143,21 @@ class Context:
     def readiness_service(self) -> ReadinessService:
         return ReadinessService(self.store, self.audit, readiness_settings(self.config))
 
+    def selection_service(self) -> SelectionService:
+        return SelectionService(self.store, self.audit)
+
+    def validation_service(self) -> ValidationService:
+        cfg = self.config
+        settings = ValidationSettings(
+            earliest=cfg.get("validation", "earliest", "-15m") or "-15m",
+            latest=cfg.get("validation", "latest", "now") or "now",
+            preview_max=cfg.get_int("validation", "preview_max_events", 50, 1, 200),
+            preview_timeout=cfg.get_int("validation", "preview_timeout_seconds", 30, 5, 120),
+            sample_events=cfg.get_int("validation", "sample_events", 200, 10, 1000),
+            sample_timeout=cfg.get_int("validation", "sample_timeout_seconds", 30, 5, 120))
+        return ValidationService(self.store, self.audit, SearchClient(self.user_transport),
+                                 settings, self.readiness_service())
+
 
 Handler = Callable[[Context, Request], Response]
 
@@ -190,6 +207,8 @@ def get_usecase(ctx: Context, req: Request) -> Response:
     readiness = ctx.readiness_service().get(req.arg("id"))
     detail["readiness"] = readiness
     detail["requirement_summary"]["assessment"] = readiness["state"] if readiness else "not_assessed"
+    detail["selection"] = ctx.selection_service().for_use_case(ctx.user, req.arg("id"))
+    detail["validation"] = ctx.validation_service().get(req.arg("id"))
     return Response(200, detail)
 
 
@@ -383,6 +402,56 @@ def post_readiness(ctx: Context, req: Request) -> Response:
     return Response(202, {"job": job})
 
 
+def get_selections(ctx: Context, req: Request) -> Response:
+    return Response(200, ctx.selection_service().list_for(
+        ctx.user, req.arg("intent") or None, _int(req.arg("offset"), 0, "offset"),
+        _int(req.arg("count"), 50, "count")))
+
+
+def post_selections(ctx: Context, req: Request) -> Response:
+    body = req.json()
+    doc = ctx.selection_service().upsert(
+        ctx.user, str(body.get("id") or body.get("content_id") or ""),
+        str(body.get("intent") or ""), str(body.get("notes") or ""),
+        _int(str(body.get("priority") if body.get("priority") is not None else "50"), 50, "priority"))
+    return Response(200, {"selection": doc})
+
+
+def post_selections_delete(ctx: Context, req: Request) -> Response:
+    body = req.json()
+    ctx.selection_service().delete(ctx.user, str(body.get("id") or body.get("content_id") or ""))
+    return Response(200, {"deleted": True})
+
+
+def get_validation(ctx: Context, req: Request) -> Response:
+    doc = ctx.validation_service().get(req.arg("id"))
+    if doc is None:
+        return Response(404, {"error": {"code": "not_validated", "message": "use case has not been validated"}})
+    return Response(200, doc)
+
+
+def post_validate(ctx: Context, req: Request) -> Response:
+    ctx.require(CAP_RUN_DISCOVERY)
+    body = req.json()
+    use_case_id = str(body.get("id") or req.arg("id") or "")
+    if not use_case_id:
+        raise ValidationError("id is required")
+    sample = body.get("sample", True)
+    if sample is True or str(sample).lower() in ("1", "true"):
+        return Response(200, ctx.validation_service().sample_and_assess(use_case_id, ctx.user))
+    return Response(200, ctx.validation_service().parse_only(use_case_id, ctx.user))
+
+
+def post_preview(ctx: Context, req: Request) -> Response:
+    ctx.require(CAP_RUN_DISCOVERY)
+    body = req.json()
+    use_case_id = str(body.get("id") or req.arg("id") or "")
+    if not use_case_id:
+        raise ValidationError("id is required")
+    return Response(200, ctx.validation_service().preview(
+        use_case_id, ctx.user, str(body.get("earliest") or ""), str(body.get("latest") or "")))
+
+
 def post_readiness_assess(ctx: Context, req: Request) -> Response:
     ctx.require(CAP_RUN_DISCOVERY)
     body = req.json()
@@ -416,4 +485,10 @@ def build_router() -> Router:
     router.add("GET", "readiness/summary", get_readiness_summary)
     router.add("GET", "readiness/usecase", get_readiness_usecase)
     router.add("POST", "readiness/assess", post_readiness_assess)
+    router.add("GET", "selections", get_selections)
+    router.add("POST", "selections", post_selections)
+    router.add("POST", "selections/delete", post_selections_delete)
+    router.add("GET", "validation", get_validation)
+    router.add("POST", "validate", post_validate)
+    router.add("POST", "preview", post_preview)
     return router

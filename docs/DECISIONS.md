@@ -231,3 +231,26 @@ truncated. Before, a failed chunk would have marked healthy sources missing.
   assessment reads only app-owned data and dispatches no searches.
 * Readiness for withdrawn or removed use cases is deleted at the end of a
   full run.
+
+## D-026 SPL is parsed with Splunk's search/parser; dispatch is opt-in
+`POST /services/search/parser?parse_only=true` is the syntax authority
+(verified on 10.2.9). A leading `index=` is not a command; candidates tried
+in order are the original string then `search ` + original, so
+`` `comment(...)` | multisearch `` and `index=... | stats` both parse.
+Imported SPL is dispatched only by **preview**, and only after:
+* the parser accepted it, and
+* neither the parser command list nor the static analyser reports
+  side-effect commands (`delete`, `outputlookup`, `collect`, `script`, …).
+Preview forces `earliest_time`/`latest_time`, `max_count` and a timeout.
+Event payloads are not stored; only counts, field names and messages.
+A runtime error (missing lookup) is recorded on the validation document
+(`preview.ok=false`), not raised as a 5xx.
+
+## D-027 Field sampling uses a constructed fieldsummary, not imported SPL
+For each required field, the app runs
+`| search index=<validated> sourcetype="<validated>" | head N | fieldsummary`
+over at most a few active index/sourcetype pairs from discovery. The
+imported pipeline is never used for sampling. Presence updates readiness
+(`met` / `not_met`); if no active sourcetype exists the field stays
+`unverified`. `spl_validity` is injected at assessment time for use cases
+that have primary SPL (not stored in the provider record).

@@ -100,14 +100,70 @@ require([
                 assessBtn),
             el("div", { "class": "ucm-sub", text: (counts.met || 0) + " met, " + (counts.partial || 0) + " partial, " +
                 (counts.not_met || 0) + " not met, " + (counts.unknown || 0) + " unknown, " + (rd.unverified || 0) +
-                " not verified (fields and SPL checks need WP4). Evaluated " + rd.evaluated_at + " UTC against discovery " +
+                " not verified. Evaluated " + rd.evaluated_at + " UTC against discovery " +
                 (rd.discovery_at || "–") + "." }),
             rd.blockers && rd.blockers.length ? el("div", {}, el("strong", { text: "Blocked by critical requirement: " }),
                 rd.blockers.map(function (b) { return ucm.badge(b.type + ": " + b.value, "critical"); })) : null,
             rd.gaps && rd.gaps.length ? el("div", {}, el("strong", { text: "Unmet required: " }),
                 rd.gaps.map(function (g) { return ucm.badge(g.type + ": " + g.value, "high"); })) : null,
-            el("div", { "class": "ucm-sub", text: "Readiness is inventory evidence, not a guarantee that the search returns results. Deployment state: not selected, not deployed." }));
+            el("div", { "class": "ucm-sub", text: "Readiness is inventory and validation evidence, not a guarantee that the search returns results." }));
         return box;
+    }
+
+    function setIntent(uc, intent) {
+        ucm.post("selections", { id: uc.content_id, intent: intent }).done(load).fail(function (err) {
+            window.alert(err.message);
+        });
+    }
+
+    function selectionBox(uc) {
+        var sel = uc.selection;
+        return el("div", { "class": "ucm-card" },
+            el("div", { "class": "ucm-readiness-head" },
+                el("strong", { text: "Selection" }),
+                sel ? ucm.badge(sel.intent, sel.intent === "select" ? "ok" : "info") : ucm.badge("not selected", "neutral")),
+            el("div", { "class": "ucm-actions" },
+                el("button", { "class": "btn btn-primary", type: "button", text: "Select", onclick: function () { setIntent(uc, "select"); } }),
+                el("button", { "class": "btn", type: "button", text: "Bookmark", onclick: function () { setIntent(uc, "bookmark"); } }),
+                el("button", { "class": "btn", type: "button", text: "Defer", onclick: function () { setIntent(uc, "defer"); } }),
+                el("button", { "class": "btn", type: "button", text: "Reject", onclick: function () { setIntent(uc, "reject"); } }),
+                sel ? el("button", { "class": "btn", type: "button", text: "Clear", onclick: function () {
+                    ucm.post("selections/delete", { id: uc.content_id }).done(load);
+                } }) : null),
+            el("div", { "class": "ucm-sub", text: "Your selection is stored per user and is not changed by content sync. Deployment is WP5." }));
+    }
+
+    function validationBox(uc) {
+        var v = uc.validation;
+        var parseLine = v
+            ? (v.parse_ok ? "Parsed: " + (v.commands || []).join(", ") : ("Parse failed: " + (v.parse_error || "")))
+            : "Not parsed yet.";
+        if (v && v.side_effects && v.side_effects.length) {
+            parseLine += " Side-effect commands (preview refused): " + v.side_effects.join(", ");
+        }
+        var previewLine = (v && v.preview)
+            ? ("Last preview: " + v.preview.event_count + " events (" + v.preview.earliest + " → " + v.preview.latest +
+                "). Event payloads are not stored.")
+            : "No preview run.";
+        return el("div", { "class": "ucm-card" },
+            el("div", { "class": "ucm-readiness-head" }, el("strong", { text: "SPL validation" }),
+                v ? (v.parse_ok ? ucm.badge("parsed", "ok") : ucm.badge("parse failed", "error")) : ucm.badge("not validated", "neutral")),
+            el("div", { "class": "ucm-sub", text: parseLine }),
+            el("div", { "class": "ucm-sub", text: previewLine }),
+            el("div", { "class": "ucm-actions" },
+                el("button", { "class": "btn btn-primary", type: "button", text: "Parse and sample fields",
+                    onclick: function () {
+                        this.disabled = true;
+                        ucm.post("validate", { id: uc.content_id, sample: true }).done(load)
+                            .fail(function (err) { window.alert(err.message); });
+                    } }),
+                el("button", { "class": "btn", type: "button", text: "Bounded preview",
+                    onclick: function () {
+                        this.disabled = true;
+                        ucm.post("preview", { id: uc.content_id }).done(load)
+                            .fail(function (err) { window.alert(err.message); });
+                    } })),
+            el("div", { "class": "ucm-sub", text: "Preview forces a short time window and a result cap. Searches with delete, outputlookup, collect, script or similar commands are refused. Field sampling uses a constructed fieldsummary, not the imported pipeline." }));
     }
 
     function mitreLink(m) {
@@ -184,6 +240,8 @@ require([
             el("div", { "class": "ucm-sub", text: [uc.category_name, uc.subcategory].filter(Boolean).join(" › ") })));
 
         root.appendChild(readinessBox(uc));
+        root.appendChild(selectionBox(uc));
+        root.appendChild(validationBox(uc));
 
         root.appendChild(section("Description", text(uc.description)));
         root.appendChild(section("Business value", text(uc.business_value)));

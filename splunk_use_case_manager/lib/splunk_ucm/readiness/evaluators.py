@@ -262,10 +262,42 @@ def eval_version(req, snap: EnvironmentSnapshot, settings: EvaluationSettings):
                   "Splunk %s is not among the validated versions (%s)." % (current, req.get("value")))
 
 
-def eval_spl_validity(req, snap: EnvironmentSnapshot, settings: EvaluationSettings):
+def eval_spl_validity(req, snap: EnvironmentSnapshot, settings: EvaluationSettings,
+                     content_id: str = "", key: str = ""):
     if (req.get("value") or "") == "missing":
         return result(NOT_MET, "no_spl", "The provider record has no SPL to deploy.")
-    return result(UNVERIFIED, "requires_spl_validation", "SPL validation runs in WP4.")
+    doc = snap.validation(content_id, key)
+    if not doc:
+        return result(UNVERIFIED, "not_parsed", "Primary SPL has not been parsed with Splunk's search parser.")
+    observed = [{"parse_ok": doc.get("parse_ok"), "error": doc.get("parse_error"),
+                 "commands": doc.get("commands") or [], "side_effects": doc.get("side_effects") or []}]
+    if not doc.get("parse_ok"):
+        return result(NOT_MET, "parse_error", "Splunk rejected the search: %s" % (doc.get("parse_error") or "parse failed"),
+                      observed)
+    if doc.get("side_effects"):
+        return result(PARTIAL, "side_effects",
+                      "Search parses but contains side-effect commands (%s); it will not be previewed or auto-deployed."
+                      % ", ".join(doc["side_effects"]), observed)
+    return result(MET, "parsed", "Splunk parsed the primary search (%s)." % ", ".join(doc.get("commands") or []),
+                  observed)
+
+
+def eval_field(req, snap: EnvironmentSnapshot, settings: EvaluationSettings,
+               content_id: str = "", key: str = ""):
+    sample = snap.field_sample(content_id, req.get("value") or "", key)
+    if sample is None:
+        return result(UNVERIFIED, "not_sampled", "Field has not been sampled. Run validation on this use case.")
+    row = {"field": sample.get("field"), "count": sample.get("count"), "index": sample.get("index"),
+           "sourcetype": sample.get("sourcetype"), "values": sample.get("values") or []}
+    if not sample.get("sampled"):
+        return result(UNVERIFIED, sample.get("reason") or "not_sampled",
+                      "No active sourcetype was available to sample this field.", [row])
+    if sample.get("present"):
+        where = sample.get("sourcetype") or "sample"
+        return result(MET, "sampled_present", "Field seen in the bounded sample (%s, %s events)."
+                      % (where, sample.get("count")), [row])
+    return result(NOT_MET, "sampled_absent",
+                  "Field was not present in the bounded sample of matching sourcetypes.", [row])
 
 
 def eval_other(req, snap: EnvironmentSnapshot, settings: EvaluationSettings):
@@ -293,7 +325,7 @@ EVALUATORS: Dict[str, Callable[..., Dict[str, Any]]] = {
     "version": eval_version,
     "spl_validity": eval_spl_validity,
     "other": eval_other,
-    "field": _unverified("requires_data_sampling", "Field presence needs a bounded data sample (WP4)."),
+    "field": eval_field,
     "event_condition": _unverified("requires_data_sampling", "Event conditions need a bounded data sample (WP4)."),
     "freshness": _unverified("not_evaluable", "No freshness target is defined for this requirement."),
     "permission": _unverified("not_evaluable", "Permissions are checked at deployment time (WP5)."),
@@ -301,8 +333,12 @@ EVALUATORS: Dict[str, Callable[..., Dict[str, Any]]] = {
 }
 
 
-def evaluate(req: Dict[str, Any], snap: EnvironmentSnapshot, settings: EvaluationSettings) -> Dict[str, Any]:
+def evaluate(req: Dict[str, Any], snap: EnvironmentSnapshot, settings: EvaluationSettings,
+             content_id: str = "", key: str = "") -> Dict[str, Any]:
     fn = EVALUATORS.get(req.get("type") or "")
     if fn is None:
         return result(UNVERIFIED, "no_evaluator", "No evaluator for this requirement type.")
-    return fn(req, snap, settings)
+    try:
+        return fn(req, snap, settings, content_id, key)
+    except TypeError:
+        return fn(req, snap, settings)

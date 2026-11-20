@@ -45,8 +45,8 @@ not packaged.
 | 4 | Environment Discovery | `discovery/` | WP2 | Implemented |
 | 5 | Data Source Mapping | `discovery/mapping.py` | WP2 | Implemented |
 | 6 | Readiness Assessment | `readiness/` | WP3 | Implemented (inventory evidence; field/SPL checks in WP4) |
-| 7 | Use Case Selection | `selection/` | WP4 | Planned |
-| 8 | SPL Validation | `spl/` (static analysis implemented in WP1) | WP4 | Partial |
+| 7 | Use Case Selection | `selection/` | WP4 | Implemented |
+| 8 | SPL Validation | `spl/parser.py`, `validation/` | WP4 | Implemented |
 | 9 | Deployment Manager | `deployment/` | WP5 | Planned |
 | 10 | Framework Mapping | `frameworks/` | WP6 | Planned (mappings captured in WP1) |
 | 11 | Dashboard Templates | `dashboards/` | WP6 | Planned |
@@ -121,7 +121,8 @@ All collections are app-scoped (`nobody` owner) and replicated in SHC.
 | `uc_environment_sources` | `src_<kind>_<hash>` | shared | discovery | Index, index/sourcetype pair, app and data-model rows with window counts and data age. Missing sources are marked, never deleted. |
 | `uc_source_mappings` | `map_<kind>_<hash>` | shared | discovery / analyst | Local and auto mappings. Local rows are never overwritten by discovery. |
 | `uc_readiness` | same as `uc_catalog` | shared | readiness job / analyst | `state`, `score`, `coverage`, `blockers`, `gaps`, `counts`, per-requirement `results[]` (status, code, detail, observed, via_mapping), `engine_version`, `discovery_at`, `source_hash`. ~3 KB. Staleness computed on read. |
-| `uc_selections` | `<user>::<content_id>` | per-user rows | WP4 | Planned |
+| `uc_selections` | `sel_<user>_<content_id>` | per-user | user | Bookmark / select / defer / reject. Sync never writes this collection. |
+| `uc_validation` | same as `uc_catalog` | shared | analyst | Parser outcome, side-effects, bounded preview metadata (no event payloads), field samples. |
 | `uc_deployments` | — | shared | WP5 | Planned |
 | `uc_frameworks` | — | shared | WP6 | Planned |
 
@@ -166,6 +167,12 @@ from `raw_json` without network access (`POST /ucm/catalog/reindex`, WP1).
 | `GET ucm/readiness/usecase?id=` | read | Full readiness document with staleness. Also embedded in `GET ucm/usecase` as `readiness`. |
 | `POST ucm/readiness` | `ucm_run_discovery` | Queue a full re-assessment. |
 | `POST ucm/readiness/assess` | `ucm_run_discovery` | Assess one use case synchronously (`{"id": ...}`). |
+| `GET ucm/selections` | caller | The caller's selections (`intent=bookmark\|select\|defer\|reject\|backlog`). |
+| `POST ucm/selections` | caller | Upsert the caller's intent (`id`, `intent`, `notes`, `priority`). |
+| `POST ucm/selections/delete` | caller | Remove the caller's selection. |
+| `GET ucm/validation?id=` | read | Last parse / preview / field-sample document. |
+| `POST ucm/validate` | `ucm_run_discovery` | Parse with `/services/search/parser`, optionally sample fields and re-assess (`sample`). |
+| `POST ucm/preview` | `ucm_run_discovery` | Bounded preview of imported SPL; refused when side-effect commands are present. |
 
 Writes check an app capability (`authorize.conf`) from the request context in
 addition to collection ACLs (defence in depth). Request bodies must be sent as

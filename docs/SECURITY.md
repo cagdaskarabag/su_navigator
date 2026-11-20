@@ -1,9 +1,7 @@
 # Security model
 
-Status: WP3 (content ingestion, catalogue, environment discovery, readiness).
-Later work packages extend this document when they add selection and
-deployment. Readiness assessment dispatches no searches; it reads only
-app-owned KV Store collections.
+Status: WP4 (catalogue, discovery, readiness, selection, SPL validation).
+Later work packages extend this document when they add deployment.
 
 ## Trust boundaries
 
@@ -12,6 +10,9 @@ app-owned KV Store collections.
 | Upstream content (GitHub, offline bundles) | Untrusted. Size-capped, git-blob-SHA verified, schema- and safety-validated, normalized by allowlisted field mapping. Stored as opaque JSON text (`raw_json`). |
 | Imported SPL | Displayed only, labelled "untrusted". Never executed by the catalogue or by discovery. SPL analysis is lexical (no search is dispatched). Side-effect commands (`delete`, `outputlookup`, `collect`, ...) are flagged. |
 | Discovery searches | Only a constructed `tstats` template over index names from `/services/data/indexes`, validated against `^[A-Za-z0-9_][A-Za-z0-9_-]{0,79}$`. Relative time window and result cap are required. |
+| Imported SPL preview | Dispatched only after an explicit user action, a successful `/services/search/parser` parse, and a side-effect command gate. Time window and `max_count` are forced. Event payloads are not stored. |
+| Field sampling | Constructed `| search index=… sourcetype=… \| head N \| fieldsummary` over discovered pairs. Imported pipelines are not used. |
+| Selections | Per-user KV rows; the handler only reads and writes the caller's `user` field. |
 | Reference links | Rendered as links only when absolute `http(s)`; other values are dropped or shown as plain repository paths. |
 | Browser → app API | Splunk Web proxy (`/splunkd/__raw/services/ucm/*`), Splunk session + CSRF form key. All inputs are validated against allowlists; KV queries are built from structured filters, free text is regex-escaped. |
 | App → GitHub | HTTPS only, host allowlist (`api.github.com`, `raw.githubusercontent.com` by default, configurable), TLS verification on, optional proxy / CA bundle, response size caps, bounded retries, rate-limit aware. |

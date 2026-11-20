@@ -9,7 +9,7 @@ from ..catalog.summary import STATUS_ACTIVE
 from ..content.reindex import StoredNormalizer
 from ..errors import NotFoundError, UcmError, ValidationError
 from ..log import get_logger
-from ..model.canonical import CRITICALITY_RANK, UseCase
+from ..model.canonical import CRITICALITY_RANK, Requirement, UseCase
 from ..storage import collections as C
 from ..storage.collections import DOC_SCHEMA
 from ..storage.kvstore import DocumentStore
@@ -41,11 +41,20 @@ def new_job(requested_by: str, source: str = "manual") -> Dict[str, Any]:
             "requested_at": utc_now_iso(), "errors": [], "totals": {}}
 
 
+def _requirements(uc: UseCase) -> List[Requirement]:
+    reqs = list(uc.requirements)
+    if uc.spl and not any(r.type == "spl_validity" for r in reqs):
+        reqs.append(Requirement(
+            "spl_validity:primary", "spl_validity", "primary", "required", "derived_spl", "medium",
+            "primary SPL parsed with Splunk search/parser"))
+    return reqs
+
+
 def assess_use_case(uc: UseCase, snap: EnvironmentSnapshot, settings: ReadinessSettings) -> Dict[str, Any]:
     results = []
-    for req in uc.requirements:
+    for req in _requirements(uc):
         r = dataclasses.asdict(req)
-        ev = evaluate(r, snap, settings.evaluation)
+        ev = evaluate(r, snap, settings.evaluation, uc.content_id, uc.key)
         results.append({
             "req_id": req.req_id, "type": req.type, "value": req.value, "level": req.level,
             "source": req.source, "confidence": req.confidence, **ev,

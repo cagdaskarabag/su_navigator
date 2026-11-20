@@ -62,3 +62,13 @@ min_coverage = <float 0-1>
 * Minimum share of scored requirement weight with a decided status; below it the state is
 * "insufficient_evidence". Default 0.5.
 job_timeout_seconds = <integer>
+
+[validation]
+earliest = <relative-time>
+* Forced earliest bound for preview and field sampling. Default -15m.
+latest = <relative-time>
+preview_max_events = <integer>
+preview_timeout_seconds = <integer>
+sample_events = <integer>
+* Events read per index/sourcetype pair for fieldsummary. Default 200.
+sample_timeout_seconds = <integer>

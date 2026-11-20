@@ -74,9 +74,21 @@ Gaps carried forward: per-use-case requirement overrides (accept / not
 applicable) are not implemented; the catalogue list does not show readiness
 yet; SHC and Cloud unvalidated.
 
-## WP4 — Selection and validation ⬜
-Bookmarks/selection (`uc_selections`), backlog, SPL validation (parser via
-`search/parser`, macro/lookup checks, bounded preview jobs).
+## WP4 — Selection and validation ✅
+1. Per-user `uc_selections` (bookmark / select / defer / reject); backlog =
+   select + defer. Any signed-in user manages their own rows; sync never
+   writes them.
+2. SPL validation via `/services/search/parser` (D-026), including parser
+   candidate prefixes so Fenre `multisearch` and `index=` searches both parse.
+3. Bounded preview of imported SPL; side-effect commands are refused; missing
+   lookups at runtime are recorded, not thrown as 5xx. No event payloads stored.
+4. Field sampling via constructed `fieldsummary` (D-027); readiness evaluators
+   for `field` and `spl_validity` consume `uc_validation`.
+5. UI: Select on the catalogue, Backlog view, validation + selection cards on
+   the use-case page.
+
+Gaps: event-condition sampling still unverified; no shared team backlog;
+preview does not open Splunk's Search view.
 
 ## WP5 — Deployment engine ⬜
 State machine, approval, disabled-first saved searches in an app namespace,
@@ -108,4 +120,6 @@ already run in WP1 and are repeated here.
 | Mapping registry | ✅ local never overwritten | ✅ local create + delete through REST | ⬜ | ⬜ |
 | Readiness evaluators, scoring, veto | ✅ per type, thresholds, veto, coverage, staleness, pruning | ✅ 164 use cases auto-assessed after discovery; single assess; viewer 403 | ⬜ | ⬜ |
 | Readiness worker | ✅ auto-schedule once per discovery, timeout, captain gate | ✅ queued and ran within one worker interval | ⬜ captain-only election | ⬜ |
+| Selection / backlog | ✅ per-user intents, catalogue + backlog UI | ✅ viewer can select; isolated from other users | ⬜ | ⬜ |
+| SPL parser + preview + field sample | ✅ parser candidates, side-effect gate, constructed fieldsummary | ✅ 13.1.1 parses; preview records missing lookup; `_time`/`host`/`group`/`name` sampled | ⬜ | ⬜ |
 | Packaging | n/a | ✅ AppInspect 4.4.0 precert (all checks and cloud tags): 0 failures | n/a | ⬜ vetting |
