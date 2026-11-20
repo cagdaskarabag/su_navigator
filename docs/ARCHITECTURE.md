@@ -44,7 +44,7 @@ not packaged.
 | 3 | Content Synchronization | `content/sync.py`, `bin/ucm_sync_worker.py` | WP1 | Implemented |
 | 4 | Environment Discovery | `discovery/` | WP2 | Implemented |
 | 5 | Data Source Mapping | `discovery/mapping.py` | WP2 | Implemented |
-| 6 | Readiness Assessment | `readiness/` | WP3 | Planned |
+| 6 | Readiness Assessment | `readiness/` | WP3 | Implemented (inventory evidence; field/SPL checks in WP4) |
 | 7 | Use Case Selection | `selection/` | WP4 | Planned |
 | 8 | SPL Validation | `spl/` (static analysis implemented in WP1) | WP4 | Partial |
 | 9 | Deployment Manager | `deployment/` | WP5 | Planned |
@@ -68,6 +68,13 @@ Mark disappeared records `withdrawn`; record job in uc_sync_state; audit
 Imported SPL is data. It is never dispatched by the content subsystem.
 Discovery searches are a constructed ``tstats`` template over index names
 returned by ``/services/data/indexes`` (D-020, D-021).
+
+Readiness flow (WP3): ``EnvironmentSnapshot.load`` (sources + mappings +
+discovery state, once per job) ─▶ ``StoredNormalizer`` re-derives each active
+use case's requirements from ``uc_content`` ─▶ one evaluator per requirement
+type ─▶ ``score`` (weights, veto) ─▶ batch_save ``uc_readiness``. The worker
+queues a re-assessment when discovery or content sync completed after the
+last assessment (D-024).
 
 ## 4. Canonical model (`ucm.usecase/1`)
 
@@ -113,7 +120,7 @@ All collections are app-scoped (`nobody` owner) and replicated in SHC.
 | `uc_audit` | uuid | shared (append) | all services | `time, actor, action, object_type, object_id, outcome, details`. Retention: 365 days (purge in WP7). |
 | `uc_environment_sources` | `src_<kind>_<hash>` | shared | discovery | Index, index/sourcetype pair, app and data-model rows with window counts and data age. Missing sources are marked, never deleted. |
 | `uc_source_mappings` | `map_<kind>_<hash>` | shared | discovery / analyst | Local and auto mappings. Local rows are never overwritten by discovery. |
-| `uc_readiness` | — | shared | WP3 | Planned |
+| `uc_readiness` | same as `uc_catalog` | shared | readiness job / analyst | `state`, `score`, `coverage`, `blockers`, `gaps`, `counts`, per-requirement `results[]` (status, code, detail, observed, via_mapping), `engine_version`, `discovery_at`, `source_hash`. ~3 KB. Staleness computed on read. |
 | `uc_selections` | `<user>::<content_id>` | per-user rows | WP4 | Planned |
 | `uc_deployments` | — | shared | WP5 | Planned |
 | `uc_frameworks` | — | shared | WP6 | Planned |
@@ -154,6 +161,11 @@ from `raw_json` without network access (`POST /ucm/catalog/reindex`, WP1).
 | `GET ucm/mappings` | read | Source mappings. |
 | `POST ucm/mappings` | `ucm_run_discovery` | Create or update a **local** mapping. |
 | `POST ucm/mappings/delete` | `ucm_run_discovery` | Delete a local mapping (auto mappings cannot be deleted). |
+| `GET ucm/readiness` | read | Filtered, paged readiness (`state, domain, criticality, category, q, sort, offset, count`). |
+| `GET ucm/readiness/summary` | read | Counts by state, most common unmet requirements, jobs, settings. |
+| `GET ucm/readiness/usecase?id=` | read | Full readiness document with staleness. Also embedded in `GET ucm/usecase` as `readiness`. |
+| `POST ucm/readiness` | `ucm_run_discovery` | Queue a full re-assessment. |
+| `POST ucm/readiness/assess` | `ucm_run_discovery` | Assess one use case synchronously (`{"id": ...}`). |
 
 Writes check an app capability (`authorize.conf`) from the request context in
 addition to collection ACLs (defence in depth). Request bodies must be sent as

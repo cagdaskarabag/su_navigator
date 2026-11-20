@@ -94,12 +94,36 @@
   </row>
   <row>
     <panel>
-      <title>Readiness, validation and deployment</title>
+      <title>Readiness by state</title>
+      <chart>
+        <search>
+          <query>| inputlookup ucm_readiness_lookup | stats count by state | eval order=case(state="ready",1,state="partially_ready",2,state="not_ready",3,state="blocked",4,true(),5) | sort order | fields state count</query>
+        </search>
+        <option name="charting.chart">bar</option>
+        <option name="charting.legend.placement">none</option>
+        <option name="charting.drilldown">none</option>
+      </chart>
+    </panel>
+    <panel>
+      <title>Ready use cases by domain</title>
+      <chart>
+        <search>
+          <query>| inputlookup ucm_readiness_lookup where state="ready" | stats count by domains | sort - count | rename domains as domain</query>
+        </search>
+        <option name="charting.chart">bar</option>
+        <option name="charting.legend.placement">none</option>
+        <option name="charting.drilldown">none</option>
+      </chart>
+    </panel>
+  </row>
+  <row>
+    <panel>
+      <title>Validation and deployment</title>
       <html>
         <div class="ucm-notice">
-          <strong>Not assessed.</strong> Readiness, validation and deployment figures are shown only once
-          environment discovery and readiness assessment have run against this deployment. No use case is
-          reported as ready, validated or enabled until there is evidence for it.
+          <strong>Not assessed.</strong> Readiness above is inventory evidence (data, add-ons, data models,
+          knowledge objects). Field presence and SPL validity are verified in a later release, and no use case is
+          reported as validated or enabled until there is evidence for it.
         </div>
       </html>
     </panel>

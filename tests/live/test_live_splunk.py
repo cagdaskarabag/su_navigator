@@ -191,6 +191,34 @@ class LiveApiTest(unittest.TestCase):
         status, usecase = api(self.admin, "GET", "usecase", {"id": "fenre:UC-9.1.1"})
         if status == 200:
             self.assertIn("environment_summary", usecase)
+        status, macros = api(self.admin, "GET", "inventory", {"kind": "macro", "count": "5"})
+        self.assertEqual(status, 200)
+        self.assertGreater(macros["total"], 0)
+
+    def test_readiness_assess_and_rbac(self):
+        self.wait_idle()
+        bundle = helpers.fixture_bundle(record_ids=["9.1.1", "13.1.1"])
+        status, body = api(self.admin, "POST", "import", raw=json.dumps(bundle).encode("utf-8"))
+        self.assertEqual(status, 200, body)
+        _, disc = api(self.admin, "GET", "discovery")
+        if not disc["state"].get("last_completed_at"):
+            self.skipTest("no completed discovery on this instance")
+        status, body = api(self.viewer, "POST", "readiness/assess", body={"id": "fenre:UC-9.1.1"})
+        self.assertEqual(status, 403)
+        status, doc = api(self.admin, "POST", "readiness/assess", body={"id": "fenre:UC-13.1.1"})
+        self.assertEqual(status, 200, doc)
+        self.assertIn(doc["state"], ("ready", "partially_ready", "not_ready", "blocked", "insufficient_evidence"))
+        self.assertEqual(len(doc["results"]), doc["requirement_count"])
+        self.assertTrue(all(r["status"] for r in doc["results"]))
+        status, detail = api(self.viewer, "GET", "usecase", {"id": "fenre:UC-13.1.1"})
+        self.assertEqual(detail["readiness"]["state"], doc["state"])
+        self.assertEqual(detail["requirement_summary"]["assessment"], doc["state"])
+        status, summary = api(self.viewer, "GET", "readiness/summary")
+        self.assertEqual(status, 200)
+        self.assertGreaterEqual(summary["total"], 1)
+        status, page = api(self.viewer, "GET", "readiness", {"sort": "score", "count": "10"})
+        self.assertEqual(status, 200)
+        self.assertTrue(page["items"])
 
     @unittest.skipUnless(os.environ.get("UCM_LIVE_REMOTE") == "1", "set UCM_LIVE_REMOTE=1 for GitHub access")
     def test_remote_manifest_through_splunkd(self):

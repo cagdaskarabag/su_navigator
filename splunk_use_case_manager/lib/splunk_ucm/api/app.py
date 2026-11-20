@@ -27,6 +27,9 @@ from ..discovery.service import DiscoveryService, new_job as new_discovery_job
 from ..discovery.worker import settings_from_config
 from ..errors import PermissionDenied, UcmError, UnsupportedOperation, ValidationError
 from ..platform.search import SearchClient
+from ..readiness.query import ReadinessFilter, ReadinessQueryService
+from ..readiness.service import ReadinessService, new_job as new_readiness_job
+from ..readiness.worker import settings_from_config as readiness_settings
 from ..log import get_logger
 from ..platform.capabilities import PlatformProbe
 from ..secrets import get_secret
@@ -135,6 +138,9 @@ class Context:
             self.store, self.audit, SplunkInventory(self.user_transport),
             SearchClient(self.user_transport), settings_from_config(self.config))
 
+    def readiness_service(self) -> ReadinessService:
+        return ReadinessService(self.store, self.audit, readiness_settings(self.config))
+
 
 Handler = Callable[[Context, Request], Response]
 
@@ -180,8 +186,11 @@ def get_catalog(ctx: Context, req: Request) -> Response:
 
 def get_usecase(ctx: Context, req: Request) -> Response:
     service = UseCaseDetailService(ContentRepository(ctx.store), CategoryRepository(ctx.store))
-    detail = service.get(req.arg("id"))
-    return Response(200, attach_environment(detail, ctx.store))
+    detail = attach_environment(service.get(req.arg("id")), ctx.store)
+    readiness = ctx.readiness_service().get(req.arg("id"))
+    detail["readiness"] = readiness
+    detail["requirement_summary"]["assessment"] = readiness["state"] if readiness else "not_assessed"
+    return Response(200, detail)
 
 
 def get_categories(ctx: Context, req: Request) -> Response:
@@ -341,6 +350,48 @@ def post_mappings_delete(ctx: Context, req: Request) -> Response:
     return Response(200, {"deleted": True})
 
 
+def get_readiness(ctx: Context, req: Request) -> Response:
+    f = ReadinessFilter(
+        states=req.args("state"), domains=req.args("domain"), criticality=req.args("criticality"),
+        category_keys=req.args("category"), q=req.arg("q").strip(), sort=req.arg("sort", "score"),
+        offset=_int(req.arg("offset"), 0, "offset"), count=_int(req.arg("count"), 25, "count"),
+        with_total=req.arg("total", "1") != "0")
+    max_page = ctx.config.get_int("catalog", "max_page_size", 100, 10, 500)
+    return Response(200, ReadinessQueryService(ctx.store, max_page).search(f))
+
+
+def get_readiness_summary(ctx: Context, req: Request) -> Response:
+    svc = ctx.readiness_service()
+    out = ReadinessQueryService(ctx.store).summary()
+    out["state"] = svc.state()
+    out["jobs"] = svc.jobs(limit=10)
+    out["discovery_completed_at"] = ctx.discovery_service().state.state().get("last_completed_at")
+    out["settings"] = dataclasses.asdict(svc.settings)
+    return Response(200, out)
+
+
+def get_readiness_usecase(ctx: Context, req: Request) -> Response:
+    doc = ctx.readiness_service().get(req.arg("id"))
+    if doc is None:
+        return Response(404, {"error": {"code": "not_assessed", "message": "use case has not been assessed"}})
+    return Response(200, doc)
+
+
+def post_readiness(ctx: Context, req: Request) -> Response:
+    ctx.require(CAP_RUN_DISCOVERY)
+    job = ctx.readiness_service().enqueue(new_readiness_job(ctx.user))
+    return Response(202, {"job": job})
+
+
+def post_readiness_assess(ctx: Context, req: Request) -> Response:
+    ctx.require(CAP_RUN_DISCOVERY)
+    body = req.json()
+    use_case_id = str(body.get("id") or req.arg("id") or "")
+    if not use_case_id:
+        raise ValidationError("id is required")
+    return Response(200, ctx.readiness_service().assess_one(use_case_id, ctx.user))
+
+
 def build_router() -> Router:
     router = Router()
     router.add("GET", "catalog", get_catalog)
@@ -360,4 +411,9 @@ def build_router() -> Router:
     router.add("GET", "mappings", get_mappings)
     router.add("POST", "mappings", post_mappings)
     router.add("POST", "mappings/delete", post_mappings_delete)
+    router.add("GET", "readiness", get_readiness)
+    router.add("POST", "readiness", post_readiness)
+    router.add("GET", "readiness/summary", get_readiness_summary)
+    router.add("GET", "readiness/usecase", get_readiness_usecase)
+    router.add("POST", "readiness/assess", post_readiness_assess)
     return router

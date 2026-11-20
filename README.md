@@ -5,9 +5,10 @@ deploy monitoring use cases. Content comes from pluggable providers; the first
 is the [Fenre monitoring use-case catalogue](https://github.com/fenre/splunk-monitoring-use-cases)
 (MIT).
 
-**Status: WP2, content ingestion, searchable catalogue and environment
-discovery.** Readiness assessment, selection and deployment are not
-implemented yet. See [docs/IMPLEMENTATION_PLAN.md](docs/IMPLEMENTATION_PLAN.md).
+**Status: WP3, content ingestion, searchable catalogue, environment
+discovery and readiness assessment.** Selection, SPL validation and
+deployment are not implemented yet. See
+[docs/IMPLEMENTATION_PLAN.md](docs/IMPLEMENTATION_PLAN.md).
 
 ## What works today
 
@@ -23,6 +24,9 @@ implemented yet. See [docs/IMPLEMENTATION_PLAN.md](docs/IMPLEMENTATION_PLAN.md).
   administration, overview and a data-inventory dashboard (counts and data
   age from a bounded `tstats`, never from imported SPL).
 - Source-mapping registry: local mappings are never overwritten by discovery.
+- Readiness assessment: one evaluator per requirement type with stored
+  evidence, weighted score, and a veto when a critical requirement is unmet.
+  Field and SPL checks are reported as "not verified" until WP4.
 - Capability-based access control and an audit trail.
 
 ## Layout

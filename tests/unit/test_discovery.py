@@ -65,6 +65,12 @@ class FakeInventory:
     def list_datamodels(self):
         return list(self.models)
 
+    def list_knowledge_objects(self):
+        return []
+
+    def server_version(self):
+        return "10.2.9"
+
 
 class FakeSearch:
     def __init__(self, rows=None, error=None, truncated=False):
@@ -194,6 +200,28 @@ class DiscoveryServiceTest(unittest.TestCase):
         job = self.run_job()
         self.assertEqual(job["status"], "partial")
         self.assertTrue(job["errors"])
+
+    def test_failed_or_truncated_search_does_not_mark_pairs_missing(self):
+        from splunk_ucm.errors import UnsupportedOperation
+        self.run_job()
+        key = source_key("pair", "wineventlog", "WinEventLog:System")
+        self.search.error = UnsupportedOperation("search failed")
+        self.run_job()
+        self.assertEqual(self.store.get(C.ENVIRONMENT_SOURCES, key)["status"], "active")
+        self.search.error = None
+        self.search.rows = [ROWS[0]]
+        self.search.truncated = True
+        self.run_job()
+        self.assertEqual(self.store.get(C.ENVIRONMENT_SOURCES, key)["status"], "active")
+
+    def test_knowledge_objects_and_version_recorded(self):
+        self.inv.list_knowledge_objects = lambda: [
+            {"kind": "macro", "name": "sec_idx", "app": "TA", "sharing": "global", "disabled": False,
+             "lookup_type": ""}]
+        self.run_job()
+        macros = self.store.query(C.ENVIRONMENT_SOURCES, {"kind": "macro"})
+        self.assertEqual(macros[0]["sharing"], "global")
+        self.assertEqual(self.store.get(C.SYNC_STATE, "discovery::local")["splunk_version"], "10.2.9")
 
     def test_imported_spl_never_reaches_search(self):
         self.run_job()

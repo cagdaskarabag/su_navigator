@@ -16,6 +16,7 @@ from splunk_ucm.config import load_config  # noqa: E402
 from splunk_ucm.content.registry import remote_provider  # noqa: E402
 from splunk_ucm.content.worker import SyncWorker  # noqa: E402
 from splunk_ucm.discovery.worker import DiscoveryWorker  # noqa: E402
+from splunk_ucm.readiness.worker import ReadinessWorker  # noqa: E402
 from splunk_ucm.errors import StorageError  # noqa: E402
 from splunk_ucm.log import get_logger  # noqa: E402
 from splunk_ucm.platform.capabilities import PlatformProbe  # noqa: E402
@@ -80,20 +81,24 @@ def run(config_xml: str) -> int:
     config = load_config(transport)
     store = KVStore(transport)
     leader = lambda: _leader(probe)
-    worker = SyncWorker(store, config, remote_provider,
-                        lambda: get_secret(transport, "github_token") or "", leader)
-    discovery = DiscoveryWorker(store, config, transport, leader)
+    workers = [
+        ("sync", SyncWorker(store, config, remote_provider,
+                            lambda: get_secret(transport, "github_token") or "", leader)),
+        ("discovery", DiscoveryWorker(store, config, transport, leader)),
+        ("readiness", ReadinessWorker(store, config, leader)),
+    ]
     for _ in range(_max_jobs(config_xml)):
-        result = worker.run_once()
-        if result.get("action") == "skipped":
+        ran = False
+        for name, worker in workers:
+            result = worker.run_once()
+            if result.get("action") == "skipped":
+                return 0
+            if result.get("action") != "idle":
+                log.info("%s worker run" % name, extra=result)
+                ran = True
+                break
+        if not ran:
             break
-        if result.get("action") != "idle":
-            log.info("worker run", extra=result)
-            continue
-        dresult = discovery.run_once()
-        if dresult.get("action") in ("idle", "skipped"):
-            break
-        log.info("discovery worker run", extra=dresult)
     return 0
 
 

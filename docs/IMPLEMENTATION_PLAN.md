@@ -51,9 +51,28 @@ tests; SHC and Splunk Cloud behaviour are unvalidated.
 6. Jobs run in `ucm_sync_worker` (D-021). `ucm_analyst` receives
    `ucm_run_discovery`.
 
-## WP3 — Readiness engine ⬜
-Requirement evaluators (one per type), evidence model, `uc_readiness`, weighted
-scoring with critical-requirement veto, readiness dashboard.
+## WP3 — Readiness engine ✅
+1. `EnvironmentSnapshot`: sources, mappings and discovery state loaded once
+   per job.
+2. Evaluators for sourcetype (exact, wildcard, local/auto mapping, staleness,
+   no-longer-seen), index, cim_model, datamodel_acceleration, addon (name,
+   label, Splunkbase id, minimum version), product (aliases), macro, lookup,
+   eventtype (sharing), version, spl_validity ("no SPL"). Fields, event
+   conditions, permissions and free-text data sources are `unverified`.
+3. Evidence model per requirement: status, code, detail, observed rows,
+   mapping used.
+4. Weighted score with critical veto and coverage (D-024); `uc_readiness`.
+5. Full jobs in the worker with auto re-assessment after discovery or sync;
+   synchronous single assessment; staleness on read (D-025).
+6. UI: Readiness dashboard (state cards, most common unmet requirements,
+   filters, paging), readiness block and per-requirement evidence on the
+   use-case page, readiness charts on the Overview.
+7. Discovery extended with knowledge objects, Splunk version and all apps;
+   fix for false `missing` after failed or truncated searches (D-023).
+
+Gaps carried forward: per-use-case requirement overrides (accept / not
+applicable) are not implemented; the catalogue list does not show readiness
+yet; SHC and Cloud unvalidated.
 
 ## WP4 — Selection and validation ⬜
 Bookmarks/selection (`uc_selections`), backlog, SPL validation (parser via
@@ -87,4 +106,6 @@ already run in WP1 and are repeated here.
 | Dashboards | n/a | ✅ rendered in headless Chrome with live data, no app JS errors | ⬜ | ⬜ |
 | Discovery tstats + inventory REST | ✅ fake inventory/search; SPL construction rejects injection | ✅ include_internal job: 31 pairs, 12 indexes, 0 missing; viewer 403 | ⬜ | ⬜ |
 | Mapping registry | ✅ local never overwritten | ✅ local create + delete through REST | ⬜ | ⬜ |
+| Readiness evaluators, scoring, veto | ✅ per type, thresholds, veto, coverage, staleness, pruning | ✅ 164 use cases auto-assessed after discovery; single assess; viewer 403 | ⬜ | ⬜ |
+| Readiness worker | ✅ auto-schedule once per discovery, timeout, captain gate | ✅ queued and ran within one worker interval | ⬜ captain-only election | ⬜ |
 | Packaging | n/a | ✅ AppInspect 4.4.0 precert (all checks and cloud tags): 0 failures | n/a | ⬜ vetting |

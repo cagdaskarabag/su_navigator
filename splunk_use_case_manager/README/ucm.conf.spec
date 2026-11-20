@@ -48,3 +48,17 @@ search_timeout_seconds = <integer>
 job_timeout_seconds = <integer>
 schedule_interval_hours = <integer>
 * 0 disables scheduled discovery.
+
+[readiness]
+auto_assess = <boolean>
+* Re-assess all use cases after each completed discovery run or content sync. Default true.
+stale_hours = <integer>
+* A sourcetype whose newest event is older than this is "partial" (stale). Default 24.
+ready_threshold = <integer 1-100>
+* Minimum score for "ready" (also requires no unmet required or critical requirement). Default 90.
+partial_threshold = <integer 0-100>
+* Minimum score for "partially_ready". Default 50.
+min_coverage = <float 0-1>
+* Minimum share of scored requirement weight with a decided status; below it the state is
+* "insufficient_evidence". Default 0.5.
+job_timeout_seconds = <integer>

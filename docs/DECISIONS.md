@@ -181,5 +181,53 @@ leader gate as content sync; SHC still unvalidated).
 Auto mappings (`auto_exact` / `auto_heuristic`) match discovered values to
 catalogue fields and are labelled medium/low confidence. A mapping with
 `origin=local` is left untouched. Auto mappings cannot be deleted; create a
-local override instead. Presence of a source is inventory evidence, not a
+local override instead. Presence of a source is inventory evidence, and not a
 readiness score (WP3).
+
+## D-023 Discovery records knowledge objects; absence is only proven by complete searches
+Readiness needs macros, lookups and eventtypes (derived from SPL) and the
+Splunk version. Discovery therefore also lists `/servicesNS/-/-/admin/macros`,
+`data/transforms/lookups`, `data/lookup-table-files`, `saved/eventtypes`
+(name, app, sharing) and `server/info` version, and stores **all** enabled apps
+(not only add-on-like ones) so premium products and add-ons can be matched.
+Fix carried in WP3: an index/sourcetype pair is marked `missing` only if its
+index was in a `tstats` chunk that succeeded and the result was not
+truncated. Before, a failed chunk would have marked healthy sources missing.
+
+## D-024 Readiness scoring and veto
+* Statuses: `met` (1.0), `partial` (0.5, e.g. stale data, add-on below
+  minimum version, app-scoped macro), `not_met` (0), `unknown` (0, evaluator
+  could not decide), `unverified` (type not checkable from inventory: fields,
+  event conditions, permissions, SPL validity other than "no SPL") and
+  `not_applicable`.
+* Weight = level (critical 3, required 2, recommended 1, informational 0) x
+  confidence (high 1.0, medium 0.75, low 0.5), so SPL-derived hypotheses count
+  less than provider-structured requirements.
+* Score = weighted mean over scored requirements; `unverified` and zero-weight
+  requirements are excluded and reported (`unverified` count). Coverage =
+  share of scored weight with a decided status (not `unknown`).
+* **Veto:** any `critical` requirement `not_met` ⇒ `blocked`, whatever the
+  score. A `required` requirement `not_met` prevents `ready`.
+* States: `blocked`; `insufficient_evidence` (no scored requirement or
+  coverage < `min_coverage`); `ready` (score ≥ 90 and no unmet required);
+  `partially_ready` (≥ 50); `not_ready`. Thresholds in `ucm.conf [readiness]`.
+* "Ready" means inventory evidence only. The UI states this and shows the
+  number of unverified requirements; WP4 adds field sampling and SPL checks.
+* Data model presence is "met" for `cim_model` (definition installed);
+  populated data is not verified. Acceleration is a separate requirement.
+
+## D-025 Assessment execution, freshness and capability
+* Full assessment runs as a job (`doc_type=readiness_job`) in
+  `ucm_sync_worker` after content sync and discovery are idle. The environment
+  is loaded once per job; ~0.5 ms CPU per use case (16k in ~8 s CPU, measured
+  in memory); KV Store I/O dominates.
+* `auto_assess` (default on) queues a job when discovery or content sync
+  completed after the last assessment; a failed job is not retried until new
+  discovery or content arrives.
+* Single use cases can be assessed synchronously from the detail page.
+* Results record `discovery_at`, `source_hash` and `engine_version`; a read
+  flags them `stale` (`newer_discovery`, `content_changed`, `engine_upgraded`).
+* Running assessments reuses `ucm_run_discovery` (no new capability):
+  assessment reads only app-owned data and dispatches no searches.
+* Readiness for withdrawn or removed use cases is deleted at the end of a
+  full run.

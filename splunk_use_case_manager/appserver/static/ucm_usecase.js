@@ -37,33 +37,77 @@ require([
         return el("div", {}, el("div", { "class": "ucm-actions" }, el("strong", { text: title }), copy), pre);
     }
 
-    function requirementsTable(reqs) {
+    function evidenceText(res) {
+        var parts = [res.detail || ""];
+        if (res.via_mapping) {
+            parts.push("Via " + res.via_mapping.origin + " mapping from " + res.via_mapping.value + ".");
+        }
+        return parts.join(" ");
+    }
+
+    function requirementsTable(reqs, readiness) {
         if (!reqs.length) { return text("", "No requirements could be derived from this record."); }
+        var byId = {};
+        ((readiness && readiness.results) || []).forEach(function (r) { byId[r.req_id] = r; });
         var head = el("tr", {});
-        ["Type", "Requirement", "Level", "Source", "Confidence", "Notes", "In this deployment"].forEach(function (h) {
+        ["Type", "Requirement", "Level", "Source", "Confidence", "Status", "Evidence"].forEach(function (h) {
             head.appendChild(el("th", { text: h }));
         });
         var body = el("tbody", {});
         reqs.forEach(function (r) {
-            var env = r.environment || {};
-            var envBadge;
-            if (!env.applicable) {
-                envBadge = ucm.badge("n/a", "neutral");
-            } else if (env.present) {
-                envBadge = ucm.badge("present", "ok");
-            } else {
-                envBadge = ucm.badge("not seen", "warn");
-            }
+            var res = byId[r.req_id];
+            var evidence = res ? evidenceText(res) : (r.notes || "");
             body.appendChild(el("tr", {},
                 el("td", { text: r.type }),
                 el("td", { "class": "ucm-mono", text: r.value }),
                 el("td", {}, ucm.badge(r.level, r.level === "critical" ? "critical" : (r.level === "required" ? "high" : "neutral"))),
                 el("td", { text: r.source.replace("_", " ") }),
                 el("td", { text: r.confidence }),
-                el("td", { "class": "ucm-sub", text: r.notes || "" }),
-                el("td", {}, envBadge)));
+                el("td", {}, res ? ucm.statusBadge(res.status) : ucm.badge("not assessed", "neutral")),
+                el("td", { "class": "ucm-sub" }, evidence,
+                    res && res.observed && res.observed.length
+                        ? el("details", { "class": "ucm-details" }, el("summary", { text: "Observed (" + res.observed.length + ")" }),
+                            el("pre", { "class": "ucm-pre ucm-mono", text: res.observed.map(function (o) {
+                                return Object.keys(o).filter(function (k) { return o[k] !== null && o[k] !== undefined && o[k] !== ""; })
+                                    .map(function (k) { return k + "=" + o[k]; }).join("  ");
+                            }).join("\n") }))
+                        : null)));
         });
         return el("table", { "class": "ucm-table" }, el("thead", {}, head), body);
+    }
+
+    function readinessBox(uc) {
+        var rd = uc.readiness;
+        var assessBtn = el("button", { "class": "btn", type: "button", text: rd ? "Re-assess now" : "Assess now",
+            onclick: function () {
+                this.disabled = true;
+                ucm.post("readiness/assess", { id: uc.content_id }).done(function () { load(); })
+                    .fail(function (err) { window.alert(err.message); });
+            } });
+        if (!rd) {
+            return el("div", {}, ucm.stateBox("info", "Readiness: not assessed",
+                "This use case has not been evaluated against this deployment yet. Assessment runs automatically after " +
+                "environment discovery. Deployment state: not selected, not deployed."),
+                el("div", { "class": "ucm-actions" }, assessBtn));
+        }
+        var counts = rd.counts || {};
+        var box = el("div", { "class": "ucm-card" },
+            el("div", { "class": "ucm-readiness-head" },
+                el("strong", { text: "Readiness" }), ucm.readinessBadge(rd.state),
+                el("span", { "class": "ucm-big", text: rd.score === null || rd.score === undefined ? "–" : rd.score + " / 100" }),
+                el("span", { "class": "ucm-sub", text: "coverage " + Math.round((rd.coverage || 0) * 100) + "%" }),
+                rd.stale ? ucm.badge("stale: " + rd.stale_reasons.join(", "), "warn") : null,
+                assessBtn),
+            el("div", { "class": "ucm-sub", text: (counts.met || 0) + " met, " + (counts.partial || 0) + " partial, " +
+                (counts.not_met || 0) + " not met, " + (counts.unknown || 0) + " unknown, " + (rd.unverified || 0) +
+                " not verified (fields and SPL checks need WP4). Evaluated " + rd.evaluated_at + " UTC against discovery " +
+                (rd.discovery_at || "–") + "." }),
+            rd.blockers && rd.blockers.length ? el("div", {}, el("strong", { text: "Blocked by critical requirement: " }),
+                rd.blockers.map(function (b) { return ucm.badge(b.type + ": " + b.value, "critical"); })) : null,
+            rd.gaps && rd.gaps.length ? el("div", {}, el("strong", { text: "Unmet required: " }),
+                rd.gaps.map(function (g) { return ucm.badge(g.type + ": " + g.value, "high"); })) : null,
+            el("div", { "class": "ucm-sub", text: "Readiness is inventory evidence, not a guarantee that the search returns results. Deployment state: not selected, not deployed." }));
+        return box;
     }
 
     function mitreLink(m) {
@@ -139,19 +183,12 @@ require([
                 uc.provider_status === "withdrawn" ? ucm.badge("withdrawn upstream", "warn") : null),
             el("div", { "class": "ucm-sub", text: [uc.category_name, uc.subcategory].filter(Boolean).join(" › ") })));
 
-        var env = uc.environment_summary || {};
-        var envNote = env.requirements_applicable
-            ? (env.requirements_present + " of " + env.requirements_applicable +
-                " inventory-related requirements match a discovered source. This is not a readiness score.")
-            : "No inventory-related requirements, or discovery has not been run.";
-        root.appendChild(ucm.stateBox("info", "Readiness: not assessed",
-            "This use case has not been evaluated against this deployment. Requirements below are taken from the " +
-            "provider record or derived from its SPL; derived requirements are hypotheses, not evidence. " +
-            "Deployment state: not selected, not deployed. " + envNote));
+        root.appendChild(readinessBox(uc));
 
         root.appendChild(section("Description", text(uc.description)));
         root.appendChild(section("Business value", text(uc.business_value)));
-        root.appendChild(section("Requirements", requirementsTable(uc.requirements),
+        root.appendChild(section("Requirements", requirementsTable(uc.requirements, uc.readiness),
+            el("div", { "class": "ucm-sub", text: "Requirements come from the provider record or are derived from its SPL; derived requirements are hypotheses with lower confidence and weight." }),
             el("details", { "class": "ucm-details" }, el("summary", { text: "Provider data-source description" }), text(uc.data_sources_text)),
             uc.required_fields.length ? el("div", {}, el("strong", { text: "Required fields: " }), ucm.chips(uc.required_fields)) : null,
             uc.datamodel_acceleration_text ? el("details", { "class": "ucm-details" }, el("summary", { text: "Data model acceleration notes" }), text(uc.datamodel_acceleration_text)) : null));
@@ -184,7 +221,11 @@ require([
         ucm.clear(root).appendChild(ucm.stateBox("error", "No use case selected.", "Open a use case from the Content Catalogue."));
         return;
     }
-    ucm.get("usecase", { id: id }).done(render).fail(function (err) {
-        ucm.clear(root).appendChild(ucm.stateBox("error", "The use case could not be loaded.", err.message));
-    });
+    function load() {
+        ucm.get("usecase", { id: id }).done(render).fail(function (err) {
+            ucm.clear(root).appendChild(ucm.stateBox("error", "The use case could not be loaded.", err.message));
+        });
+    }
+
+    load();
 });

@@ -70,6 +70,40 @@ class SplunkInventory:
             })
         return out
 
+    def server_version(self) -> str:
+        try:
+            data = self.t.json("GET", "/services/server/info")
+        except StorageError:
+            return ""
+        entries = _entries(data)
+        return str(_content(entries[0]).get("version") or "") if entries else ""
+
+    def list_knowledge_objects(self, limit: int = 5000) -> List[Dict[str, Any]]:
+        """Macros, lookup definitions, lookup table files and eventtypes visible to the caller."""
+        out: List[Dict[str, Any]] = []
+        for kind, path in (("macro", "/servicesNS/-/-/admin/macros"),
+                           ("lookup", "/servicesNS/-/-/data/transforms/lookups"),
+                           ("lookup", "/servicesNS/-/-/data/lookup-table-files"),
+                           ("eventtype", "/servicesNS/-/-/saved/eventtypes")):
+            try:
+                entries = self._get(path, kind + " listing")
+            except UnsupportedOperation:
+                continue
+            for entry in entries[:limit]:
+                name = str(entry.get("name") or "")
+                if not name:
+                    continue
+                content = _content(entry)
+                acl = entry.get("acl") if isinstance(entry.get("acl"), dict) else {}
+                out.append({
+                    "kind": kind, "name": name,
+                    "app": str(acl.get("app") or content.get("eai:appName") or ""),
+                    "sharing": str(acl.get("sharing") or ""),
+                    "disabled": bool(content.get("disabled")),
+                    "lookup_type": str(content.get("type") or ("file" if path.endswith("files") else "")),
+                })
+        return out
+
     def list_datamodels(self) -> List[Dict[str, Any]]:
         out = []
         for entry in self._get("/services/data/models", "data model listing"):

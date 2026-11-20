@@ -47,3 +47,12 @@ pre.ucm-spl { background: #1e2327; color: #e8ecef; padding: 10px 12px; border-ra
 .ucm-card { flex: 1 1 260px; border: 1px solid #e1e6eb; border-radius: 4px; padding: 12px; background: #fff; }
 .ucm-actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin: 8px 0; }
 details.ucm-details > summary { cursor: pointer; color: #1f4e79; margin: 4px 0; }
+
+.ucm-card-link { text-decoration: none; color: inherit; flex: 1 1 150px; }
+.ucm-card-link:hover { border-color: #1f4e79; text-decoration: none; }
+.ucm-card-active { border-color: #1f4e79; box-shadow: inset 0 0 0 1px #1f4e79; }
+.ucm-big { font-size: 26px; font-weight: 600; margin-top: 4px; }
+.ucm-score { display: inline-flex; align-items: center; gap: 6px; font-weight: 600; }
+.ucm-score-bar { display: inline-block; width: 60px; height: 6px; background: #e8ecef; border-radius: 3px; overflow: hidden; }
+.ucm-score-bar > span { display: block; height: 100%; background: #1f4e79; }
+.ucm-readiness-head { display: flex; gap: 16px; align-items: center; flex-wrap: wrap; }

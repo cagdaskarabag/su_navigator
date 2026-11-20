@@ -83,7 +83,8 @@ require([
                     el("td", { "class": "ucm-mono", text: row.sourcetype })];
             } else {
                 cells = [el("td", { text: row.name }),
-                    el("td", { "class": "ucm-sub", text: row.label || row.display_name || row.datatype || row.app || "" })];
+                    el("td", { "class": "ucm-sub", text: row.label || row.display_name || row.datatype ||
+                        (row.app ? row.app + (row.sharing ? " (" + row.sharing + ")" : "") : "") })];
             }
             body.appendChild(el("tr", {}, cells,
                 el("td", { text: row.window_count === undefined ? "" : row.window_count }),
@@ -149,7 +150,7 @@ require([
                 el("input", { "class": "ucm-search", type: "search", value: state.q, id: "inv-q" })),
             el("div", { "class": "ucm-field" }, el("label", { text: "Kind" }),
                 el("select", { id: "inv-kind" },
-                    ["pair", "index", "app", "datamodel"].map(function (k) {
+                    ["pair", "index", "app", "datamodel", "macro", "lookup", "eventtype"].map(function (k) {
                         return el("option", { value: k, text: k, selected: state.kind === k ? "selected" : null });
                     }))),
             el("div", { "class": "ucm-field" }, el("label", { text: "Status" }),

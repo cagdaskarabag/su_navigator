@@ -5,7 +5,7 @@ from typing import Any, Dict, List, Optional
 from ..storage import collections as C
 from ..storage.kvstore import DocumentStore
 from ..util import utc_now_iso
-from .keys import mapping_key, source_key
+from .keys import mapping_key
 
 
 class SourceRepository:
@@ -19,11 +19,14 @@ class SourceRepository:
         if docs:
             self.store.batch_save(C.ENVIRONMENT_SOURCES, docs)
 
-    def list_active_keys(self, kind: Optional[str] = None) -> List[str]:
+    def list_active(self, kind: Optional[str] = None) -> List[Dict[str, Any]]:
         query: Dict[str, Any] = {"status": "active"}
         if kind:
             query["kind"] = kind
-        return [r["_key"] for r in self.store.query(C.ENVIRONMENT_SOURCES, query, fields=["_key"])]
+        return self.store.query(C.ENVIRONMENT_SOURCES, query, fields=["_key", "kind", "index"])
+
+    def list_all(self, kind: Optional[str] = None) -> List[Dict[str, Any]]:
+        return self.store.query(C.ENVIRONMENT_SOURCES, {"kind": kind} if kind else None)
 
     def mark_missing(self, keys: List[str], when: str) -> int:
         changed = 0
@@ -107,7 +110,3 @@ class DiscoveryStateRepository:
             self.store.delete(C.SYNC_STATE, row["_key"])
         return len(rows)
 
-
-# referenced by keys.py users
-source_key = source_key
-mapping_key = mapping_key

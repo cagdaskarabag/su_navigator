@@ -105,13 +105,15 @@ class DiscoveryService:
         indexes = self.inventory.list_indexes()
         apps = self.inventory.list_apps()
         models = self.inventory.list_datamodels()
+        knowledge = self.inventory.list_knowledge_objects()
+        version = self.inventory.server_version()
 
         eligible = [i for i in indexes if _index_eligible(i, include_internal)]
         event_indexes = [i["name"] for i in eligible if i.get("datatype") != "metric"]
         for name in event_indexes:
             validate_index_name(name)
 
-        pairs, truncated, search_errors = self._tstats(event_indexes, earliest, latest)
+        pairs, truncated, search_errors, searched = self._tstats(event_indexes, earliest, latest)
         imported = utc_now_iso()
         now = self.now_epoch()
 
@@ -120,10 +122,19 @@ class DiscoveryService:
         docs.extend(_pair_docs(pairs, now, imported, job["job_id"]))
         docs.extend(_app_docs(apps, imported, job["job_id"]))
         docs.extend(_model_docs(models, imported, job["job_id"]))
+        docs.extend(_knowledge_docs(knowledge, imported, job["job_id"]))
         self.sources.save(docs)
 
         kept = {d["_key"] for d in docs}
-        gone = [k for k in self.sources.list_active_keys() if k not in kept]
+        gone = []
+        for row in self.sources.list_active():
+            if row["_key"] in kept:
+                continue
+            # A pair is only "missing" if its index was actually searched and
+            # the result set was complete; otherwise absence proves nothing.
+            if row.get("kind") == "pair" and (truncated or row.get("index") not in searched):
+                continue
+            gone.append(row["_key"])
         missing = self.sources.mark_missing(gone, imported) if gone else 0
 
         auto = {
@@ -138,6 +149,7 @@ class DiscoveryService:
         totals = {
             "indexes": len(indexes), "indexes_eligible": len(eligible),
             "pairs": len(pairs), "apps": len(apps), "datamodels": len(models),
+            "knowledge_objects": len(knowledge),
             "missing": missing, "truncated": truncated, "auto_mappings": auto,
         }
         job["totals"] = totals
@@ -154,6 +166,9 @@ class DiscoveryService:
             "last_attempt_at": imported, "last_attempt_status": job["status"],
             "last_source": job["source"], "include_internal": include_internal,
             "earliest": earliest, "latest": latest, "totals": totals,
+            "splunk_version": version,
+            "last_completed_at": imported, "last_completed_job_id": job["job_id"],
+            "last_completed_status": job["status"],
         })
         if job["status"] == JOB_SUCCEEDED:
             state["last_success_at"] = imported
@@ -163,6 +178,7 @@ class DiscoveryService:
         pairs: List[Dict[str, Any]] = []
         errors: List[Dict[str, Any]] = []
         truncated = False
+        searched: set = set()
         remaining = self.settings.max_pairs
         for group, spl in tstats_searches(indexes, earliest, latest):
             if remaining <= 0:
@@ -174,6 +190,7 @@ class DiscoveryService:
             except UcmError as exc:
                 errors.append(dict(exc.to_dict(), indexes=group[:5]))
                 continue
+            searched.update(group)
             truncated = truncated or result.truncated
             for row in result.rows:
                 if len(pairs) >= self.settings.max_pairs:
@@ -183,7 +200,7 @@ class DiscoveryService:
                 if parsed:
                     pairs.append(parsed)
             remaining = self.settings.max_pairs - len(pairs)
-        return pairs, truncated, errors
+        return pairs, truncated, errors, searched
 
 
 def _index_eligible(index: Dict[str, Any], include_internal: bool) -> bool:
@@ -266,7 +283,7 @@ def _pair_docs(pairs, now, imported, job_id) -> List[Dict[str, Any]]:
 def _app_docs(apps, imported, job_id) -> List[Dict[str, Any]]:
     docs = []
     for app in apps:
-        if app.get("disabled") or not _looks_like_addon(app):
+        if app.get("disabled"):
             continue
         docs.append(_doc(
             kind="app", name=app["name"], index="", sourcetype="",
@@ -289,6 +306,21 @@ def _model_docs(models, imported, job_id) -> List[Dict[str, Any]]:
             window_count=0, last_time=None, now=0, imported=imported, job_id=job_id,
             identity=(model["name"],)))
     return docs
+
+
+def _knowledge_docs(objects, imported, job_id) -> List[Dict[str, Any]]:
+    docs: Dict[str, Dict[str, Any]] = {}
+    for obj in objects:
+        if obj.get("disabled"):
+            continue
+        doc = _doc(
+            kind=obj["kind"], name=obj["name"], index="", sourcetype="",
+            extra={"app": obj.get("app"), "sharing": obj.get("sharing"),
+                   "lookup_type": obj.get("lookup_type") or None},
+            window_count=0, last_time=None, now=0, imported=imported, job_id=job_id,
+            identity=(obj["name"], obj.get("app") or ""))
+        docs[doc["_key"]] = doc
+    return list(docs.values())
 
 
 def _doc(kind, name, index, sourcetype, extra, window_count, last_time, now, imported, job_id,

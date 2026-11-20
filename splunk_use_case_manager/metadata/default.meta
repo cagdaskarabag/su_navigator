@@ -26,5 +26,8 @@ access = read : [ * ], write : [ admin, sc_admin, ucm_admin, ucm_analyst ]
 [collections/uc_source_mappings]
 access = read : [ * ], write : [ admin, sc_admin, ucm_admin, ucm_analyst ]
 
+[collections/uc_readiness]
+access = read : [ * ], write : [ admin, sc_admin, ucm_admin, ucm_analyst ]
+
 [ucm]
 access = read : [ * ], write : [ admin, sc_admin, ucm_admin ]

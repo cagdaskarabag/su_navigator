@@ -166,10 +166,28 @@ define(["jquery", "splunk.util"], function ($, splunkUtil) {
 
     function shortSha(value) { return value ? String(value).substring(0, 12) : ""; }
 
+    var READINESS_LABELS = { ready: ["Ready", "ok"], partially_ready: ["Partially ready", "warn"],
+        not_ready: ["Not ready", "high"], blocked: ["Blocked", "critical"],
+        insufficient_evidence: ["Insufficient evidence", "neutral"] };
+    var STATUS_LABELS = { met: ["met", "ok"], partial: ["partial", "warn"], not_met: ["not met", "error"],
+        unknown: ["unknown", "neutral"], unverified: ["not verified", "info"], not_applicable: ["n/a", "neutral"] };
+
+    function readinessBadge(value) {
+        var l = READINESS_LABELS[value] || [value || "not assessed", "neutral"];
+        return badge(l[0], l[1]);
+    }
+
+    function statusBadge(value) {
+        var l = STATUS_LABELS[value] || [value || "not assessed", "neutral"];
+        return badge(l[0], l[1]);
+    }
+
     return {
         get: get, post: post, postRaw: postRaw, el: el, clear: clear, badge: badge,
         criticalityBadge: criticalityBadge, chips: chips, stateBox: stateBox, queryParams: queryParams,
         setQueryParams: setQueryParams, pager: pager, debounce: debounce, shortSha: shortSha,
+        readinessBadge: readinessBadge, statusBadge: statusBadge,
+        READINESS_STATES: ["ready", "partially_ready", "not_ready", "blocked", "insufficient_evidence"],
         DOMAINS: ["security", "infrastructure", "network", "application", "database", "cloud", "endpoint",
             "identity", "ot_ics", "observability", "compliance", "business", "other"],
         CRITICALITY: ["critical", "high", "medium", "low", "unknown"],

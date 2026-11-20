@@ -1,7 +1,9 @@
 # Security model
 
-Status: WP2 (content ingestion, catalogue, environment discovery). Later work
-packages extend this document when they add selection and deployment.
+Status: WP3 (content ingestion, catalogue, environment discovery, readiness).
+Later work packages extend this document when they add selection and
+deployment. Readiness assessment dispatches no searches; it reads only
+app-owned KV Store collections.
 
 ## Trust boundaries
 
@@ -20,7 +22,7 @@ packages extend this document when they add selection and deployment.
 | --- | --- |
 | *(none)* | Read catalogue, categories, use-case detail, sync status, platform report, inventory, mappings, discovery status. |
 | `ucm_manage_content` | Remote sync, provider manifest check, offline import, catalogue reindex, audit read. |
-| `ucm_run_discovery` | Queue discovery jobs; create and delete **local** source mappings. |
+| `ucm_run_discovery` | Queue discovery jobs; create and delete **local** source mappings; run readiness assessments (full or single). |
 | `ucm_deploy` | Reserved for WP5 (guided deployment). Grants nothing yet. |
 | `ucm_admin` | Audit read; app administration in later WPs. |
 

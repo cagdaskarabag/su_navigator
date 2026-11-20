@@ -8,7 +8,7 @@ from ..errors import ValidationError
 from ..storage import collections as C
 from ..storage.kvstore import DocumentStore
 
-KINDS = ("index", "pair", "app", "datamodel")
+KINDS = ("index", "pair", "app", "datamodel", "macro", "lookup", "eventtype")
 STATUSES = ("active", "missing")
 SORTS = {
     "name": [("sort_key", 1)],
