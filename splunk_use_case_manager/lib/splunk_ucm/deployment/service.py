@@ -450,7 +450,7 @@ class DeploymentService:
     def _check_spl(self, spl: str) -> Dict[str, Any]:
         out: Dict[str, Any] = {"parse_ok": False, "parse_error": "", "side_effects": [], "high_cost": []}
         try:
-            parsed = parse(self.search, spl)
+            parsed = parse(self.search, spl, app=self.saved.app)
         except (UnsupportedOperation, ValidationError) as exc:
             out["parse_error"] = exc.message[:500]
             out["side_effects"] = combined_side_effects(spl, [])

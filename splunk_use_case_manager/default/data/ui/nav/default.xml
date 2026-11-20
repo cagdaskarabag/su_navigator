@@ -5,6 +5,12 @@
   <view name="ucm_readiness" />
   <view name="ucm_backlog" />
   <view name="ucm_deployments" />
+  <view name="ucm_coverage" />
+  <collection label="Dashboards">
+    <view name="ucm_domain" />
+    <view name="ucm_dashboards" />
+    <view source="unclassified" match="ucm_gen_" />
+  </collection>
   <collection label="Administration">
     <view name="ucm_content_admin" />
   </collection>

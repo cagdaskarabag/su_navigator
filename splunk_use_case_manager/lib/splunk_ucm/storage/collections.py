@@ -12,5 +12,6 @@ SELECTIONS = "uc_selections"
 VALIDATION = "uc_validation"
 DEPLOYMENTS = "uc_deployments"
 FRAMEWORKS = "uc_frameworks"
+DASHBOARDS = "uc_dashboards"
 
 DOC_SCHEMA = 1

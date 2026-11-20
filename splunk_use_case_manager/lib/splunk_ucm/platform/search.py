@@ -7,6 +7,7 @@ a side-effect gate (WP4).
 
 import json
 from typing import Any, Dict, List, Optional
+from urllib.parse import quote
 
 from ..errors import StorageError, UnsupportedOperation, ValidationError
 from ..storage.transport import SplunkdTransport
@@ -50,16 +51,21 @@ class SearchClient:
             raise ValidationError("empty search")
         return self._oneshot(text, timeout, max_count, earliest, latest)
 
-    def parse(self, q: str) -> ParseResult:
-        """POST /services/search/parser with parse_only. 400 is a parse failure, not a transport error."""
+    def parse(self, q: str, app: str = "") -> ParseResult:
+        """POST search/parser with parse_only. 400 is a parse failure, not a transport error.
+
+        With ``app`` the parser resolves macros and lookups in that app's namespace,
+        as a saved search in that app would.
+        """
+        path = "/servicesNS/-/%s/search/parser" % quote(app, safe="") if app else "/services/search/parser"
         status, body = self.t.request(
-            "POST", "/services/search/parser",
+            "POST", path,
             query={"output_mode": "json", "parse_only": "true"},
             form={"q": q}, timeout=30.0)
         if status not in (200, 400):
             if status in (403, 402):
                 raise UnsupportedOperation("search parser is not available", {"status": status})
-            raise StorageError("splunkd returned HTTP %d" % status, status, {"path": "/services/search/parser"})
+            raise StorageError("splunkd returned HTTP %d" % status, status, {"path": path})
         try:
             data = json.loads(body.decode("utf-8") if body else "{}")
         except ValueError as exc:

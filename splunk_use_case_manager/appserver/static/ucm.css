@@ -70,3 +70,11 @@ textarea.ucm-input { font-family: Menlo, Consolas, monospace; font-size: 12px; }
 .ucm-matrix-cell.lvl-deployed { background: #5fb760; color: #fff; }
 .ucm-matrix-cell.lvl-enabled { background: #1e7b34; color: #fff; }
 .ucm-legend span { display: inline-block; padding: 2px 8px; margin-right: 6px; font-size: 11px; border-radius: 2px; }
+.ucm-matrix-cell:hover { outline: 1px solid #1f4e79; text-decoration: none; }
+.ucm-matrix-sub { margin-left: 10px; }
+.ucm-matrix-selected { outline: 2px solid #1f4e79; }
+.ucm-matrix-cell.lvl-operational { background: #0b4d1f; color: #fff; }
+.ucm-legend { margin: 8px 0; }
+.ucm-row-active td { background: #eef4fa; }
+.ucm-chip { display: inline-block; padding: 1px 6px; margin: 0 4px 2px 0; font-size: 11px; border-radius: 10px; background: #eef4fa; }
+.ucm-toolbar label { display: inline-flex; align-items: center; gap: 4px; margin: 0 8px; }

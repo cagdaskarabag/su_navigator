@@ -48,8 +48,8 @@ not packaged.
 | 7 | Use Case Selection | `selection/` | WP4 | Implemented |
 | 8 | SPL Validation | `spl/parser.py`, `validation/` | WP4 | Implemented |
 | 9 | Deployment Manager | `deployment/` | WP5 | Implemented |
-| 10 | Framework Mapping | `frameworks/` | WP6 | Planned (mappings captured in WP1) |
-| 11 | Dashboard Templates | `dashboards/` | WP6 | Planned |
+| 10 | Framework Mapping | `frameworks/` (registry, coverage, operations) | WP6 | Implemented |
+| 11 | Dashboard Templates | `dashboards/` | WP6 | Implemented |
 | 12 | Audit | `audit.py` | WP1 | Implemented |
 | 13 | Platform Capability Adapter | `platform/` | WP1 / WP2 | Implemented (SHC captain and Cloud vetting still pending) |
 
@@ -130,7 +130,8 @@ All collections are app-scoped (`nobody` owner) and replicated in SHC.
 | `uc_selections` | `sel_<user>_<content_id>` | per-user | user | Bookmark / select / defer / reject. Sync never writes this collection. |
 | `uc_validation` | same as `uc_catalog` | shared | analyst | Parser outcome, side-effects, bounded preview metadata (no event payloads), field samples. |
 | `uc_deployments` | `dep_<catalog key>` | shared | REST (system token), worker | Workflow `state`, `revisions[]` (frozen SPL, schedule, parse result, submitter, approver, deploy time), `deployed_revision`, `live` (status, drift, owner, next run), `history[]` (last 100), `version`. |
-| `uc_frameworks` | — | shared | WP6 | Planned |
+| `uc_frameworks` | `fw_<id>_<version>` / `active_<id>` | shared | REST (system token) | Imported framework definitions (`ucm.framework/1`) and the active version per framework. Bundled versions are files, not documents. |
+| `uc_dashboards` | `dash_<view name>` | shared | REST (system token) | Generated view record: template, params, label, XML hash, created/updated by. |
 
 Accelerated fields (`collections.conf`): `uc_catalog` on `category_key`,
 `criticality_rank`, `provider_status`, `sort_key`; `uc_sync_state` on
@@ -185,6 +186,16 @@ from `raw_json` without network access (`POST /ucm/catalog/reindex`, WP1).
 | `POST ucm/deployment/submit` | `ucm_run_discovery` or `ucm_deploy` | Submit the draft for approval. |
 | `POST ucm/deployment/{approve,reject,deploy,enable,disable,rollback,retire}` | `ucm_deploy` | Workflow and saved-search actions (`note`; `override_reason` for enable). |
 | `POST ucm/deployment/verify` | `ucm_run_discovery` or `ucm_deploy` | Compare the saved search with its revision. |
+| `GET ucm/frameworks` | read | Framework versions (bundled and imported, active flag) and coverage per framework. |
+| `GET ucm/frameworks/matrix` | read | ATT&CK matrix (`framework_id`, `version`, `domain`, `operational=1`, `hours`) with remapped and unresolved ids. |
+| `GET ucm/frameworks/technique` | read | Use cases for one technique (`id`). |
+| `GET ucm/frameworks/controls` | read | Controls of one regulation (`framework`) with best level and use cases. |
+| `POST ucm/frameworks/import` | `ucm_manage_content` | Import a `ucm.framework/1` definition (JSON body). |
+| `POST ucm/frameworks/activate` | `ucm_manage_content` | Choose the active version (`framework_id`, `version`). |
+| `GET ucm/operations` | read (scheduler logs need `_internal`) | Run status of deployed searches (`hours` = 1, 4, 24, 72 or 168). |
+| `GET ucm/dashboards` | read | Templates and generated views. |
+| `POST ucm/dashboards/preview` | read | Render a template without saving. |
+| `POST ucm/dashboards/{create,delete}` | `ucm_deploy` | Write or remove a generated view in this app. |
 
 Writes check an app capability (`authorize.conf`) from the request context in
 addition to collection ACLs (defence in depth). Request bodies must be sent as
@@ -221,6 +232,10 @@ Full model: `docs/SECURITY.md`.
   match) over a precomputed `search_text` field holding id, title,
   sourcetypes, tags and MITRE ids; descriptions are not searched. No ranking.
 * Derived requirements are lexical hypotheses (D-013), not evidence.
+* Coverage is computed on read over the whole active catalogue (no cache);
+  this is fine for tens of thousands of use cases but not tuned beyond that.
+* Run status relies on the scheduler log in `_internal`, which most
+  non-admin roles cannot search (D-031).
 
 See also `docs/IMPLEMENTATION_PLAN.md` "Validation status" and
 `docs/PROJECT_DISCOVERY.md` §6.

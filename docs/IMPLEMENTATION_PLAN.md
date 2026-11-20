@@ -108,9 +108,24 @@ preview does not open Splunk's Search view.
 Gaps: no alert actions (email, webhook); no bulk deployment; ownership cannot
 be moved to a service account by the app.
 
-## WP6 — Frameworks and dashboards ⬜
-Generic framework model, versioned ATT&CK Enterprise/ICS, matrix, dashboard
-templates, domain dashboards, operational coverage.
+## WP6 — Frameworks and dashboards ✅
+1. Framework format `ucm.framework/1`, ATT&CK Enterprise and ICS 20.1 bundled,
+   STIX builder, import and activation of other versions (D-030).
+2. Coverage levels catalogue → ready → deployed → enabled → operational;
+   ATT&CK matrix with sub-technique roll-up, revoked remapping and unresolved
+   ids; regulation coverage by control (D-031).
+3. Run status of deployed searches from the scheduler log, with a clear
+   "not available" when the role cannot read `_internal` (D-031).
+4. Dashboard templates and generated views with marker and record checks
+   (D-032); static Domain dashboard on the KV lookups.
+5. UI: Coverage view (matrix, technique drill-down, regulations, run status),
+   Generated dashboards view, run-status column on Deployments.
+6. Deployment drafts are parsed in the app namespace, so macros that are not
+   shared with the app are caught before deploy.
+
+Gaps: regulations have no bundled control catalogue (only mapped controls are
+shown); summaries written before 0.6.0 lack `framework_controls` until they
+are reindexed (WP7 migration); no PDF export of coverage.
 
 ## WP7 — Hardening and release ⬜
 RBAC review, SHC worker election, Cloud vetting, upgrade tests, retention
@@ -137,4 +152,6 @@ already run in WP1 and are repeated here.
 | Selection / backlog | ✅ per-user intents, catalogue + backlog UI | ✅ viewer can select; isolated from other users | ⬜ | ⬜ |
 | SPL parser + preview + field sample | ✅ parser candidates, side-effect gate, constructed fieldsummary | ✅ 13.1.1 parses; preview records missing lookup; `_time`/`host`/`group`/`name` sampled | ⬜ | ⬜ |
 | Deployment workflow and saved searches | ✅ state machine, four eyes, disabled-first, drift, rollback, trim, concurrency, RBAC | ✅ operator drafts and deploys, admin approves, operator owns the search, enable override, external edit detected as drift, rollback restores cron, retire deletes; operator KV write to `uc_deployments` 403 | ⬜ | ⬜ |
+| Frameworks, coverage, run status | ✅ builder, validation, versions, matrix roll-up/remap/unresolved, levels, controls, run-status classes and `_internal` probe | ✅ bundled Enterprise/ICS 20.1 served; 227 techniques, revoked T1562 remapped to T1685; admin sees 2 searches operational, viewer and operator get "not available" | ⬜ | ⬜ |
+| Generated dashboards | ✅ render escaping/allowlists, create/regenerate/delete, marker conflict | ✅ two views generated and rendered; operator can create/delete, viewer 403, direct KV write 403; `_key` lookups in panels return data | ⬜ | ⬜ |
 | Packaging | n/a | ✅ AppInspect 4.4.0 precert (all checks and cloud tags): 0 failures | n/a | ⬜ vetting |

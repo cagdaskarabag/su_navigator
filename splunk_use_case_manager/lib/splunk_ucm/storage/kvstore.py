@@ -212,7 +212,8 @@ class InMemoryStore(DocumentStore):
         if limit:
             docs = docs[:limit]
         if fields:
-            keep = set(fields) | {"_key"}
+            # Splunk's KV Store only returns _key when it is listed in fields.
+            keep = set(fields)
             docs = [{k: v for k, v in d.items() if k in keep} for d in docs]
         return copy.deepcopy(docs)
 

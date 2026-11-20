@@ -31,6 +31,11 @@ See [docs/IMPLEMENTATION_PLAN.md](docs/IMPLEMENTATION_PLAN.md).
 - Guided deployment: draft, four-eyes approval, saved search written
   disabled, read back and checked, enable gated on readiness, rollback,
   retire and drift detection.
+- Coverage: MITRE ATT&CK Enterprise and ICS 20.1 matrices (bundled, other
+  versions importable) and regulation controls, by level from catalogue to
+  running successfully; run status of deployed searches from the scheduler
+  log.
+- Domain dashboard and dashboards generated from fixed templates.
 - Capability-based access control and an audit trail.
 
 ## Layout
@@ -91,3 +96,11 @@ under the MIT licence (see the README there).
 See [docs/SECURITY.md](docs/SECURITY.md). In short: upstream content is
 untrusted, imported SPL is never executed, nothing is enabled or deployed
 automatically, and secrets live only in Splunk's credential store.
+
+## Third-party content
+
+`splunk_use_case_manager/lib/splunk_ucm/frameworks/data/` contains reduced
+copies of MITRE ATT&CK® Enterprise and ICS 20.1 (ids, names, tactic
+membership, revocations). © The MITRE Corporation. Reproduced and distributed
+with the permission of The MITRE Corporation under the
+[ATT&CK terms of use](https://attack.mitre.org/resources/legal-and-branding/terms-of-use/).

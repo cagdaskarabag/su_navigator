@@ -1,0 +1,11 @@
+<dashboard version="1.1" theme="light" script="ucm_coverage.js" stylesheet="ucm.css" hideEdit="true">
+  <label>Coverage</label>
+  <description>MITRE ATT&amp;CK and regulatory framework coverage of the catalogue, readiness, deployments and run status.</description>
+  <row>
+    <panel>
+      <html>
+        <div id="ucm-coverage" class="ucm-root"><div class="ucm-loading">Loading coverage…</div></div>
+      </html>
+    </panel>
+  </row>
+</dashboard>

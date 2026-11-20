@@ -18,6 +18,11 @@ def sort_key_for(record_id: str) -> str:
     return ".".join(parts)
 
 
+# Bump when catalog_summary gains or changes fields; the upgrade migration
+# re-derives older summaries from stored raw records (no network).
+SUMMARY_VERSION = 2
+
+
 def catalog_summary(uc: UseCase) -> Dict[str, Any]:
     sourcetypes = [r.value for r in uc.requirements if r.type == "sourcetype"]
     for variant in uc.spl_variants:
@@ -27,12 +32,15 @@ def catalog_summary(uc: UseCase) -> Dict[str, Any]:
     indexes = [r.value for r in uc.requirements if r.type == "index"]
     mitre = [m.object_id for m in uc.framework_mappings if m.framework == "mitre_attack"]
     frameworks = dedupe(m.framework for m in uc.framework_mappings)
+    controls = dedupe("%s#%s" % (m.framework, m.object_id) for m in uc.framework_mappings
+                      if m.framework != "mitre_attack" and m.object_id)[:300]
     addons = dedupe(a.name for a in uc.addons)
     search_text = " ".join([uc.provenance.provider_record_id, uc.content_id, uc.title,
                             " ".join(sourcetypes), " ".join(uc.tags), " ".join(mitre)]).lower()
     return {
         "_key": uc.key,
         "doc_schema": DOC_SCHEMA,
+        "summary_version": SUMMARY_VERSION,
         "content_id": uc.content_id,
         "provider": uc.provenance.provider,
         "record_id": uc.provenance.provider_record_id,
@@ -56,6 +64,7 @@ def catalog_summary(uc: UseCase) -> Dict[str, Any]:
         "premium_apps": uc.premium_apps,
         "mitre_ids": mitre,
         "frameworks": frameworks,
+        "framework_controls": controls,
         "has_spl": bool(uc.spl or uc.cim_spl),
         "requirement_count": len(uc.requirements),
         "review_status": uc.review_status,

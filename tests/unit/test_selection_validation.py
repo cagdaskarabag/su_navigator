@@ -33,8 +33,9 @@ class FakeParser:
         self.oneshot_calls = []
         self.parse_calls = []
 
-    def parse(self, q):
+    def parse(self, q, app=""):
         self.parse_calls.append(q)
+        self.parse_apps = getattr(self, "parse_apps", []) + [app]
         if not self.ok:
             return ParseResult(False, [], [{"type": "FATAL", "text": self.error}])
         return ParseResult(True, list(self.commands), [])

@@ -34,10 +34,10 @@ def parser_candidates(spl: str) -> List[str]:
     return seen
 
 
-def parse(client: SearchClient, spl: str) -> ParseResult:
+def parse(client: SearchClient, spl: str, app: str = "") -> ParseResult:
     last = None
     for candidate in parser_candidates(spl):
-        last = client.parse(candidate)
+        last = client.parse(candidate, app=app) if app else client.parse(candidate)
         if last.ok:
             last.normalized = candidate
             return last

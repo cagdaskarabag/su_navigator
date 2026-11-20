@@ -122,6 +122,7 @@ class WorkflowTest(unittest.TestCase):
         self.assertEqual(doc["state"], "draft")
         self.assertEqual(doc["revision"], 1)
         self.assertTrue(doc["revisions"][0]["parse_ok"])
+        self.assertEqual(set(svc.search.parse_apps), {"splunk_use_case_manager"})
         doc = svc.submit("alice", UC)
         self.assertEqual(doc["state"], "pending_approval")
         with self.assertRaises(PermissionDenied):

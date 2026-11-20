@@ -25,10 +25,15 @@ from ..discovery.overlay import attach_environment
 from ..discovery.query import InventoryFilter, InventoryQueryService, coverage
 from ..discovery.service import DiscoveryService, new_job as new_discovery_job
 from ..discovery.worker import settings_from_config
+from ..dashboards.service import DashboardService, ViewClient
+from ..dashboards.templates import DOMAINS as DASHBOARD_DOMAINS
 from ..deployment.savedsearch import SavedSearchClient
 from ..deployment.service import DeploymentService
 from ..deployment.worker import settings_from_config as deployment_settings
 from ..errors import PermissionDenied, UcmError, UnsupportedOperation, ValidationError
+from ..frameworks.coverage import CoverageService
+from ..frameworks.operations import OperationsService
+from ..frameworks.registry import FrameworkRegistry
 from ..platform.search import SearchClient
 from ..readiness.query import ReadinessFilter, ReadinessQueryService
 from ..readiness.service import ReadinessService, new_job as new_readiness_job
@@ -106,9 +111,10 @@ class Context:
                  user: str, store: Optional[DocumentStore] = None, audit_store: Optional[DocumentStore] = None,
                  config: Optional[AppConfig] = None,
                  provider_factory: Optional[Callable[..., Any]] = None,
-                 record_store: Optional[DocumentStore] = None):
+                 record_store: Optional[DocumentStore] = None, view_client: Optional[Any] = None):
         self.user = user
         self.record_store = record_store
+        self.view_client = view_client
         self.user_transport = user_transport
         self.system_transport = system_transport
         self.store = store or KVStore(user_transport)
@@ -164,12 +170,19 @@ class Context:
         return ValidationService(self.store, self.audit, SearchClient(self.user_transport),
                                  settings, self.readiness_service())
 
+    def records(self) -> DocumentStore:
+        """Store for admin-write-only collections, used only after the handler's capability check."""
+        return self.record_store or (KVStore(self.system_transport) if self.system_transport else self.store)
+
     def deployment_service(self) -> DeploymentService:
         # Workflow records go through the system token (uc_deployments is admin-write only);
         # saved searches are written with the caller's session (D-028, D-029).
-        records = self.record_store or (KVStore(self.system_transport) if self.system_transport else self.store)
-        return DeploymentService(records, self.audit, SearchClient(self.user_transport),
+        return DeploymentService(self.records(), self.audit, SearchClient(self.user_transport),
                                  SavedSearchClient(self.user_transport), deployment_settings(self.config))
+
+    def dashboard_service(self) -> DashboardService:
+        views = ViewClient(self.system_transport) if self.system_transport else self.view_client
+        return DashboardService(self.records(), self.audit, views)
 
 
 Handler = Callable[[Context, Request], Response]
@@ -534,6 +547,113 @@ def _deployment_action(action: str) -> Handler:
     return handler
 
 
+def _operational_map(ctx: Context, hours: int) -> Tuple[Optional[Dict[str, str]], Dict[str, Any]]:
+    health = OperationsService(ctx.store, SearchClient(ctx.user_transport)).health(hours)
+    if not health["available"]:
+        return None, health
+    return {i["content_id"]: i["health"] for i in health["items"]}, health
+
+
+def _levels(ctx: Context, req: Request) -> Tuple[Dict[str, Dict[str, Any]], Optional[Dict[str, Any]]]:
+    operational, health = None, None
+    if req.arg("operational") == "1":
+        operational, health = _operational_map(ctx, _int(req.arg("hours"), 24, "hours"))
+    domain = req.arg("domain")
+    if domain and domain not in DASHBOARD_DOMAINS:
+        raise ValidationError("invalid domain")
+    return CoverageService(ctx.store).use_case_levels(operational, domain), health
+
+
+def get_frameworks(ctx: Context, req: Request) -> Response:
+    registry = FrameworkRegistry(ctx.records())
+    levels, _ = _levels(ctx, req)
+    return Response(200, {"definitions": registry.list(),
+                          "coverage": CoverageService(ctx.store).frameworks_summary(levels),
+                          "use_cases": len(levels)})
+
+
+def get_framework_matrix(ctx: Context, req: Request) -> Response:
+    registry = FrameworkRegistry(ctx.records())
+    definition = registry.get(req.arg("framework_id", "mitre_attack_enterprise"), req.arg("version"))
+    levels, health = _levels(ctx, req)
+    out = CoverageService(ctx.store).attack_matrix(definition, levels)
+    out["versions"] = registry.versions(definition["framework_id"])
+    out["active_version"] = registry.active_versions().get(definition["framework_id"])
+    out["operational"] = None if health is None else {"available": health["available"], "reason": health["reason"],
+                                                      "hours": health["hours"], "counts": health["counts"]}
+    return Response(200, out)
+
+
+def get_framework_technique(ctx: Context, req: Request) -> Response:
+    registry = FrameworkRegistry(ctx.records())
+    definition = registry.get(req.arg("framework_id", "mitre_attack_enterprise"), req.arg("version"))
+    tid = req.arg("id")
+    if not any(t["id"] == tid for t in definition["techniques"]):
+        raise ValidationError("unknown technique for this framework version")
+    levels, _ = _levels(ctx, req)
+    return Response(200, {"id": tid, "use_cases": CoverageService(ctx.store).technique_use_cases(
+        definition, tid, levels)})
+
+
+def get_framework_controls(ctx: Context, req: Request) -> Response:
+    framework = req.arg("framework")
+    if not framework or len(framework) > 200:
+        raise ValidationError("framework is required")
+    levels, _ = _levels(ctx, req)
+    return Response(200, {"framework": framework,
+                          "controls": CoverageService(ctx.store).framework_controls(framework, levels)})
+
+
+def post_framework_import(ctx: Context, req: Request) -> Response:
+    ctx.require(CAP_MANAGE_CONTENT)
+    summary = FrameworkRegistry(ctx.records()).import_definition(req.body, ctx.user)
+    ctx.audit.record(ctx.user, "framework.imported", "framework", summary["framework_id"],
+                     details={"version": summary["version"], "techniques": summary["techniques"]})
+    return Response(200, {"definition": summary})
+
+
+def post_framework_activate(ctx: Context, req: Request) -> Response:
+    ctx.require(CAP_MANAGE_CONTENT)
+    body = req.json()
+    out = FrameworkRegistry(ctx.records()).activate(str(body.get("framework_id") or ""),
+                                                    str(body.get("version") or ""), ctx.user)
+    ctx.audit.record(ctx.user, "framework.activated", "framework", out["framework_id"],
+                     details={"version": out["version"]})
+    return Response(200, out)
+
+
+def get_operations(ctx: Context, req: Request) -> Response:
+    return Response(200, OperationsService(ctx.store, SearchClient(ctx.user_transport)).health(
+        _int(req.arg("hours"), 24, "hours")))
+
+
+def get_dashboards(ctx: Context, req: Request) -> Response:
+    svc = ctx.dashboard_service()
+    return Response(200, {"templates": svc.templates(), "dashboards": svc.list()})
+
+
+def post_dashboard_preview(ctx: Context, req: Request) -> Response:
+    body = req.json()
+    return Response(200, ctx.dashboard_service().preview(str(body.get("template") or ""), body.get("params") or {}))
+
+
+def post_dashboard_create(ctx: Context, req: Request) -> Response:
+    ctx.require(CAP_DEPLOY)
+    body = req.json()
+    return Response(200, {"dashboard": ctx.dashboard_service().create(
+        ctx.user, str(body.get("template") or ""), body.get("params") or {})})
+
+
+def post_dashboard_delete(ctx: Context, req: Request) -> Response:
+    ctx.require(CAP_DEPLOY)
+    body = req.json()
+    name = str(body.get("name") or "")
+    if not name.startswith("ucm_gen_") or len(name) > 100:
+        raise ValidationError("not a generated dashboard name")
+    ctx.dashboard_service().delete(ctx.user, name)
+    return Response(200, {"deleted": True})
+
+
 DEPLOYMENT_ACTIONS = ("draft", "submit", "approve", "reject", "deploy", "enable", "disable", "rollback",
                       "retire", "verify")
 
@@ -572,4 +692,15 @@ def build_router() -> Router:
     router.add("GET", "deployment", get_deployment)
     for action in DEPLOYMENT_ACTIONS:
         router.add("POST", "deployment/" + action, _deployment_action(action))
+    router.add("GET", "frameworks", get_frameworks)
+    router.add("GET", "frameworks/matrix", get_framework_matrix)
+    router.add("GET", "frameworks/technique", get_framework_technique)
+    router.add("GET", "frameworks/controls", get_framework_controls)
+    router.add("POST", "frameworks/import", post_framework_import)
+    router.add("POST", "frameworks/activate", post_framework_activate)
+    router.add("GET", "operations", get_operations)
+    router.add("GET", "dashboards", get_dashboards)
+    router.add("POST", "dashboards/preview", post_dashboard_preview)
+    router.add("POST", "dashboards/create", post_dashboard_create)
+    router.add("POST", "dashboards/delete", post_dashboard_delete)
     return router

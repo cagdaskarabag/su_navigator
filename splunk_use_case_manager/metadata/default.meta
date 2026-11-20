@@ -47,3 +47,12 @@ access = read : [ * ], write : [ admin, sc_admin, ucm_admin, ucm_deployment_oper
 # token after the capability check, so participants cannot forge approvals.
 [collections/uc_deployments]
 access = read : [ * ], write : [ admin, sc_admin ]
+
+# Imported framework versions, active-version choices and generated-dashboard
+# records: written by the REST handler with the system token after the
+# capability check (D-030, D-032).
+[collections/uc_frameworks]
+access = read : [ * ], write : [ admin, sc_admin ]
+
+[collections/uc_dashboards]
+access = read : [ * ], write : [ admin, sc_admin ]

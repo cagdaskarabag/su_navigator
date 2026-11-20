@@ -22,9 +22,9 @@ Status: WP5 (catalogue, discovery, readiness, selection, SPL validation, deploym
 | Capability | Grants |
 | --- | --- |
 | *(none)* | Read catalogue, categories, use-case detail, sync status, platform report, inventory, mappings, discovery status. |
-| `ucm_manage_content` | Remote sync, provider manifest check, offline import, catalogue reindex, audit read. |
+| `ucm_manage_content` | Remote sync, provider manifest check, offline import, catalogue reindex, audit read, framework import and activation. |
 | `ucm_run_discovery` | Queue discovery jobs; create and delete **local** source mappings; run readiness assessments (full or single). |
-| `ucm_deploy` | Approve, reject, deploy, enable, disable, roll back and retire deployments. Drafting and submitting also accept `ucm_run_discovery`. |
+| `ucm_deploy` | Approve, reject, deploy, enable, disable, roll back and retire deployments; create and delete generated dashboards. Drafting and submitting also accept `ucm_run_discovery`. |
 | `ucm_admin` | Audit read; app administration in later WPs. |
 
 | Role | Imports | Capabilities |
@@ -51,6 +51,13 @@ import, reindex, manifest and audit).
   `sc_admin`. The REST handler writes it with the system token after checking
   `ucm_deploy` (or `ucm_run_discovery` for drafts), so approvals cannot be
   forged through the KV REST API (verified live: an operator gets 403).
+- `uc_frameworks` and `uc_dashboards`: readable by all app users, writable
+  only by `admin` / `sc_admin`; written by the REST handler with the system
+  token after the capability check (verified live: viewer and operator get
+  403 on direct writes). Generated views are written to this app with the
+  system token, so dashboard creators do not need view-write permissions; the
+  app only overwrites or deletes views that carry its marker and have a
+  record (D-032).
 - `savedsearches` in this app: writable by `admin`, `sc_admin`, `ucm_admin`
   and `ucm_deployment_operator`.
 - `uc_audit`: readable by admins and content managers, writable only by
@@ -64,6 +71,14 @@ anyway; every enable is audited with the readiness state). Content managers can 
 directly through the KV REST API, bypassing validation. Those collections are
 derived data (rebuildable by sync/reindex) and never hold customer-owned
 state.
+
+Run status (D-031) is searched with the caller's token, so it never reveals
+scheduler data a user could not search themselves.
+
+Framework definitions imported by content managers are validated strictly
+(ids, names, references, size); their text is rendered with `textContent`
+only. Dashboard templates escape every value and accept parameters only from
+allowlists; imported SPL never appears in a generated dashboard.
 
 ## Secrets
 

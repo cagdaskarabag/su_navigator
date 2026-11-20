@@ -14,6 +14,7 @@ require([
     var LIVE_KIND = { enabled: "ok", disabled: "info", missing: "error", unmanaged: "error", absent: "neutral" };
     var STATE_KIND = { draft: "neutral", pending_approval: "warn", approved: "info", rejected: "high",
         deployed: "ok", failed: "error", retired: "neutral" };
+    var HEALTH_KIND = { operational: "ok", no_runs: "warn", unhealthy: "error", disabled: "info", unknown: "neutral" };
 
     function card(label, value, active, onclick) {
         return el("div", { "class": "ucm-card ucm-card-link" + (active ? " ucm-card-active" : ""), onclick: onclick },
@@ -59,9 +60,12 @@ require([
             return;
         }
         var head = el("tr", {});
-        ["Use case", "Workflow", "Saved search", "Revision", "Updated (UTC)", "Last error"].forEach(function (h) { head.appendChild(el("th", { text: h })); });
+        ["Use case", "Workflow", "Saved search", "Runs (24 h)", "Revision", "Updated (UTC)", "Last error"].forEach(function (h) { head.appendChild(el("th", { text: h })); });
         var body = el("tbody", {});
+        var healthCells = {};
         items.forEach(function (d) {
+            var healthCell = el("td", { "class": "ucm-sub", text: d.deployed_revision ? "…" : "" });
+            healthCells[d.content_id] = healthCell;
             var live = (d.live && d.live.status) || "absent";
             var drift = (d.live && d.live.drift) || [];
             body.appendChild(el("tr", {},
@@ -69,11 +73,24 @@ require([
                     el("div", { "class": "ucm-sub ucm-mono", text: (d.saved_search && d.saved_search.name) || "" }), ucm.criticalityBadge(d.criticality)),
                 el("td", {}, ucm.badge(d.state.replace("_", " "), STATE_KIND[d.state] || "neutral")),
                 el("td", {}, ucm.badge(live, LIVE_KIND[live] || "neutral"), drift.length ? ucm.badge("drift: " + drift.map(function (x) { return x.field; }).join(", "), "warn") : null),
+                healthCell,
                 el("td", { text: "latest " + d.revision + (d.deployed_revision ? ", deployed " + d.deployed_revision : "") }),
                 el("td", { text: (d.updated_at || "") + " by " + (d.updated_by || "") }),
                 el("td", { "class": "ucm-sub", text: d.last_error || "" })));
         });
         root.appendChild(el("table", { "class": "ucm-table" }, el("thead", {}, head), body));
+        ucm.get("operations", { hours: 24 }).done(function (ops) {
+            var byId = {};
+            (ops.items || []).forEach(function (i) { byId[i.content_id] = i; });
+            Object.keys(healthCells).forEach(function (id) {
+                var cell = ucm.clear(healthCells[id]);
+                var i = byId[id];
+                if (!ops.available) { cell.textContent = byId[id] ? "unavailable" : ""; return; }
+                if (i) { cell.appendChild(ucm.badge(i.health.replace("_", " ") + (i.runs ? " (" + i.runs + ")" : ""), HEALTH_KIND[i.health] || "neutral")); }
+            });
+        }).fail(function () {
+            Object.keys(healthCells).forEach(function (id) { ucm.clear(healthCells[id]); });
+        });
         if (state.offset || data.has_more) {
             root.appendChild(ucm.pager(state.offset, COUNT, null, data.has_more, function (o) { state.offset = o; load(); }));
         }
