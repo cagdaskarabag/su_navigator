@@ -1,0 +1,64 @@
+[]
+access = read : [ * ], write : [ admin, sc_admin ]
+export = none
+
+[collections/uc_catalog]
+access = read : [ * ], write : [ admin, sc_admin, ucm_content_manager, ucm_admin ]
+
+[collections/uc_content]
+access = read : [ * ], write : [ admin, sc_admin, ucm_content_manager, ucm_admin ]
+
+[collections/uc_categories]
+access = read : [ * ], write : [ admin, sc_admin, ucm_content_manager, ucm_admin ]
+
+[collections/uc_sync_state]
+access = read : [ * ], write : [ admin, sc_admin, ucm_content_manager, ucm_admin, ucm_analyst ]
+
+[collections/uc_audit]
+access = read : [ admin, sc_admin, ucm_admin, ucm_content_manager ], write : [ admin, sc_admin ]
+
+[transforms/ucm_audit_lookup]
+access = read : [ admin, sc_admin, ucm_admin, ucm_content_manager ], write : [ admin, sc_admin ]
+
+[collections/uc_environment_sources]
+access = read : [ * ], write : [ admin, sc_admin, ucm_admin, ucm_analyst ]
+
+[collections/uc_source_mappings]
+access = read : [ * ], write : [ admin, sc_admin, ucm_admin, ucm_analyst ]
+
+[collections/uc_readiness]
+access = read : [ * ], write : [ admin, sc_admin, ucm_admin, ucm_analyst ]
+
+[collections/uc_selections]
+access = read : [ * ], write : [ admin, sc_admin, ucm_admin, ucm_analyst, ucm_viewer ]
+
+[collections/uc_validation]
+access = read : [ * ], write : [ admin, sc_admin, ucm_admin, ucm_analyst ]
+
+[ucm]
+access = read : [ * ], write : [ admin, sc_admin, ucm_admin ]
+
+# Deployed use cases are saved searches in this app (WP5). Deployment operators
+# write them with their own session; the REST handler gates every change.
+[savedsearches]
+access = read : [ * ], write : [ admin, sc_admin, ucm_admin, ucm_deployment_operator ]
+
+# Workflow records (approvals) are written only with the REST handler's system
+# token after the capability check, so participants cannot forge approvals.
+[collections/uc_deployments]
+access = read : [ * ], write : [ admin, sc_admin ]
+
+# Imported framework versions, active-version choices and generated-dashboard
+# records: written by the REST handler with the system token after the
+# capability check (D-030, D-032).
+[collections/uc_frameworks]
+access = read : [ * ], write : [ admin, sc_admin ]
+
+[collections/uc_dashboards]
+access = read : [ * ], write : [ admin, sc_admin ]
+
+# Splunk Lantern import sessions and staged extractions: written only by the
+# REST handler (system token, after the ucm_manage_content check) and the
+# background worker, so staged content cannot be altered before import (D-037).
+[collections/uc_lantern]
+access = read : [ admin, sc_admin, ucm_admin, ucm_content_manager ], write : [ admin, sc_admin ]

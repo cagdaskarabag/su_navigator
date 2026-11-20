@@ -1,0 +1,11 @@
+<dashboard version="1.1" theme="light" script="ucm_inventory.js" stylesheet="ucm.css" hideEdit="true">
+  <label>Data Inventory</label>
+  <description>Sources discovered in this Splunk deployment. Event counts and data age come from a bounded tstats over a configured time window; they are not a readiness assessment.</description>
+  <row>
+    <panel>
+      <html>
+        <div id="ucm-inventory" class="ucm-root"><div class="ucm-loading">Loading inventory…</div></div>
+      </html>
+    </panel>
+  </row>
+</dashboard>

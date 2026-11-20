@@ -1,0 +1,91 @@
+<form version="1.1" theme="light" hideEdit="true">
+  <label>Domain dashboard</label>
+  <description>Catalogue, readiness and deployment state for one monitoring domain, read from the app's KV Store lookups.</description>
+  <fieldset submitButton="false" autoRun="true">
+    <input type="dropdown" token="domain" searchWhenChanged="true">
+      <label>Domain</label>
+      <choice value="*">All domains</choice>
+      <choice value="security">Security</choice>
+      <choice value="infrastructure">Infrastructure</choice>
+      <choice value="network">Network</choice>
+      <choice value="application">Application</choice>
+      <choice value="database">Database</choice>
+      <choice value="cloud">Cloud</choice>
+      <choice value="endpoint">Endpoint</choice>
+      <choice value="identity">Identity</choice>
+      <choice value="ot_ics">OT / ICS</choice>
+      <choice value="observability">Observability</choice>
+      <choice value="compliance">Compliance</choice>
+      <choice value="business">Business</choice>
+      <choice value="other">Other</choice>
+      <default>security</default>
+    </input>
+  </fieldset>
+  <row>
+    <panel>
+      <title>Active use cases</title>
+      <single>
+        <search>
+          <query>| inputlookup ucm_catalog_lookup where provider_status="active" | search domains=$domain|s$ | stats count</query>
+        </search>
+      </single>
+    </panel>
+    <panel>
+      <title>Data ready</title>
+      <single>
+        <search>
+          <query>| inputlookup ucm_readiness_lookup where state="ready" | search domains=$domain|s$ | stats count</query>
+        </search>
+      </single>
+    </panel>
+    <panel>
+      <title>Enabled searches</title>
+      <single>
+        <search>
+          <query>| inputlookup ucm_deployments_lookup where live_status="enabled" | lookup ucm_catalog_lookup _key as catalog_key OUTPUT domains | search domains=$domain|s$ | stats count</query>
+        </search>
+      </single>
+    </panel>
+  </row>
+  <row>
+    <panel>
+      <title>Readiness</title>
+      <chart>
+        <search>
+          <query>| inputlookup ucm_readiness_lookup | search domains=$domain|s$ | stats count by state | sort - count</query>
+        </search>
+        <option name="charting.chart">bar</option>
+        <option name="charting.legend.placement">none</option>
+      </chart>
+    </panel>
+    <panel>
+      <title>Use cases by criticality</title>
+      <chart>
+        <search>
+          <query>| inputlookup ucm_catalog_lookup where provider_status="active" | search domains=$domain|s$ | stats count by criticality | sort - count</query>
+        </search>
+        <option name="charting.chart">pie</option>
+      </chart>
+    </panel>
+  </row>
+  <row>
+    <panel>
+      <title>Ready but not deployed</title>
+      <table>
+        <search>
+          <query>| inputlookup ucm_readiness_lookup where state="ready" | search domains=$domain|s$ | lookup ucm_deployments_lookup catalog_key as _key OUTPUT live_status | where isnull(live_status) OR live_status="absent" | table content_id title criticality score | sort - score | head 50</query>
+        </search>
+        <option name="drilldown">none</option>
+      </table>
+    </panel>
+    <panel>
+      <title>Deployments</title>
+      <table>
+        <search>
+          <query>| inputlookup ucm_deployments_lookup | lookup ucm_catalog_lookup _key as catalog_key OUTPUT domains | search domains=$domain|s$ | table content_id title state live_status deployed_revision updated_at updated_by</query>
+        </search>
+        <option name="drilldown">none</option>
+      </table>
+    </panel>
+  </row>
+</form>

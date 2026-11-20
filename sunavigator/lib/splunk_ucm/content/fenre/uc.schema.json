@@ -1,0 +1,769 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://fenre.github.io/splunk-monitoring-use-cases/schemas/uc.schema.json",
+  "title": "Splunk Monitoring Use Case",
+  "description": "JSON-first authoring schema for a Splunk Monitoring Use Case (UC). Locked at Phase 1.1.",
+  "version": "1.11.0",
+  "x-stability": "stable",
+  "x-since": "v6.0",
+  "x-changelog": "/schemas/changelogs/uc.md",
+  "schemaVersion": "1.11.0",
+  "type": "object",
+  "required": ["id", "title"],
+  "additionalProperties": false,
+  "properties": {
+    "$schema": {
+      "type": "string",
+      "format": "uri-reference",
+      "description": "Optional IDE-tooling hint pointing to this schema. Ignored by the build; present so VS Code / JetBrains / Neovim LSP clients autocomplete fields."
+    },
+    "id": {
+      "type": "string",
+      "description": "UC identifier in the form category.subcategory.index, e.g. 22.35.1. The full UC-ID is 'UC-' + id.",
+      "pattern": "^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)$"
+    },
+    "subcategory": {
+      "type": "string",
+      "description": "Explicit subcategory bucket key. Two formats are accepted: (1) the public '<category>.<subcategory>' form (e.g. '4.5'), used when a UC is intentionally cross-listed under a subcategory whose number does not match the id prefix — UC-4.4.32 'Function Cold-Start Latency Anomalies' lives under 4.5 'Serverless & FaaS' even though its id starts with 4.4; (2) the disambiguated '<category>.<subcategory>#<n>' form (e.g. '22.3#1'), used only when a category has multiple subcategories sharing the same numerical id and the UC belongs to the n-th occurrence (1-indexed; the first occurrence is just '22.3' with no suffix). The disambiguator preserves the legacy markdown 'extended clauses' grouping (e.g. '### 22.3 DORA' vs '### 22.3 — DORA (extended clauses)') without introducing new public ids. Omit when the id prefix already matches the first occurrence of the subcategory bucket.",
+      "pattern": "^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)(#[1-9][0-9]*)?$"
+    },
+    "title": {
+      "type": "string",
+      "minLength": 8,
+      "description": "Short human-readable title of the use case."
+    },
+
+    "criticality": {
+      "type": "string",
+      "enum": ["critical", "high", "medium", "low"],
+      "description": "Risk / business impact if the monitored condition is not detected."
+    },
+    "difficulty": {
+      "type": "string",
+      "enum": ["beginner", "intermediate", "advanced", "expert"]
+    },
+    "wave": {
+      "type": "string",
+      "enum": ["crawl", "walk", "run"],
+      "description": "Implementation maturity tier within a category (the 'crawl \u2192 walk \u2192 run' roadmap). 'crawl' = ship first: install the TA, turn on a base data feed, put one panel or alert in place. 'walk' = depends on one or two crawl UCs being live (typically same-category refinements: anomaly detection over a trend, cross-host correlation, SLA math on an existing signal). 'run' = depends on multiple crawls/walks, often cross-category (e.g. ITSI service trees that consume both host and app metrics). Curator-maintained; validated against 'prerequisiteUseCases' at build time so a 'crawl' UC cannot prerequisitely depend on a 'run' UC."
+    },
+    "prerequisiteUseCases": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "pattern": "^UC-(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)$"
+      },
+      "description": "UC ids (full 'UC-X.Y.Z' form, not bare 'X.Y.Z') that must be implemented before this UC produces value. Curator-maintained. Validated against the catalogue at build time: unknown ids fail the build, self-references fail the build, and cycles in the prerequisite graph fail the build (Kahn's topological sort). Wave monotonicity is enforced as a warning, not an error \u2014 a crawl UC depending on a run UC prints a build warning."
+    },
+    "monitoringType": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "string",
+        "enum": [
+          "Analytics",
+          "Anomaly",
+          "Audit",
+          "Availability",
+          "Business",
+          "Capacity",
+          "Change",
+          "Compliance",
+          "Configuration",
+          "Cost",
+          "Data Quality",
+          "DevSecOps",
+          "Fault",
+          "Fraud",
+          "Governance",
+          "Inventory",
+          "Operations",
+          "Patient Safety",
+          "Performance",
+          "Physical",
+          "Physical Security",
+          "Quality",
+          "Reliability",
+          "Resilience",
+          "Revenue Assurance",
+          "Risk",
+          "Safety",
+          "Security",
+          "Threat",
+          "Network",
+          "Trading",
+          "Vulnerability"
+        ]
+      }
+    },
+    "splunkPillar": {
+      "type": "string",
+      "enum": ["Security", "Observability", "Platform", "IT Operations"]
+    },
+    "industry": {
+      "type": "string",
+      "description": "Industry vertical this UC is specific to (e.g. 'Financial Services', 'Healthcare', 'Utilities'). Appears as '- **Industry:**' in the cat-22 markdown."
+    },
+
+    "owner": {
+      "type": "string",
+      "description": "Accountable role for this control. Drives evidence-pack roll-up.",
+      "enum": [
+        "CISO",
+        "DPO",
+        "CFO",
+        "Head of IR",
+        "Head of OT Security",
+        "Head of IT Operations",
+        "Head of Platform",
+        "Procurement",
+        "Legal",
+        "HR",
+        "Board / Audit Committee"
+      ]
+    },
+    "controlFamily": {
+      "type": "string",
+      "description": "Which of the 15 cross-regulation control families this UC belongs to. Empty only when the UC is regulation-specific and does not fit a cross-cutting family.",
+      "enum": [
+        "evidence-continuity",
+        "access-review-cadence",
+        "data-flow-cross-border",
+        "third-party-activity",
+        "retention-end-enforcement",
+        "log-source-completeness",
+        "break-glass-access",
+        "crypto-drift",
+        "ir-drill-evidence",
+        "backup-restore-evidence",
+        "board-exec-reporting",
+        "training-effectiveness",
+        "data-subject-request-lifecycle",
+        "policy-to-control-traceability",
+        "privileged-session-recording",
+        "regulation-specific"
+      ]
+    },
+    "exclusions": {
+      "type": "string",
+      "minLength": 10,
+      "description": "Explicit scope exclusion. States what the UC does NOT cover. Required so reviewers and auditors know the limits."
+    },
+    "evidence": {
+      "type": "string",
+      "minLength": 10,
+      "description": "Auditor-facing evidence artefact produced when this UC is active. Name a dashboard, saved-search, report, or index that an auditor can be shown."
+    },
+    "evidenceSigning": {
+      "type": "object",
+      "description": "Optional: how evidence produced by this UC is timestamped or signed. Enforced for production evidence packs in Phase 2 of the auditor-facing rollout.",
+      "additionalProperties": false,
+      "properties": {
+        "method": {
+          "type": "string",
+          "enum": ["rfc3161-tsa", "sigstore", "gpg", "none"]
+        },
+        "tsaUrl": { "type": "string", "format": "uri" },
+        "signer": { "type": "string" }
+      }
+    },
+
+    "compliance": {
+      "type": "array",
+      "minItems": 1,
+      "description": "Clause-level regulatory mappings. Optional at the schema level (operational and observability UCs typically have none); when present, must contain at least one entry. Cat-22 (regulatory compliance) UCs and any UC that claims to satisfy or detect a violation of a clause MUST populate this array. Use multiple entries to claim coverage across regulations.",
+      "items": {
+        "type": "object",
+        "required": ["regulation", "version", "clause", "mode", "assurance", "assurance_rationale"],
+        "additionalProperties": false,
+        "properties": {
+          "regulation": {
+            "type": "string",
+            "description": "Regulation identifier. Must match an entry in data/regulations.json. Examples: GDPR, HIPAA, PCI-DSS, NIST-800-53, ISO-27001, NIS2, DORA, SOX-ITGC, SOC-2, CMMC, NERC-CIP, NIST-CSF, FedRAMP, EU-AI-Act."
+          },
+          "version": {
+            "type": "string",
+            "description": "Version of the regulation (must be present in regulations.json versions[] for the named regulation). Examples: '2016/679' (GDPR), 'v4.0' (PCI DSS), 'Rev.5' (NIST 800-53), '2022' (ISO 27001).",
+            "minLength": 1
+          },
+          "clause": {
+            "type": "string",
+            "description": "Specific clause / article / control ID as written in the authoritative source. Must match the clause_grammar regex for this regulation+version in regulations.json. Examples: 'Art.32(1)(b)' (GDPR), '§164.312(b)' (HIPAA), '10.2.1' (PCI DSS), 'AU-2' (NIST 800-53), 'A.8.15' (ISO 27001).",
+            "minLength": 1
+          },
+          "clauseUrl": {
+            "type": "string",
+            "format": "uri",
+            "description": "Deep link to the specific clause in the authoritative source. When omitted, generated from regulations.json clause_url_template."
+          },
+          "mode": {
+            "type": "string",
+            "enum": ["satisfies", "detects-violation-of"],
+            "description": "satisfies: the UC demonstrates compliance with the clause. detects-violation-of: the UC fires when the clause is violated (e.g. 'no unencrypted PAN in transit' is detected by a UC firing on unencrypted traffic)."
+          },
+          "assurance": {
+            "type": "string",
+            "enum": ["full", "partial", "contributing"],
+            "description": "full: the UC is by itself sufficient evidence of the clause. partial: the UC is one of several controls needed to meet the clause. contributing: the UC is useful context but not a primary control. Weights: full=1.0, partial=0.5, contributing=0.25."
+          },
+          "assurance_rationale": {
+            "type": "string",
+            "minLength": 10,
+            "description": "One-line explanation of why this assurance level was chosen. Explicit so reviewers can challenge the judgement."
+          },
+          "controlObjective": {
+            "type": "string",
+            "minLength": 20,
+            "maxLength": 280,
+            "description": "Story-layer field (schema v1.6.0). One sentence, in the UC author's voice, stating what this UC accomplishes for this specific clause. Distinct from UC-level 'title' (which describes the UC in general) and from 'assurance_rationale' (which explains why the assurance level was chosen). Example for PCI DSS 10.2.1: 'Proves the audit log records every individual access to cardholder data.' Rendered as the headline of a clause/UC pair in buyer and auditor views. Optional at the schema level; linted as required on tier-1 Cat-22 UCs by python3 -m splunk_uc audit-compliance-mappings once the Phase 4 migration has landed."
+          },
+          "evidenceArtifact": {
+            "type": "string",
+            "minLength": 20,
+            "maxLength": 400,
+            "description": "Story-layer field (schema v1.6.0). The concrete, auditor-takeaway artefact produced when this UC is active and covering this clause. Example: 'Saved search pci_10_2_1_cardholder_access.json + daily scheduled email digest archived to restricted audit_evidence index with 7-year retention.' Rendered as the 'acceptable evidence' column in the clause-navigator.html auditor view. Distinct from the UC-level 'evidenceExample' field (which describes artefacts for the UC in general) because a single UC may produce different acceptable evidence for different clauses. Optional; linted as required on tier-1 Cat-22 UCs by python3 -m splunk_uc audit-compliance-mappings once the Phase 4 migration has landed."
+          },
+          "obligationRef": {
+            "type": "string",
+            "pattern": "^[a-z0-9-]+@[^#]+#.+$",
+            "description": "Story-layer field (schema v1.6.0). Canonical reference into data/regulations.json of the form '{regulationId}@{version}#{clause}' (e.g. 'pci-dss@v4.0#10.2.1'). Lets a UI pull the authoritative 'topic' and 'obligationText' for this clause inline without re-joining across files. Normally auto-filled by the build from the sibling regulation/version/clause triplet; only hand-authored when the UC wants to pin to a different regulation revision than the triplet implies. Must resolve to an entry in data/regulations.json."
+          },
+          "requires_sme_review": {
+            "type": "boolean",
+            "description": "Story-layer field (schema v1.6.1). True when controlObjective/evidenceArtifact were machine-generated by python3 -m splunk_uc migrate-compliance-phase4 and have not yet been vetted by a regulation SME. The scorecard and the audit gates surface the count of entries with this flag set; SME review clears the flag (set to false or omit). Defaults to absent, which is equivalent to false."
+          },
+          "provenance": {
+            "type": "string",
+            "enum": ["maintainer", "auditor-reviewed", "olir-crosswalk", "nist-cprt-ingest", "derived-from-parent"],
+            "description": "Where did this mapping come from? Drives trust-level in the coverage report."
+          },
+          "signedBy": {
+            "type": "string",
+            "description": "Name (+ credential) of the SME who vetted this clause mapping. Used in data/provenance/sme-signoffs.json."
+          },
+          "derivationSource": {
+            "type": "object",
+            "description": "Populated by python3 -m splunk_uc generate-phase3-3-derivatives when this entry was mechanically derived from a parent-regulation entry via the derivesFrom graph in data/regulations.json. Presence indicates provenance='derived-from-parent'; absence means the entry was hand-authored or came from a direct crosswalk. Generator keys entries on (regulation, version, clause); if a direct entry exists for the same key it wins and no derivation is written.",
+            "required": ["parentRegulation", "parentVersion", "parentClause", "parentAssurance", "inheritanceMode"],
+            "additionalProperties": false,
+            "properties": {
+              "parentRegulation": {
+                "type": "string",
+                "description": "Framework id of the parent regulation (e.g. 'gdpr')."
+              },
+              "parentVersion": {
+                "type": "string",
+                "description": "Version of the parent regulation (e.g. '2016/679')."
+              },
+              "parentClause": {
+                "type": "string",
+                "description": "Clause id in the parent regulation that was the source of this derived mapping."
+              },
+              "parentAssurance": {
+                "type": "string",
+                "enum": ["full", "partial", "contributing"],
+                "description": "Assurance level on the parent entry at the moment the derivation was generated. The inherited entry's own 'assurance' is degraded one step from this value (full → partial; partial → contributing; contributing never propagates)."
+              },
+              "inheritanceMode": {
+                "type": "string",
+                "enum": ["identity", "mapped"],
+                "description": "Mirrors derivesFrom[derivative].inheritanceMode so downstream consumers can tell whether this derivative preserves the parent's clause numbers (identity) or renumbers them (mapped)."
+              },
+              "divergenceNote": {
+                "type": "string",
+                "description": "Populated when derivesFrom[derivative].divergences lists the parent clause. Informational only — SME review should confirm whether the inherited mapping still holds given the divergence."
+              }
+            }
+          },
+          "legalCaveat": {
+            "type": "string",
+            "minLength": 10,
+            "description": "Optional legal-counsel caveat attached to this clause entry. Populated when Phase 4.5b legal review returns outcome='conditional' or 'approved-with-revisions' and counsel requested that a specific caveat appear alongside the claim. Rendered in the compliance scorecard and in generated Splunk app help text. See docs/legal-review-guide.md \u00a73.1."
+          },
+          "smeCaveat": {
+            "type": "string",
+            "minLength": 10,
+            "description": "Optional subject-matter-expert caveat attached to this clause entry. Populated when Phase 5.2 SME review returns outcome='conditional' and the SME required a specific deployment-scope, data-source-version, or industry-scope caveat to appear alongside the claim. Typical content: field-extraction prerequisites, TA version pins, industry-specific applicability constraints. Rendered in the compliance scorecard and in generated Splunk app help text. See docs/sme-review-guide.md \u00a74.1."
+          }
+        }
+      }
+    },
+
+    "controlTest": {
+      "type": "object",
+      "description": "Control-test definition. Without this, 'detects control X' is an unverifiable claim. Required for all tier-1 UCs; strongly recommended elsewhere.",
+      "required": ["positiveScenario", "negativeScenario"],
+      "additionalProperties": false,
+      "properties": {
+        "positiveScenario": {
+          "type": "string",
+          "minLength": 20,
+          "description": "Narrative: what sequence of events SHOULD fire this UC. Testable against a sample-data fixture."
+        },
+        "negativeScenario": {
+          "type": "string",
+          "minLength": 20,
+          "description": "Narrative: what looks similar but should NOT fire. Guards against false positives."
+        },
+        "fixtureRef": {
+          "type": "string",
+          "description": "Relative path to a sample-data fixture that exercises the positive scenario (e.g. 'sample-data/uc-22.35.1-fixture.json')."
+        },
+        "attackTechnique": {
+          "type": "string",
+          "pattern": "^T\\d{4}(\\.\\d{3})?$",
+          "description": "MITRE ATT&CK technique ID (e.g. T1562.008). When present and the UC is tier-1, the Phase 4.5 QA gate runs the Atomic Red Team test for this technique and the UC must fire."
+        },
+        "fixtureStatus": {
+          "type": "string",
+          "enum": ["pending", "draft", "approved"],
+          "description": "Lifecycle status of the fixture. Set to 'pending' when fixtureRef was cleared due to a broken path and the fixture needs to be recreated."
+        }
+      }
+    },
+
+    "dataSources": {
+      "type": "string",
+      "description": "Log / metric sources the SPL expects. Free-form narrative; may name indexes, sourcetypes, CIM nodes."
+    },
+    "app": {
+      "type": "string",
+      "description": "Primary Splunk app, add-on, or TA required. Free-form (e.g. 'Splunk Enterprise Security (Splunkbase 263)')."
+    },
+    "splunkbaseApps": {
+      "type": "array",
+      "description": "Structured list of Splunkbase apps required to implement this UC. Each entry pins the Splunkbase app id (numeric, the integer in https://splunkbase.splunk.com/app/<id>), the human-readable name, an optional minimum version, the role the app plays for this UC, and an optional reference to a Cursor agent skill that automates setup. The recommender app reads this field to render the per-card 'Required Splunkbase apps' section and to compute install-guidance status. Added in schema v1.7.0; population for the historical 7,300+ UC catalogue is staged via `requiresSmeReview = true` until SMEs sign each entry off.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "name", "role"],
+        "properties": {
+          "id": {
+            "type": "integer",
+            "minimum": 1,
+            "description": "Numeric Splunkbase app id (e.g. 5631 for Splunk_TA_cisco_meraki). Joins against data/splunkbase-catalog.json."
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Short, human-readable app name (e.g. 'Splunk Add-on for Cisco Meraki'). Always required so the recommender always has readable text even before the catalog cache resolves."
+          },
+          "url": {
+            "type": "string",
+            "format": "uri",
+            "pattern": "^https://splunkbase\\.splunk\\.com/app/\\d+/?$",
+            "description": "Optional canonical Splunkbase deep link. Constrained to splunkbase.splunk.com/app/<id> so deep-links can never point at attacker-controlled origins."
+          },
+          "minVersion": {
+            "type": "string",
+            "pattern": "^\\d+(\\.\\d+){1,2}$",
+            "description": "Optional minimum app version this UC depends on (MAJOR.MINOR or MAJOR.MINOR.PATCH). Drives the version-check traffic light in the recommender UI."
+          },
+          "role": {
+            "type": "string",
+            "enum": ["primary", "data-source", "premium", "optional", "supporting-data"],
+            "description": "What this app contributes to the UC. 'primary' = the app the UC is built on (often a TA); 'data-source' = supplies the events/metrics; 'premium' = a Splunk premium app the UC integrates with (ES/ITSI/SOAR/UBA/PCI/etc.); 'optional' = recommended but not required."
+          },
+          "setupSkill": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9-]*$",
+            "description": "Optional reference to a Cursor agent skill that automates setup (kebab-case, matching the skill ids under .cursor/skills/). Lays the groundwork for an MCP-driven install flow without committing v9.0 to it."
+          },
+          "requiresSmeReview": {
+            "type": "boolean",
+            "description": "Set true while the entry was proposed automatically by python3 -m splunk_uc generate-splunkbase-mappings and has not yet been signed off by an SME. Cleared to false (or removed) once a human review confirms the mapping. CI's tools/audits/splunkbase_coverage.py uses this flag to track migration progress without blocking the build."
+          }
+        }
+      }
+    },
+    "premiumApps": {
+      "type": "array",
+      "description": "Splunk premium apps relied upon by this UC. Each entry is either a canonical enum string or an object that preserves the source spelling and any qualifier (e.g. 'optional, for asset/identity context').",
+      "items": {
+        "oneOf": [
+          {
+            "type": "string",
+            "enum": [
+              "Splunk Enterprise Security",
+              "Splunk ITSI",
+              "Splunk SOAR",
+              "Splunk User Behavior Analytics",
+              "Splunk App for PCI Compliance",
+              "Splunk Edge Hub",
+              "Splunk OT Security Add-on",
+              "Splunk OT Intelligence",
+              "Splunk App for Fraud Analytics",
+              "Splunk Airport Ground Operations App",
+              "Splunk Machine Learning Toolkit"
+            ]
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["name"],
+            "properties": {
+              "name": {
+                "type": "string",
+                "description": "Canonical short name used for machine lookup.",
+                "enum": [
+                  "Splunk Enterprise Security",
+                  "Splunk ITSI",
+                  "Splunk SOAR",
+                  "Splunk User Behavior Analytics",
+                  "Splunk App for PCI Compliance",
+                  "Splunk Edge Hub",
+                  "Splunk OT Security Add-on",
+                  "Splunk OT Intelligence",
+                  "Splunk App for Fraud Analytics",
+                  "Splunk Airport Ground Operations App",
+                  "Splunk Machine Learning Toolkit"
+                ]
+              },
+              "displayName": {
+                "type": "string",
+                "description": "Verbatim source spelling (may be a long form like 'Splunk IT Service Intelligence (ITSI)'). Used for markdown round-trip."
+              },
+              "note": {
+                "type": "string",
+                "description": "Qualifier extracted from a trailing parenthetical (e.g. 'optional, for asset/identity context')."
+              }
+            }
+          }
+        ]
+      }
+    },
+    "products": {
+      "type": "array",
+      "description": "Splunk products the use case is implemented in, primary first. Omitted means ['splunk-platform']. Ids, required fields, audits, exports, and fingerprint fields per product live in data/splunk-products.json (see ADR-0017).",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {
+        "enum": [
+          "splunk-platform",
+          "splunk-agent-observability",
+          "splunk-observability-cloud",
+          "splunk-itsi",
+          "splunk-soar",
+          "splunk-edge-hub"
+        ]
+      }
+    },
+    "productArtifacts": {
+      "type": "array",
+      "description": "Non-SPL implementation artifacts (evaluator settings, SignalFlow detector programs, playbooks, KPI definitions, Edge Hub source configurations). Allowed type values per product live in data/splunk-products.json.",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["product", "type", "title", "body"],
+        "properties": {
+          "product": {
+            "type": "string",
+            "description": "Product id from data/splunk-products.json; must also appear in products[].",
+            "pattern": "^splunk-[a-z0-9]+(-[a-z0-9]+)*$"
+          },
+          "type": {
+            "type": "string",
+            "description": "Artifact type, one of the product's artifactTypes in data/splunk-products.json.",
+            "pattern": "^[a-z][a-z0-9-]*$"
+          },
+          "language": {
+            "enum": ["signalflow", "spl", "python", "json", "yaml", "text"],
+            "description": "Syntax of body, used for code highlighting. 'text' for UI click-paths."
+          },
+          "title": {"type": "string", "minLength": 3, "maxLength": 160},
+          "body": {"type": "string", "minLength": 1},
+          "docsUrl": {
+            "type": "string",
+            "format": "uri",
+            "pattern": "^https://",
+            "description": "Vendor documentation page the artifact follows."
+          }
+        }
+      }
+    },
+    "spl": {
+      "type": "string",
+      "description": "Primary Splunk search. Plain SPL (no triple-backtick fencing here)."
+    },
+    "cimSpl": {
+      "type": "string",
+      "description": "Alternative SPL using tstats against accelerated CIM data models."
+    },
+    "splVariants": {
+      "type": "array",
+      "minItems": 1,
+      "description": "Vendor-specific alternatives to spl. spl stays the default search; a variant does not create a new use case id. At most one item per model. Added in schema v1.10.0. In catalog.json the array is qv and each item's spl/cimSpl are q/qs.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["model", "sourcetypes", "splunkbaseAppId", "spl"],
+        "properties": {
+          "model": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9]*_[a-z0-9_]+$",
+            "description": "Equipment model compound from the EQUIPMENT registry, the same form as equipmentModels[] (for example cisco_firepower)."
+          },
+          "sourcetypes": {
+            "type": "array",
+            "minItems": 1,
+            "uniqueItems": true,
+            "items": {"type": "string", "minLength": 1},
+            "description": "Sourcetypes this variant's spl reads."
+          },
+          "splunkbaseAppId": {
+            "type": "integer",
+            "minimum": 1,
+            "description": "Numeric Splunkbase app id of the add-on that produces those sourcetypes. Same id space as splunkbaseApps[].id."
+          },
+          "spl": {
+            "type": "string",
+            "minLength": 1,
+            "description": "The variant search. Same role as the use case spl field."
+          },
+          "cimSpl": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Optional tstats form of the variant. Same role as the use case cimSpl field."
+          },
+          "notes": {
+            "type": "string",
+            "description": "Author notes: where the field names come from, and what differs from the default search."
+          },
+          "status": {
+            "type": "string",
+            "enum": ["verified", "community", "draft"],
+            "description": "Same vocabulary as the use case status field. Omit means community."
+          },
+          "requiresSmeReview": {
+            "type": "boolean",
+            "description": "True while the variant awaits SME sign-off. Same flag as splunkbaseApps[].requiresSmeReview."
+          }
+        }
+      }
+    },
+    "cimModels": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "not": {
+          "enum": ["N/A", "n/a", "N/a", "na", "NA"]
+        }
+      },
+      "description": "CIM data model names. Omit the field when no CIM model applies; do not use the literal \"N/A\"."
+    },
+    "schema": {
+      "type": "string",
+      "description": "Schema context for the UC. Examples: 'CIM', 'OCSF', 'OCSF: authentication'."
+    },
+    "dataModelAcceleration": {
+      "type": "string",
+      "description": "DMA note for implementers (e.g. 'Enable for Performance, Network_Traffic')."
+    },
+
+    "description": {
+      "type": "string",
+      "minLength": 20,
+      "description": "Plain-language description of what the UC detects or monitors."
+    },
+    "value": {
+      "type": "string",
+      "minLength": 20,
+      "description": "Why this UC matters. Business-facing framing."
+    },
+    "grandmaExplanation": {
+      "type": "string",
+      "minLength": 20,
+      "maxLength": 400,
+      "description": "Plain, jargon-free, 'explain it to my grandma' summary of what this use case does and why anyone should care. One to three sentences, no Splunk / SPL / CIM / MITRE / TA / add-on acronyms, no index / sourcetype / tstats, no regulation clause numbers. Uses 'we' voice (e.g. 'We watch...', 'We catch...', 'We help you know when...'). This is the primary UC text shown throughout the non-technical view. Generator-owned: populated by python3 -m splunk_uc generate-grandma-explanations — do not hand-edit except to polish, and keep under the maxLength so the card and panel layouts do not overflow."
+    },
+    "implementation": {
+      "type": "string",
+      "minLength": 20,
+      "description": "Short deployment summary."
+    },
+    "detailedImplementation": {
+      "type": "string",
+      "description": "Optional multi-line step-by-step deployment instructions."
+    },
+    "scriptExample": {
+      "type": "string",
+      "description": "For scripted-input UCs: reference script body (typically fenced in markdown when rendered)."
+    },
+    "visualization": {
+      "type": "string",
+      "description": "Suggested dashboards and chart types."
+    },
+    "references": {
+      "type": "array",
+      "minItems": 1,
+      "description": "At least one authoritative link (regulator site, NIST publication, ISO page, vendor doc).",
+      "items": {
+        "type": "object",
+        "required": ["url"],
+        "properties": {
+          "url": { "type": "string", "format": "uri" },
+          "title": { "type": "string" },
+          "retrieved": { "type": "string", "format": "date" }
+        }
+      }
+    },
+
+    "knownFalsePositives": { "type": "string" },
+    "mitreAttack": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^(T\\d{4}(\\.\\d{3})?|TA\\d{4}|N/A \\(.+\\))$"
+      },
+      "description": "MITRE ATT&CK technique IDs (Txxxx or Txxxx.yyy), tactic IDs (TAxxxx), or 'N/A (<reason>)' for operational/non-security UCs."
+    },
+    "detectionType": {
+      "type": "string",
+      "description": "Detection style or primary IOC/entity type. Two taxonomies coexist in the corpus: (1) SOC detection categories — 'TTP', 'Anomaly', 'Baseline', 'Hunting', 'Correlation' — and (2) IOC/entity types inherited from Splunk Enterprise Security risk-object conventions, e.g. 'system', 'user', 'process_name', 'ip_address', 'file_hash', 'url'. Free-form to preserve curator intent. The build pipeline does not perform taxonomy normalisation."
+    },
+    "securityDomain": {
+      "type": "string",
+      "enum": [
+        "endpoint",
+        "network",
+        "threat",
+        "identity",
+        "access",
+        "audit",
+        "cloud",
+        "soc_operations",
+        "industry"
+      ]
+    },
+    "requiredFields": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "equipment": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "pattern": "^[a-z0-9][a-z0-9_-]*$"
+      },
+      "description": "Structured equipment / platform tags (slugs matching the EQUIPMENT table in enrichment.py — e.g. 'cisco', 'paloalto', 'azure', 'splunk-es'). Populated by python3 -m splunk_uc generate-equipment-tags from substring-matching `app` + `dataSources` + `spl` + `implementation` fields. See docs/equipment-table.md §4 for the canonical ID registry."
+    },
+    "equipmentModels": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "minLength": 2
+      },
+      "description": "Equipment-model tags. Two formats are accepted: (1) structured compound slugs '<equipmentId>_<modelId>' (e.g. 'cisco_meraki', 'paloalto_globalprotect') for operational UCs, populated by python3 -m splunk_uc generate-equipment-tags; (2) descriptive tooling strings (e.g. 'Splunk Enterprise Security 7.x (notable framework)') for regulatory and compliance UCs where the required tooling ecosystem matters more than UI filtering."
+    },
+    "capabilities": {
+      "type": "array",
+      "uniqueItems": true,
+      "minItems": 1,
+      "items": {
+        "type": "string",
+        "pattern": "^[a-z][a-z0-9_]*\\.[a-z][a-z0-9_]*$"
+      },
+      "description": "Vendor product capabilities this UC covers, as '<product slug>.<capability id>' from data/cisco-portfolio.json (e.g. 'duo.authentication', 'secure_access.dns_security'). Curated by hand; python -m splunk_uc generate-cisco-coverage crosses these with the portfolio to produce reports/cisco-coverage/, and audit-cisco-coverage rejects ids the portfolio does not define."
+    },
+
+    "hardware": {
+      "type": "string",
+      "description": "Free-form hardware / platform note. Mirrors the legacy '- **Hardware:**' markdown line and is preserved verbatim. Used for hardware-specific UCs (BMC, sensors, edge devices) where the deployment context matters but does not fit the structured equipment[] tags."
+    },
+    "telcoUseCase": {
+      "type": "string",
+      "description": "Free-form telco-vertical descriptor. Mirrors the legacy '- **Telco Use Case:**' markdown line. Surfaces in the cat-21 industry-vertical filter and is preserved verbatim so curator wording survives the round-trip through the build pipeline."
+    },
+
+    "status": {
+      "type": "string",
+      "enum": ["verified", "community", "draft"],
+      "description": "verified: production-ready, SME-signed-off. community: contributed, unreviewed. draft: work in progress."
+    },
+    "splStatus": {
+      "type": "string",
+      "enum": ["verified", "example"],
+      "description": "Whether the SPL field names were checked against sample events shipped in the add-on package. verified: every field name appears in a package sample. example: no package sample exists, so the search is an illustration and field names were not changed. Absent means not yet assessed. Added in schema v1.11.0. uc-thin.json emits this as ss, and only when set."
+    },
+    "lastReviewed": { "type": "string", "format": "date" },
+    "splunkVersions": {
+      "type": "array",
+      "description": "Splunk platform versions the UC has been validated against. Every entry MUST be a token from the canonical vocabulary at data/splunk-version-vocabulary.json. Tokens cover both Splunk Enterprise tracks (8.x / 9.x / 9.0+ / 9.1+ / 9.2+ / 9.3+ / 10.x — minor-version-plus tokens mean 'this minor or any later one on the same major track') and Splunk Cloud (the Cloud token covers both Victoria and Classic until those become breaking-change axes). Drift is gated by `python -m splunk_uc audit-splunk-version-matrix --check`; the audit's vocabulary-validation pass duplicates this schema's enum on purpose so a stale schema can never silently accept a typo, and a stale vocabulary can never silently reject something the schema permits.",
+      "items": {
+        "type": "string",
+        "enum": ["8.x", "9.x", "9.0+", "9.1+", "9.2+", "9.3+", "10.x", "Cloud"]
+      }
+    },
+    "reviewer": { "type": "string" },
+    "dataDomain": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^[a-z0-9][a-z0-9_-]*$"
+      },
+      "description": "Optional business data domains touched (for example supply-chain, finance, or customer-experience tagging in catalog views)."
+    },
+
+    "cost": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Cost-impact metadata so consumers can rank or filter UCs by Splunk licensing impact. All sub-fields are optional; ``cost.tier`` is the primary coverage key tracked by ``audit-cost-coverage``.",
+      "properties": {
+        "tier": {
+          "type": "string",
+          "enum": ["low", "medium", "high", "extreme"],
+          "description": "Plain-English licensing-impact band for ranking and filtering. Machine-only consumers should treat this as the canonical sort key until numeric ingest estimates are populated."
+        },
+        "ingest_gb_per_day": {
+          "type": "number",
+          "minimum": 0,
+          "description": "Machine-only worst-case indexed volume estimate in gigabytes per day for this UC at reference scale. Omit when unknown; do not embed regional pricing."
+        },
+        "search_load": {
+          "type": "string",
+          "enum": ["light", "moderate", "heavy", "real-time"],
+          "description": "Machine-only search-compute intensity band (scheduled vs real-time, aggregation depth, subsearch use). Helps rank UCs that stress search heads or ad-hoc capacity."
+        },
+        "search_load_notes": {
+          "type": "string",
+          "maxLength": 400,
+          "description": "Plain-English nuance for ``search_load`` (for example 'real-time correlation over three indexes' or 'hourly tstats only')."
+        },
+        "tstats_eligible": {
+          "type": "boolean",
+          "description": "Machine-only flag: true when the UC's primary SPL can run against an accelerated CIM data model via tstats instead of raw events."
+        },
+        "storage_class": {
+          "type": "string",
+          "enum": ["hot", "warm", "cold", "frozen", "metrics"],
+          "description": "Machine-only expected retention tier for the underlying data this UC queries. Informs storage-cost ranking, not dollar amounts."
+        },
+        "retention_days": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Machine-only expected retention horizon in days for the data this UC depends on."
+        },
+        "sources": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Plain-English or machine-readable labels for the cost drivers (for example 'HEC volume', 'DMA acceleration', 'real-time alert')."
+        },
+        "last_estimated": {
+          "type": "string",
+          "format": "date",
+          "description": "Machine-only ISO date when this cost profile was last reviewed."
+        },
+        "estimated_by": {
+          "type": "string",
+          "enum": ["maintainer", "ai-advisory", "vendor", "customer-report"],
+          "description": "Machine-only provenance for the estimate. Closed enum so downstream tooling can weight maintainer-signed entries above advisory drafts."
+        }
+      }
+    }
+  }
+}

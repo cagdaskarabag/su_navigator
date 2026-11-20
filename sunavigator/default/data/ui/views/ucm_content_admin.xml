@@ -1,0 +1,11 @@
+<dashboard version="1.1" theme="light" script="ucm_content_admin.js" stylesheet="ucm.css" hideEdit="true">
+  <label>Content Administration</label>
+  <description>Synchronize content from the remote provider or import an offline bundle. Imported content stays available when the provider is unreachable.</description>
+  <row>
+    <panel>
+      <html>
+        <div id="ucm-admin" class="ucm-root"><div class="ucm-loading">Loading…</div></div>
+      </html>
+    </panel>
+  </row>
+</dashboard>

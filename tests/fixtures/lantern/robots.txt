@@ -1,0 +1,13 @@
+# Synthetic robots.txt modelled on the rules lantern.splunk.com publishes.
+User-Agent: *
+Crawl-delay: 5
+Request-rate: 1/5
+Disallow: /Special:*
+Disallow: /*title=Special:*
+Disallow: /Template:*
+Disallow: /User:*
+Disallow: /deki/
+Disallow: /*action=*
+Disallow: /@*
+Allow: /@api/deki/files/
+Allow: /@style/favicon.ico

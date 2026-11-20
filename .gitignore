@@ -1,0 +1,7 @@
+__pycache__/
+*.pyc
+dist/
+appinspect.json
+sunavigator/local/
+sunavigator/metadata/local.meta
+.DS_Store
