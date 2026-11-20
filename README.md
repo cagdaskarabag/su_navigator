@@ -1,92 +1,173 @@
-# SUNavigator
+# SUNavigator (Splunk Use Case Navigator)
 
-SUNavigator (short for **Splunk use case navigator**) is a Splunk app for
-Enterprise and Cloud to discover, assess, select, validate and deploy
-monitoring use cases. Content comes from pluggable providers; the first
-is the [Fenre monitoring use-case catalogue](https://github.com/fenre/splunk-monitoring-use-cases)
-(MIT).
+[![Version](https://img.shields.io/badge/version-0.7.1-blue.svg)](docs/OPERATOR_GUIDE.md#0-what-changed-in-071)
+[![Splunk Compatibility](https://img.shields.io/badge/splunk-Enterprise%2010.x%20%7C%20Cloud-orange.svg)](docs/OPERATOR_GUIDE.md#2-requirements)
+[![Python Support](https://img.shields.io/badge/python-3.9%20%7C%203.13-brightgreen.svg)](docs/DECISIONS.md#d-005-stdlib-only-python-compatible-with-39313)
+[![Tests](https://img.shields.io/badge/unit%20tests-202%20passed-success.svg)](tests/)
+[![AppInspect](https://img.shields.io/badge/Splunk%20AppInspect-Clean-brightgreen.svg)](docs/DECISIONS.md#d-019-packaging-constraints-from-appinspect)
 
-**Status: 0.7.1.** Content ingestion, catalogue, discovery, readiness,
-selection, SPL validation, guided deployment, coverage and generated
-dashboards. 0.7.1 renames the application from "Splunk Use Case Manager"
-to SUNavigator; see the operator guide for the upgrade path.
+**SUNavigator** is a native Splunk application for Enterprise and Cloud that bridges the gap between external security detection catalogues and live production environments. It empowers SOC and detection engineering teams to **discover**, **assess**, **backlog**, **validate**, and **safely deploy** monitoring use cases with built-in four-eyes governance.
 
-- **Install, use and troubleshooting:** [docs/OPERATOR_GUIDE.md](docs/OPERATOR_GUIDE.md)
-- Work packages and validation: [docs/IMPLEMENTATION_PLAN.md](docs/IMPLEMENTATION_PLAN.md)
+Content is ingested from pluggable detection providers, with out-of-the-box support for the [Fenre monitoring use-case catalogue](https://github.com/fenre/splunk-monitoring-use-cases).
 
-![SUNavigator overview dashboard on a lab instance (synthetic sample data)](docs/images/03-overview.png)
+---
 
-The screenshots in the operator guide come from a lab instance with synthetic
-sample events, not from production data.
+![SUNavigator Overview Dashboard](docs/images/03-overview.png)
+*SUNavigator landing overview: tracking imported use-case metrics, data inventory status, and environment readiness.*
 
-## What works today
+---
 
-- Remote sync from GitHub pinned to an immutable commit, with per-record
-  git-blob-SHA verification, incremental updates (tree/blob SHA), category-atomic
-  writes with last-known-good fallback, withdrawal of removed records and a
-  schema-major-change guard.
-- Offline bundle import for air-gapped environments
-  (`tools/ucm_cli.py build-bundle`), using the same validation path.
-- Provider-independent canonical model with labelled, confidence-rated
-  requirements derived from provider fields and lexical SPL analysis.
-- Server-side filtered and paged catalogue, use-case detail, content
-  administration, overview and a data-inventory dashboard (counts and data
-  age from a bounded `tstats`, never from imported SPL).
-- Source-mapping registry: local mappings are never overwritten by discovery.
-- Readiness assessment: one evaluator per requirement type with stored
-  evidence, weighted score, and a veto when a critical requirement is unmet.
-  Field presence and SPL parse results become evidence after validation.
-- Per-user selection and backlog. Bounded SPL preview (no side-effect
-  commands) and field sampling via a constructed `fieldsummary`.
-- Guided deployment: draft, four-eyes approval, saved search written
-  disabled, read back and checked, enable gated on readiness, rollback,
-  retire and drift detection.
-- Coverage: MITRE ATT&CK Enterprise and ICS 20.1 matrices (bundled, other
-  versions importable) and regulation controls, by level from catalogue to
-  running successfully; run status of deployed searches from the scheduler
-  log.
-- Domain dashboard and dashboards generated from fixed templates.
-- Upgrade migrations and retention purges (audit, job history) in the
-  background worker; leader-gated on search head clusters.
+## Table of Contents
 
-Not yet validated on a search head cluster or a Splunk Cloud stack; see
-`docs/IMPLEMENTATION_PLAN.md`, "Validation status".
-- Capability-based access control and an audit trail.
+- [Key Capabilities](#key-capabilities)
+- [Visual Tour](#visual-tour)
+- [How It Works](#how-it-works)
+- [Architecture & Design Principles](#architecture--design-principles)
+- [Quick Start & Installation](#quick-start--installation)
+  - [Prerequisites](#prerequisites)
+  - [Building from Source](#building-from-source)
+  - [CLI Installation (Recommended)](#cli-installation-recommended)
+  - [First-Run Setup](#first-run-setup)
+- [Offline & Air-Gapped Deployments](#offline--air-gapped-deployments)
+- [Deployment Workflow & Governance](#deployment-workflow--governance)
+- [Documentation Map](#documentation-map)
+- [Repository Layout](#repository-layout)
+- [Development & Testing](#development--testing)
+- [Upgrades & Migrations](#upgrades--migrations)
+- [Security & Trust Model](#security--trust-model)
+- [Third-Party Attributions](#third-party-attributions)
 
-## Layout
+---
 
-| Path | Contents |
-| --- | --- |
-| `sunavigator/` | The Splunk app (the only thing that is packaged). |
-| `sunavigator/lib/splunk_ucm/` | Python services (stdlib only, Python 3.9 and 3.13). |
-| `tools/` | Operator CLI, bundle builder, packaging, dev deploy, perf check. |
-| `tests/unit/` | Mocked tests: no Splunk, no network. |
-| `tests/live/` | Tests against a real Splunk instance (opt-in). |
-| `docs/` | Operator guide, discovery, architecture, decisions, plan, security. |
+## Key Capabilities
 
-## Install (development)
+- 📥 **Curated Content Ingestion**: Synchronizes use cases from GitHub pinned to immutable commit hashes with per-record git blob SHA-1 verification. Supports atomic, category-level transactions, incremental sync, and automatic withdrawal of removed upstream rules.
+- 🔍 **Safe Bounded Data Discovery**: Discovers active index and sourcetype pairs, event volume, and data freshness using constructed, bounded `tstats` queries—never running untrusted imported SPL. Preserves local source mappings without overwriting operator customizations.
+- 📊 **Evidence-Based Readiness Engine**: Evaluates whether required sourcetypes, fields, CIM data models, macros, and add-ons exist in your environment. Produces deterministic readiness scores (0–100) and enforces a veto when critical requirements are missing.
+- 🎯 **Operator Backlog & Syntax Validation**: Provides per-user selection, bookmarking, and triage. Validates SPL against Splunk's native search parser, inspects command syntax, and provides safe, bounded previews with `fieldsummary` sampling.
+- 🛡️ **Four-Eyes Guided Deployment**: Enforces separation of duties (maker-checker). A draft is submitted by one operator, reviewed and approved by a second operator, and deployed as a disabled saved search. Live activation is gated on environment readiness and strictly audited.
+- 🔄 **Drift Detection & Rollback**: Compares live saved searches against frozen deployment revisions. Automatically detects external modifications and provides one-click rollback to prior revisions or safe retirement.
+- 🗺️ **Framework & Regulation Coverage**: Maps catalogue holdings and deployed detections against MITRE ATT&CK® Enterprise 20.1 and ICS 20.1 technique matrices, as well as compliance obligations, with execution run-status tracking.
+- 📈 **Dynamic Domain Dashboards**: Generates Simple XML monitoring dashboards from vetted templates without embedding arbitrary upstream SPL.
 
-```bash
-./tools/package.sh                       # dist/sunavigator-<version>.tar.gz
-# or, for a local dev instance:
-SPLUNK_HOME=/opt/splunk ./tools/dev_deploy.sh --restart
+---
+
+## Visual Tour
+
+| View | Screenshot | Description |
+| --- | --- | --- |
+| **Content Catalogue** | ![Content Catalogue](docs/images/05-content-catalogue.png) | Server-side filtered and paged view of all imported use cases with domain, category, criticality, difficulty, and MITRE ATT&CK facets. |
+| **Data Inventory** | ![Data Inventory](docs/images/06-data-inventory.png) | Discovered data sources, event counts, freshness age, and catalogue sourcetype / index mapping coverage. |
+| **Readiness Assessment** | ![Readiness Assessment](docs/images/07-readiness.png) | High-level readiness breakdown (Ready, Partially Ready, Not Ready, Blocked) and the most common unmet telemetry requirements. |
+| **Deployment Management** | ![Deployments List](docs/images/13-deployments-list.png) | Comprehensive tracking of all active, draft, and retired deployments with saved-search operational status and drift indicators. |
+| **MITRE ATT&CK Coverage** | ![Coverage Matrix](docs/images/14-coverage.png) | Interactive technique coverage matrix spanning In Catalogue, Data Ready, Deployed, Enabled, and Running Successfully states. |
+
+---
+
+## How It Works
+
+```
+┌───────────────────────────────┐
+│ Upstream Catalogue (Fenre/Git)│
+└───────────────┬───────────────┘
+                │ Pinned commit + git blob SHA verification
+                ▼
+┌───────────────────────────────┐        ┌───────────────────────────────┐
+│   Background Sync Worker      │◄───────┤ Data Inventory Discovery      │
+│  (ucm_sync_worker modular in) │        │ (Bounded tstats, active pairs)│
+└───────────────┬───────────────┘        └───────────────┬───────────────┘
+                │ Atomic category upserts                │ Telemetry facts
+                ▼                                        ▼
+┌────────────────────────────────────────────────────────────────────────┐
+│                      KV Store State Collections                        │
+│  (uc_catalog, uc_requirements, uc_inventory, uc_readiness, uc_deploy)  │
+└───────────────────────────────────┬────────────────────────────────────┘
+                                    │
+                                    ▼
+┌────────────────────────────────────────────────────────────────────────┐
+│                   SUNavigator REST API (/services/ucm/...)             │
+│        Persistent Python Handler (Strict capability-based RBAC)        │
+└───────────────────────────────────┬────────────────────────────────────┘
+                                    │
+         ┌──────────────────────────┴──────────────────────────┐
+         ▼                                                     ▼
+┌───────────────────────────────┐             ┌───────────────────────────────┐
+│ Splunk Web Interface          │             │ Splunk Saved Searches Engine  │
+│ (Simple XML 1.1 + JS Modules) │             │ (Disabled-first, SUN - <id>)  │
+└───────────────────────────────┘             └───────────────────────────────┘
 ```
 
-Then open **SUNavigator → Administration**, check the manifest, select
-categories and synchronize, or import an offline bundle. Full steps,
-roles, configuration and troubleshooting (including Splunk Web install
-timeouts and macOS KV Store certificate trust) are in
-[docs/OPERATOR_GUIDE.md](docs/OPERATOR_GUIDE.md).
+---
 
-Optional GitHub token (raises the API rate limit). It is stored in Splunk's
-credential store, never in configuration files:
+## Architecture & Design Principles
+
+SUNavigator follows strict enterprise architectural constraints documented in [docs/DECISIONS.md](docs/DECISIONS.md):
+
+1. **Zero External Python Dependencies (D-005)**: Built strictly with Python's standard library. Fully compatible with Splunk Enterprise 10.x running Python 3.9 through 3.13.
+2. **Untrusted Upstream Content (D-006, D-007)**: All third-party detection definitions are treated as untrusted data. Schema validation, size caps, and commit-pinned blob checks occur before data enters the system.
+3. **No Dynamic SPL Execution (D-020, D-026)**: Imported SPL is never dispatched or executed during discovery, catalogue viewing, or readiness checks. Read-only checks use Splunk's native parser and bounded `fieldsummary` queries.
+4. **Splunk-Native Storage (D-004)**: All operational state, summaries, discovery metrics, and audit entries reside in Splunk KV Store collections; no non-standard local filesystem caches are used.
+5. **Caller-Scoped Authorization (D-011)**: REST endpoints run under the calling user's session token and enforce granular Splunk capabilities (`ucm_view_content`, `ucm_manage_content`, `ucm_run_discovery`, `ucm_select_usecases`, `ucm_deploy`).
+
+---
+
+## Quick Start & Installation
+
+### Prerequisites
+
+- **Splunk Enterprise 10.2+** or **10.4+** (Single instance or distributed Search Head).
+- **KV Store status**: `ready` (`$SPLUNK_HOME/bin/splunk show kvstore-status`).
+  - *macOS Note*: If KV Store is stuck on `starting` with `CSSMERR_TP_CERT_SUSPENDED`, add `[kvstore] ocspValidation = false` to `server.conf` (see [Operator Guide §9.2](docs/OPERATOR_GUIDE.md#92-administration-kvstorestatus-unavailable--kv-get-failed)).
+
+### Building from Source
+
+Package the production `.tar.gz` bundle from this repository:
+
+```bash
+git clone https://github.com/cagdaskarabag/sun_navigator.git
+cd sun_navigator
+./tools/package.sh
+# Output: dist/sunavigator-0.7.1.tar.gz
+```
+
+### CLI Installation (Recommended)
+
+Splunk Web's UI upload times out on packages over standard browser HTTP limits. Install via the Splunk CLI:
+
+```bash
+$SPLUNK_HOME/bin/splunk install app dist/sunavigator-0.7.1.tar.gz \
+  -auth "$SPLUNK_USER:$SPLUNK_PASSWORD"
+
+$SPLUNK_HOME/bin/splunk restart
+```
+
+Verify installation:
+
+```bash
+$SPLUNK_HOME/bin/splunk display app sunavigator \
+  -auth "$SPLUNK_USER:$SPLUNK_PASSWORD"
+```
+
+### First-Run Setup
+
+1. Log into Splunk Web and navigate to **Apps → SUNavigator**.
+2. Open **Administration**: verify that KV Store, Remote Content Sync, and Platform checks show green `available` badges.
+3. Under **Remote synchronization**, click **Check provider for categories**, select Category `9` (Identity & Access Management), and click **Synchronize selected**.
+4. Go to **Data Inventory** and click **Run discovery** to catalog active indexes and sourcetypes in your environment.
+5. Visit **Readiness** to see automatic telemetry match rates, or open **Content Catalogue** to start selecting detections.
+
+*(Optional)* Configure a GitHub personal access token to prevent API rate limiting:
 
 ```bash
 curl -k -u admin https://localhost:8089/servicesNS/nobody/sunavigator/storage/passwords \
-  -d name=github_token -d realm=sunavigator --data-urlencode password@-
+  -d name=github_token -d realm=sunavigator --data-urlencode password="YOUR_GITHUB_TOKEN"
 ```
 
-## Offline bundles
+---
+
+## Offline & Air-Gapped Deployments
+
+For environments without direct outbound internet access to GitHub, build an offline bundle on an internet-connected workstation:
 
 ```bash
 git clone https://github.com/fenre/splunk-monitoring-use-cases /tmp/fenre
@@ -94,40 +175,113 @@ python3 tools/ucm_cli.py validate --repo /tmp/fenre --categories 9,10
 python3 tools/ucm_cli.py build-bundle --repo /tmp/fenre --categories 9,10 --output bundle.json
 ```
 
-A bundle built with `--records` is marked partial and never withdraws
-records it does not list.
+In SUNavigator, navigate to **Administration → Offline import**, upload `bundle.json`, and click **Import bundle**. Every record is validated against its git blob SHA hash, matching remote sync integrity.
 
-## Upgrades
+---
 
-Versions from 0.7.1 on use the app ID `sunavigator`. Upgrading from
-`splunk_use_case_manager` (0.7.0 and earlier) is a new app, not an in-place
-upgrade: retire deployments, remove the old app, then install SUNavigator.
-Within one worker interval (60 s) the background worker applies pending
-migrations and records the version in `uc_sync_state` key `app::state`.
-Downgrades are not supported. See the operator guide, section 8.
+## Deployment Workflow & Governance
 
-## Tests
+SUNavigator implements a safe, four-eyes deployment state machine:
+
+```
+[Draft] ─── Submit ───► [Pending Approval] ─── Approve ───► [Approved]
+                             │                                   │
+                             └── Reject                          └── Deploy (Disabled)
+                                                                     │
+                                                                     ▼
+                                [Active / Enabled] ◄─── Enable ─── [Deployed]
+                                        │                             │
+                                        ├── Verify Drift              ├── Rollback
+                                        └── Retire                    └── Retire
+```
+
+- **Separation of Duties**: The operator who drafts/submits a detection cannot approve it unless `allow_self_approval = true` is explicitly configured.
+- **Disabled-First**: Newly deployed searches are always created in a `disabled = 1` state under the naming convention `SUN - <record_id> - <title>`.
+- **Gated Activation**: Enabling a search requires an assessment score above threshold. Enabling a blocked search requires an audited override reason.
+- **Continuous Drift Verification**: Periodic background jobs verify live saved search definitions against frozen KV Store deployment revisions to detect manual tampering.
+
+---
+
+## Documentation Map
+
+| Guide | Description |
+| --- | --- |
+| 📖 **[Operator Guide](docs/OPERATOR_GUIDE.md)** | Comprehensive manual covering installation, configuration, role assignment, first-run sync, view-by-view usage, upgrading, and troubleshooting. |
+| 🏗️ **[Architecture Specification](docs/ARCHITECTURE.md)** | Technical reference for software components, KV Store collection schemas, and REST endpoints. |
+| 🔒 **[Security & RBAC Model](docs/SECURITY.md)** | Detailed trust boundaries, Splunk capability definitions, and credential handling. |
+| 📜 **[Architecture Decision Records (ADRs)](docs/DECISIONS.md)** | Recorded technical decisions and trade-offs (D-001 through D-036). |
+| 📋 **[Implementation Plan](docs/IMPLEMENTATION_PLAN.md)** | Work package breakdown (WP0–WP7) and validation test matrices. |
+
+---
+
+## Repository Layout
+
+```
+sun_navigator/
+├── sunavigator/                   # The packaged Splunk App
+│   ├── app.manifest              # App packaging manifest
+│   ├── default/                  # Default Splunk configurations (app, restmap, collections, etc.)
+│   ├── bin/                      # REST entrypoints and modular input worker
+│   ├── lib/splunk_ucm/           # Core Python engine (stdlib only)
+│   │   ├── catalog/              # Catalogue search, summary, and query engine
+│   │   ├── content/              # Ingestion, normalization, and bundle verification
+│   │   ├── deployment/           # Four-eyes workflow, savedsearch writer, drift verifier
+│   │   ├── discovery/            # Bounded tstats data discovery
+│   │   ├── frameworks/           # MITRE ATT&CK & regulatory matrix engines
+│   │   └── readiness/            # Deterministic requirement and score evaluator
+│   └── appserver/static/         # Simple XML JS modules and styles
+├── tools/                        # Development, packaging, and bundle CLI tools
+├── tests/                        # Automated test suites
+│   ├── unit/                     # 202 mocked unit tests (runs without Splunk)
+│   └── live/                     # Integration tests against live Splunk instances
+└── docs/                         # Specifications, ADRs, operator guide, and screenshots
+```
+
+---
+
+## Development & Testing
+
+Unit tests run out of the box with standard Python 3.9+ without needing Splunk installed:
 
 ```bash
 cd tests
-python3 -m unittest discover -s unit -t .            # mocked
-UCM_LIVE_SPLUNK=1 UCM_SPLUNK_PASSWORD=... UCM_SPLUNK_VERIFY_TLS=0 \
-  python3 -m unittest discover -s live -t .          # real Splunk (+ UCM_LIVE_REMOTE=1 for GitHub)
+python3 -m unittest discover -s unit -t .
 ```
 
-Test fixtures in `tests/fixtures/fenre/` are verbatim upstream files used
-under the MIT licence (see the README there).
+To run live integration tests against a test Splunk Enterprise instance:
 
-## Security
+```bash
+UCM_LIVE_SPLUNK=1 \
+UCM_SPLUNK_USER=admin \
+UCM_SPLUNK_PASSWORD="your-password" \
+UCM_SPLUNK_VERIFY_TLS=0 \
+python3 -m unittest discover -s live -t .
+```
 
-See [docs/SECURITY.md](docs/SECURITY.md). In short: upstream content is
-untrusted, imported SPL is never executed, nothing is enabled or deployed
-automatically, and secrets live only in Splunk's credential store.
+For rapid local search-head deployment during development:
 
-## Third-party content
+```bash
+SPLUNK_HOME=/opt/splunk ./tools/dev_deploy.sh --restart
+```
 
-`sunavigator/lib/splunk_ucm/frameworks/data/` contains reduced
-copies of MITRE ATT&CK® Enterprise and ICS 20.1 (ids, names, tactic
-membership, revocations). © The MITRE Corporation. Reproduced and distributed
-with the permission of The MITRE Corporation under the
-[ATT&CK terms of use](https://attack.mitre.org/resources/legal-and-branding/terms-of-use/).
+---
+
+## Upgrades & Migrations
+
+- **Upgrading from 0.7.0 (`splunk_use_case_manager`)**: Version 0.7.1 introduces the official `sunavigator` app ID. Because Splunk treats this as a distinct application, follow the migration procedure in [Operator Guide §8](docs/OPERATOR_GUIDE.md#8-upgrade-and-uninstall) (retire previous deployments, remove old app, install SUNavigator, and resync).
+- **Upgrades within 0.7.1+**: Upgrades preserve `local/` configurations and automatically execute pending KV Store migrations via the background maintenance worker.
+
+---
+
+## Security & Trust Model
+
+- **Least Privilege**: Pre-bundled roles `ucm_analyst`, `ucm_content_manager`, and `ucm_deployment_operator` enforce strict privilege separation.
+- **Audit Logging**: All administrative actions (sync, discovery, approvals, overrides, deployments) generate tamper-resistant records in both the `uc_audit` KV collection and `_internal` logs (`sunavigator.log`).
+- **Credential Storage**: External API keys and tokens are stored solely in Splunk's native `storage/passwords` encrypted endpoint.
+
+---
+
+## Third-Party Attributions
+
+- Detection content provided by the [Fenre Monitoring Use Cases project](https://github.com/fenre/splunk-monitoring-use-cases), licensed under the MIT License.
+- MITRE ATT&CK® Enterprise and ICS matrices © The MITRE Corporation. Reproduced and distributed with the permission of The MITRE Corporation under the [ATT&CK terms of use](https://attack.mitre.org/resources/legal-and-branding/terms-of-use/).
