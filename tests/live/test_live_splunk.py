@@ -406,3 +406,25 @@ class LiveFrameworksDashboardsTest(unittest.TestCase):
         self.assertEqual(status, 403)
         self.assertEqual(api(self.admin, "POST", "dashboards/delete", body={"name": name})[0], 200)
         self.assertEqual(self.admin.request("GET", self.VIEW + name, {"output_mode": "json"})[0], 404)
+
+
+@unittest.skipUnless(LIVE, "set UCM_LIVE_SPLUNK=1 to run against a real Splunk instance")
+class LiveMaintenanceTest(unittest.TestCase):
+    """WP7: the worker has applied every migration and recorded the installed version."""
+
+    def test_app_state_is_current(self):
+        from splunk_ucm import __version__
+        from splunk_ucm.catalog.summary import SUMMARY_VERSION
+        from splunk_ucm.maintenance.migrations import MIGRATIONS, STATE_KEY
+        kv = KVStore(transport())
+        deadline = time.time() + 150
+        state = {}
+        while time.time() < deadline:
+            state = kv.get(C.SYNC_STATE, STATE_KEY) or {}
+            if state.get("app_version") == __version__:
+                break
+            time.sleep(10)
+        self.assertEqual(state.get("app_version"), __version__, "worker did not record the version in time")
+        self.assertEqual(state.get("applied"), [m[0] for m in MIGRATIONS])
+        total = kv.count(C.CATALOG)
+        self.assertEqual(kv.count(C.CATALOG, {"summary_version": {"$gte": SUMMARY_VERSION}}), total)

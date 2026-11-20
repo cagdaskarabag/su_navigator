@@ -91,3 +91,12 @@ max_revisions = <integer 2-100>
 * Revisions kept per deployment. The deployed and previous deployed revisions are always kept. Default 20.
 verify_interval_minutes = <integer>
 * The worker compares deployed saved searches with their revision at this interval. 0 disables. Default 60.
+
+[retention]
+audit_days = <integer 0-3650>
+* Audit records older than this are deleted by the background worker. 0 keeps them forever. Default 365.
+job_history = <integer 10-200>
+* Finished jobs kept per job type (sync, discovery, readiness). Queued and running jobs are never deleted.
+* Services also trim at write time (sync 200, discovery and readiness 50), so those are upper bounds. Default 50.
+interval_hours = <integer 0-720>
+* How often the purge runs. 0 disables purging. Default 24.

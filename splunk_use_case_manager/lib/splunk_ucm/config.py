@@ -40,6 +40,7 @@ DEFAULTS: Dict[str, Dict[str, str]] = {
         "default_cron": "*/15 * * * *", "default_earliest": "-15m", "default_latest": "now",
         "default_alert_mode": "track", "max_revisions": "20", "verify_interval_minutes": "60",
     },
+    "retention": {"audit_days": "365", "job_history": "50", "interval_hours": "24"},
 }
 
 _TRUE = {"1", "true", "t", "yes", "y", "on"}

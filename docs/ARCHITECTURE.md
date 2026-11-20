@@ -50,8 +50,9 @@ not packaged.
 | 9 | Deployment Manager | `deployment/` | WP5 | Implemented |
 | 10 | Framework Mapping | `frameworks/` (registry, coverage, operations) | WP6 | Implemented |
 | 11 | Dashboard Templates | `dashboards/` | WP6 | Implemented |
-| 12 | Audit | `audit.py` | WP1 | Implemented |
-| 13 | Platform Capability Adapter | `platform/` | WP1 / WP2 | Implemented (SHC captain and Cloud vetting still pending) |
+| 12 | Audit | `audit.py` | WP1 | Implemented (retention in WP7) |
+| 14 | Maintenance (migrations, retention) | `maintenance/` | WP7 | Implemented |
+| 13 | Platform Capability Adapter | `platform/` | WP1 / WP2 | Implemented (captain gate unit-tested; real SHC and Cloud stack not validated) |
 
 ## 3. Content flow
 
@@ -123,7 +124,7 @@ All collections are app-scoped (`nobody` owner) and replicated in SHC.
 | `uc_content` | same | shared | sync | `raw_json` (verbatim record as JSON text; KV Store forbids `$`/`.` in keys, e.g. `$schema`), `provenance`, `normalizer_version`, `source_hash`. ~10–80 KB. |
 | `uc_categories` | `fenre_cat-01` | shared | sync | Category metadata, `tree_sha`, `selected`, counts, `last_synced_at`. |
 | `uc_sync_state` | `provider::fenre` / `job::<uuid>` | shared | REST, worker | Provider state (pin, last-good commit/version, schema version) and job records (status, counts, errors). Retain last 200 jobs. |
-| `uc_audit` | uuid | shared (append) | all services | `time, actor, action, object_type, object_id, outcome, details`. Retention: 365 days (purge in WP7). |
+| `uc_audit` | uuid | shared (append) | all services | `time, actor, action, object_type, object_id, outcome, details`. Purged after `[retention] audit_days` (default 365, D-034). |
 | `uc_environment_sources` | `src_<kind>_<hash>` | shared | discovery | Index, index/sourcetype pair, app and data-model rows with window counts and data age. Missing sources are marked, never deleted. |
 | `uc_source_mappings` | `map_<kind>_<hash>` | shared | discovery / analyst | Local and auto mappings. Local rows are never overwritten by discovery. |
 | `uc_readiness` | same as `uc_catalog` | shared | readiness job / analyst | `state`, `score`, `coverage`, `blockers`, `gaps`, `counts`, per-requirement `results[]` (status, code, detail, observed, via_mapping), `engine_version`, `discovery_at`, `source_hash`. ~3 KB. Staleness computed on read. |
@@ -147,6 +148,22 @@ prevented by these guards, not by an atomic claim (SHC validation pending).
 Upgrades: every document carries `schema_version`; the normalizer version is
 stored per content document so a newer app can re-derive catalogue summaries
 from `raw_json` without network access (`POST /ucm/catalog/reindex`, WP1).
+Catalogue summaries also carry `summary_version`.
+
+App state (`uc_sync_state`, D-033):
+
+| Key | `doc_type` | Contents |
+|---|---|---|
+| `app::state` | `app_state` | `state_schema`, `applied[]` migration ids, `app_version`, `previous_app_version`, `upgraded_at`, `last_migration`, `last_migration_at` |
+| `maintenance::retention` | `retention_state` | `last_run_at`, `totals` (`audit`, `jobs`) of the last purge |
+| `deployment::verify` | `deployment_verify` | `last_run_at`, `totals` of the last drift verification |
+| `provider::<id>` | `provider` | Provider pin, last good version/commit, schema version |
+| `job::`, `djob::`, `rjob::<uuid>` | `job`, `discovery_job`, `readiness_job` | Job records, trimmed to `[retention] job_history` per type |
+
+The background worker runs, in order and one job per run: maintenance
+(pending migrations, then retention when due), content sync, discovery,
+readiness and deployment verification. All of them are leader-gated (D-035).
+Downgrades are not supported (D-033).
 
 ## 6. REST API (`/services/ucm/...`)
 
@@ -232,8 +249,8 @@ Full model: `docs/SECURITY.md`.
   match) over a precomputed `search_text` field holding id, title,
   sourcetypes, tags and MITRE ids; descriptions are not searched. No ranking.
 * Derived requirements are lexical hypotheses (D-013), not evidence.
-* Coverage is computed on read over the whole active catalogue (no cache);
-  this is fine for tens of thousands of use cases but not tuned beyond that.
+* Coverage is computed on read over the whole active catalogue (no cache):
+  about 0.5 s per request at 20,000 use cases on a single instance.
 * Run status relies on the scheduler log in `_internal`, which most
   non-admin roles cannot search (D-031).
 

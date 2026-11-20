@@ -39,7 +39,10 @@ Status: WP5 (catalogue, discovery, readiness, selection, SPL validation, deploym
 
 Capabilities are checked server-side in the REST handler for every
 state-changing endpoint (verified live: a `ucm_viewer` receives 403 for sync,
-import, reindex, manifest and audit).
+import, reindex, manifest and audit). A unit test calls every POST route
+without capabilities and expects 403, except the caller-scoped selection
+routes and dashboard preview, so a new route without a check fails the build
+(D-035).
 
 ## Storage ACLs (`metadata/default.meta`)
 
@@ -79,6 +82,12 @@ Framework definitions imported by content managers are validated strictly
 (ids, names, references, size); their text is rendered with `textContent`
 only. Dashboard templates escape every value and accept parameters only from
 allowlists; imported SPL never appears in a generated dashboard.
+
+Retention (D-034): audit records are purged after `audit_days` (default
+365). Set it to 0, or forward audit to an index, where longer retention is
+required; the app's structured log
+(`var/log/splunk/splunk_use_case_manager.log`) also carries every audit event
+and is indexed into `_internal` by default.
 
 ## Secrets
 

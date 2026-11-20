@@ -36,6 +36,11 @@ See [docs/IMPLEMENTATION_PLAN.md](docs/IMPLEMENTATION_PLAN.md).
   running successfully; run status of deployed searches from the scheduler
   log.
 - Domain dashboard and dashboards generated from fixed templates.
+- Upgrade migrations and retention purges (audit, job history) in the
+  background worker; leader-gated on search head clusters.
+
+Not yet validated on a search head cluster or a Splunk Cloud stack; see
+`docs/IMPLEMENTATION_PLAN.md`, "Validation status".
 - Capability-based access control and an audit trail.
 
 ## Layout
@@ -78,6 +83,15 @@ python3 tools/ucm_cli.py build-bundle --repo /tmp/fenre --categories 9,10 --outp
 
 A bundle built with `--records` is marked partial and never withdraws
 records it does not list.
+
+## Upgrades
+
+Install the new package over the old one (`splunk install app <tgz> -update 1`
+or Manage Apps) and restart. `local/` settings are kept. Within one worker
+interval (60 s) the background worker applies pending migrations, such as
+re-deriving catalogue summaries, and records the version in `uc_sync_state`
+key `app::state`. Downgrades are not supported: Splunk drops the data of KV
+collections that the older version does not define.
 
 ## Tests
 

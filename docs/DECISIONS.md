@@ -354,3 +354,49 @@ as drift.
   `uc_dashboards` can be deleted.
 * A static `ucm_domain` dashboard covers the common case without generating
   anything; it reads the app's KV Store lookups.
+
+## D-033 Upgrades run as versioned migrations in the worker
+* App state lives in `uc_sync_state` under `app::state`
+  (`doc_type: app_state`, `state_schema`, `applied[]`, `app_version`,
+  `previous_app_version`, `upgraded_at`, `last_migration`,
+  `last_migration_at`).
+* `maintenance/migrations.py` holds an ordered list of migrations. Each has
+  an id, a check and an apply step; ids are never reused or reordered. The
+  worker runs pending migrations before any other job, re-checks each one
+  (so a fresh install records it as `not_needed`) and audits it
+  (`app.migration`).
+* `0001_catalog_summary_v2` re-derives catalogue summaries older than
+  `SUMMARY_VERSION` from the stored raw records, without network access.
+  Verified live: 0.4.0 package → 0.7.0 package upgraded 164 summaries within
+  one worker interval, and `local/ucm.conf` was kept.
+* Downgrades are not supported. Splunk drops a KV collection's data when its
+  `collections.conf` stanza disappears, so installing a version older than
+  the one that introduced a collection loses that collection (observed live
+  for `uc_deployments` on 0.4.0). Saved searches written by the app survive
+  as unmanaged searches and must be removed or re-adopted by hand.
+
+## D-034 Retention is enforced by the worker
+* `[retention]`: `audit_days` (default 365, 0 keeps forever), `job_history`
+  (finished jobs kept per type, default 50) and `interval_hours` (default 24).
+* Purges delete audit records older than the cutoff with one KV delete query,
+  and the oldest finished jobs beyond `job_history` per job type. Queued and
+  running jobs are never deleted. Each purge that removes something writes a
+  `retention.purged` audit record.
+* Services still trim job history at write time (sync 200, discovery and
+  readiness 50); these act as upper bounds.
+
+## D-035 Leader election and RBAC review
+* All background jobs (maintenance, sync, discovery, readiness, deployment
+  verification) run only where `_leader()` is not `False`: a standalone
+  search head (member/info returns 404, 503 or 400), or the SHC member whose
+  label equals the captain's label. When splunkd cannot answer, the result
+  is unknown and the worker runs, so a broken probe never stops a single
+  instance; on a cluster this can duplicate a run, which every job tolerates
+  (idempotent upserts and per-provider job guards). Covered by unit tests
+  with simulated member/captain responses; not validated on a real cluster.
+* RBAC review: a unit test calls every POST route as a user without app
+  capabilities. All return 403 except the caller-scoped ones (selections and
+  dashboard preview). Every GET is open to app users except audit and the
+  provider manifest. Collections written for other users (`uc_audit`,
+  `uc_deployments`, `uc_frameworks`, `uc_dashboards`) are writable only by
+  `admin`/`sc_admin` and written by the handler with the system token.

@@ -17,6 +17,7 @@ from splunk_ucm.content.registry import remote_provider  # noqa: E402
 from splunk_ucm.content.worker import SyncWorker  # noqa: E402
 from splunk_ucm.deployment.worker import DeploymentWorker  # noqa: E402
 from splunk_ucm.discovery.worker import DiscoveryWorker  # noqa: E402
+from splunk_ucm.maintenance.worker import MaintenanceWorker  # noqa: E402
 from splunk_ucm.readiness.worker import ReadinessWorker  # noqa: E402
 from splunk_ucm.errors import StorageError  # noqa: E402
 from splunk_ucm.log import get_logger  # noqa: E402
@@ -28,8 +29,8 @@ from splunk_ucm.storage.transport import SimpleRequestTransport  # noqa: E402
 log = get_logger("splunk_ucm.worker")
 
 SCHEME = """<scheme>
-  <title>Use Case Manager content sync worker</title>
-  <description>Executes queued and scheduled content synchronization jobs. Emits no events.</description>
+  <title>Use Case Manager background worker</title>
+  <description>Runs migrations, retention, content sync, discovery, readiness and deployment checks. Emits no events.</description>
   <use_external_validation>false</use_external_validation>
   <use_single_instance>false</use_single_instance>
   <streaming_mode>simple</streaming_mode>
@@ -83,6 +84,7 @@ def run(config_xml: str) -> int:
     store = KVStore(transport)
     leader = lambda: _leader(probe)
     workers = [
+        ("maintenance", MaintenanceWorker(store, config, leader)),
         ("sync", SyncWorker(store, config, remote_provider,
                             lambda: get_secret(transport, "github_token") or "", leader)),
         ("discovery", DiscoveryWorker(store, config, transport, leader)),

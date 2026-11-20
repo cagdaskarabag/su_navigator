@@ -127,10 +127,24 @@ Gaps: regulations have no bundled control catalogue (only mapped controls are
 shown); summaries written before 0.6.0 lack `framework_controls` until they
 are reindexed (WP7 migration); no PDF export of coverage.
 
-## WP7 — Hardening and release ⬜
-RBAC review, SHC worker election, Cloud vetting, upgrade tests, retention
-purges (audit, job history). AppInspect and a 20k-record catalogue check were
-already run in WP1 and are repeated here.
+## WP7 — Hardening and release ✅ (0.7.0)
+1. RBAC review: every POST route is tested without capabilities (403 except
+   caller-scoped routes); read routes checked too (D-035).
+2. Leader election: one gate for all background jobs, unit-tested for
+   standalone, captain, member and unknown (D-035). Real SHC not available.
+3. Upgrades: versioned migrations with an `app::state` record; summary
+   reindex migration; live upgrade from the 0.4.0 package to 0.7.0 (D-033).
+4. Retention: audit and job-history purges in the worker, `[retention]`
+   settings (D-034).
+5. Cloud vetting: AppInspect precert with the `cloud`, `private_victoria` and
+   `private_classic` tags: 0 failures, 0 errors.
+6. Performance at 20k use cases: catalogue queries under 100 ms; coverage
+   endpoints about 0.5 s (computed on read).
+7. App icons and logos added, which removes the last browser console error.
+
+Not validated here, required before 1.0.0: a real search head cluster
+(captain-only jobs, KV replication, generated view replication) and a Splunk
+Cloud stack (vetting submission, egress, `sc_admin`).
 
 ## Validation status (keep current)
 
@@ -142,7 +156,7 @@ already run in WP1 and are repeated here.
 | KV Store client and repositories | ✅ in-memory store with KV key rules | ✅ operator parity test; 20k-document catalogue, every UI query under 100 ms | ⬜ | ⬜ |
 | Fenre provider (GitHub) | ✅ fake GitHub with real blob SHAs | ✅ categories 18 and 23 (140 records) synced from commit `3b8024a`; re-sync unchanged; re-normalize without download | ⬜ | ⬜ (egress per stack) |
 | Offline bundle import | ✅ | ✅ 24-record demo bundle through REST; idempotent re-import | ⬜ | ⬜ |
-| Sync worker (modular input) | ✅ worker logic | ✅ registered, runs under python3.13, executes queued jobs | ⬜ captain-only election | ⬜ |
+| Sync worker (modular input) | ✅ worker logic; leader gate for standalone/captain/member/unknown, every worker skips off-captain | ✅ registered, runs under python3.13, executes queued jobs | ⬜ captain-only election | ⬜ |
 | REST handler and RBAC | ✅ router and capability checks | ✅ viewer denied writes (403), direct KV writes denied, JSON errors | ⬜ | ⬜ |
 | Dashboards | n/a | ✅ rendered in headless Chrome with live data, no app JS errors | ⬜ | ⬜ |
 | Discovery tstats + inventory REST | ✅ fake inventory/search; SPL construction rejects injection | ✅ include_internal job: 31 pairs, 12 indexes, 0 missing; viewer 403 | ⬜ | ⬜ |
@@ -154,4 +168,7 @@ already run in WP1 and are repeated here.
 | Deployment workflow and saved searches | ✅ state machine, four eyes, disabled-first, drift, rollback, trim, concurrency, RBAC | ✅ operator drafts and deploys, admin approves, operator owns the search, enable override, external edit detected as drift, rollback restores cron, retire deletes; operator KV write to `uc_deployments` 403 | ⬜ | ⬜ |
 | Frameworks, coverage, run status | ✅ builder, validation, versions, matrix roll-up/remap/unresolved, levels, controls, run-status classes and `_internal` probe | ✅ bundled Enterprise/ICS 20.1 served; 227 techniques, revoked T1562 remapped to T1685; admin sees 2 searches operational, viewer and operator get "not available" | ⬜ | ⬜ |
 | Generated dashboards | ✅ render escaping/allowlists, create/regenerate/delete, marker conflict | ✅ two views generated and rendered; operator can create/delete, viewer 403, direct KV write 403; `_key` lookups in panels return data | ⬜ | ⬜ |
-| Packaging | n/a | ✅ AppInspect 4.4.0 precert (all checks and cloud tags): 0 failures | n/a | ⬜ vetting |
+| Upgrades and migrations | ✅ reindex migration, fresh install, version record, idempotent re-run | ✅ 0.4.0 package → 0.7.0 package: 164 summaries reindexed in one worker run, `local/ucm.conf` kept, app state recorded | ⬜ | ⬜ |
+| Retention | ✅ audit cutoff, job history per type, queued jobs kept, interval, audit of purges | ✅ 500-day-old audit record purged by the worker after upgrade | ⬜ | ⬜ |
+| RBAC review | ✅ every POST route without capabilities, every GET | ✅ per-feature 403 checks in the live suite | ⬜ | ⬜ |
+| Packaging | n/a | ✅ AppInspect 4.4.0 precert (all checks; `cloud`, `private_victoria`, `private_classic` tags): 0 failures, 0 errors | n/a | ⬜ vetting |
