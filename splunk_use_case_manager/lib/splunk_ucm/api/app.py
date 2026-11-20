@@ -25,6 +25,9 @@ from ..discovery.overlay import attach_environment
 from ..discovery.query import InventoryFilter, InventoryQueryService, coverage
 from ..discovery.service import DiscoveryService, new_job as new_discovery_job
 from ..discovery.worker import settings_from_config
+from ..deployment.savedsearch import SavedSearchClient
+from ..deployment.service import DeploymentService
+from ..deployment.worker import settings_from_config as deployment_settings
 from ..errors import PermissionDenied, UcmError, UnsupportedOperation, ValidationError
 from ..platform.search import SearchClient
 from ..readiness.query import ReadinessFilter, ReadinessQueryService
@@ -44,6 +47,7 @@ log = get_logger(__name__)
 CAP_MANAGE_CONTENT = "ucm_manage_content"
 CAP_ADMIN = "ucm_admin"
 CAP_RUN_DISCOVERY = "ucm_run_discovery"
+CAP_DEPLOY = "ucm_deploy"
 
 
 @dataclasses.dataclass
@@ -101,8 +105,10 @@ class Context:
     def __init__(self, user_transport: SplunkdTransport, system_transport: Optional[SplunkdTransport],
                  user: str, store: Optional[DocumentStore] = None, audit_store: Optional[DocumentStore] = None,
                  config: Optional[AppConfig] = None,
-                 provider_factory: Optional[Callable[..., Any]] = None):
+                 provider_factory: Optional[Callable[..., Any]] = None,
+                 record_store: Optional[DocumentStore] = None):
         self.user = user
+        self.record_store = record_store
         self.user_transport = user_transport
         self.system_transport = system_transport
         self.store = store or KVStore(user_transport)
@@ -158,6 +164,13 @@ class Context:
         return ValidationService(self.store, self.audit, SearchClient(self.user_transport),
                                  settings, self.readiness_service())
 
+    def deployment_service(self) -> DeploymentService:
+        # Workflow records go through the system token (uc_deployments is admin-write only);
+        # saved searches are written with the caller's session (D-028, D-029).
+        records = self.record_store or (KVStore(self.system_transport) if self.system_transport else self.store)
+        return DeploymentService(records, self.audit, SearchClient(self.user_transport),
+                                 SavedSearchClient(self.user_transport), deployment_settings(self.config))
+
 
 Handler = Callable[[Context, Request], Response]
 
@@ -209,6 +222,8 @@ def get_usecase(ctx: Context, req: Request) -> Response:
     detail["requirement_summary"]["assessment"] = readiness["state"] if readiness else "not_assessed"
     detail["selection"] = ctx.selection_service().for_use_case(ctx.user, req.arg("id"))
     detail["validation"] = ctx.validation_service().get(req.arg("id"))
+    svc = ctx.deployment_service()
+    detail["deployment"] = _deployment_view(ctx, svc, svc.get(req.arg("id")))
     return Response(200, detail)
 
 
@@ -461,6 +476,68 @@ def post_readiness_assess(ctx: Context, req: Request) -> Response:
     return Response(200, ctx.readiness_service().assess_one(use_case_id, ctx.user))
 
 
+def _require_any(ctx: Context, *caps: str) -> None:
+    have = ctx.capabilities()
+    if not any(c in have for c in caps):
+        raise PermissionDenied("missing capability %s" % " or ".join(caps))
+
+
+def _deployment_view(ctx: Context, svc: DeploymentService, doc: Optional[Dict[str, Any]]) -> Dict[str, Any]:
+    return {"deployment": doc, "allowed_actions": svc.allowed_actions(doc, ctx.user, ctx.capabilities()),
+            "settings": {"require_approval": svc.settings.require_approval,
+                         "allow_self_approval": svc.settings.allow_self_approval,
+                         "block_enable_states": list(svc.settings.block_enable_states),
+                         "defaults": svc.settings.defaults()}}
+
+
+def get_deployments(ctx: Context, req: Request) -> Response:
+    svc = ctx.deployment_service()
+    out = svc.list(req.args("state"), req.args("live"), _int(req.arg("offset"), 0, "offset"),
+                   _int(req.arg("count"), 50, "count"), drifted=req.arg("drift") == "1")
+    if req.arg("summary") == "1":
+        out["summary"] = svc.summary()
+    return Response(200, out)
+
+
+def get_deployment(ctx: Context, req: Request) -> Response:
+    svc = ctx.deployment_service()
+    return Response(200, _deployment_view(ctx, svc, svc.get(req.arg("id"))))
+
+
+def _deployment_action(action: str) -> Handler:
+    propose = action in ("draft", "submit")
+    observe = action == "verify"
+
+    def handler(ctx: Context, req: Request) -> Response:
+        if propose or observe:
+            _require_any(ctx, CAP_DEPLOY, CAP_RUN_DISCOVERY)
+        else:
+            ctx.require(CAP_DEPLOY)
+        body = req.json()
+        use_case_id = str(body.get("id") or req.arg("id") or "")
+        if not use_case_id:
+            raise ValidationError("id is required")
+        svc = ctx.deployment_service()
+        note = str(body.get("note") or "")
+        if len(note) > 500:
+            raise ValidationError("note too long")
+        if action == "draft":
+            doc = svc.save_draft(ctx.user, use_case_id, body)
+        elif action == "enable":
+            doc = svc.enable(ctx.user, use_case_id, str(body.get("override_reason") or ""))
+        elif action == "verify":
+            doc = svc.verify(ctx.user, use_case_id)
+        else:
+            doc = getattr(svc, action)(ctx.user, use_case_id, note)
+        return Response(200, _deployment_view(ctx, svc, doc))
+
+    return handler
+
+
+DEPLOYMENT_ACTIONS = ("draft", "submit", "approve", "reject", "deploy", "enable", "disable", "rollback",
+                      "retire", "verify")
+
+
 def build_router() -> Router:
     router = Router()
     router.add("GET", "catalog", get_catalog)
@@ -491,4 +568,8 @@ def build_router() -> Router:
     router.add("GET", "validation", get_validation)
     router.add("POST", "validate", post_validate)
     router.add("POST", "preview", post_preview)
+    router.add("GET", "deployments", get_deployments)
+    router.add("GET", "deployment", get_deployment)
+    for action in DEPLOYMENT_ACTIONS:
+        router.add("POST", "deployment/" + action, _deployment_action(action))
     return router

@@ -56,3 +56,17 @@ details.ucm-details > summary { cursor: pointer; color: #1f4e79; margin: 4px 0; 
 .ucm-score-bar { display: inline-block; width: 60px; height: 6px; background: #e8ecef; border-radius: 3px; overflow: hidden; }
 .ucm-score-bar > span { display: block; height: 100%; background: #1f4e79; }
 .ucm-readiness-head { display: flex; gap: 16px; align-items: center; flex-wrap: wrap; }
+.ucm-state-warn { background: #fff8e1; color: #5c4400; }
+.ucm-form .ucm-kv dd { margin-bottom: 6px; }
+.ucm-input { width: 100%; max-width: 640px; box-sizing: border-box; }
+textarea.ucm-input { font-family: Menlo, Consolas, monospace; font-size: 12px; }
+.ucm-matrix { display: flex; gap: 4px; overflow-x: auto; padding-bottom: 8px; }
+.ucm-matrix-col { min-width: 140px; max-width: 160px; flex: 0 0 auto; }
+.ucm-matrix-col h4 { font-size: 12px; margin: 0 0 4px; min-height: 32px; }
+.ucm-matrix-cell { display: block; font-size: 11px; padding: 3px 4px; margin-bottom: 2px; border-radius: 2px;
+  background: #f2f4f5; color: #2b3033; text-decoration: none; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ucm-matrix-cell.lvl-catalogue { background: #dbe9f6; }
+.ucm-matrix-cell.lvl-ready { background: #a8d5a2; }
+.ucm-matrix-cell.lvl-deployed { background: #5fb760; color: #fff; }
+.ucm-matrix-cell.lvl-enabled { background: #1e7b34; color: #fff; }
+.ucm-legend span { display: inline-block; padding: 2px 8px; margin-right: 6px; font-size: 11px; border-radius: 2px; }

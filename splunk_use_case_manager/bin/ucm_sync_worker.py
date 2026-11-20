@@ -15,6 +15,7 @@ if _LIB not in sys.path:
 from splunk_ucm.config import load_config  # noqa: E402
 from splunk_ucm.content.registry import remote_provider  # noqa: E402
 from splunk_ucm.content.worker import SyncWorker  # noqa: E402
+from splunk_ucm.deployment.worker import DeploymentWorker  # noqa: E402
 from splunk_ucm.discovery.worker import DiscoveryWorker  # noqa: E402
 from splunk_ucm.readiness.worker import ReadinessWorker  # noqa: E402
 from splunk_ucm.errors import StorageError  # noqa: E402
@@ -86,6 +87,7 @@ def run(config_xml: str) -> int:
                             lambda: get_secret(transport, "github_token") or "", leader)),
         ("discovery", DiscoveryWorker(store, config, transport, leader)),
         ("readiness", ReadinessWorker(store, config, leader)),
+        ("deployment", DeploymentWorker(store, config, transport, leader)),
     ]
     for _ in range(_max_jobs(config_xml)):
         ran = False

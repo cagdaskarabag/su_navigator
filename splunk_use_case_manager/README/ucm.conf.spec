@@ -72,3 +72,22 @@ preview_timeout_seconds = <integer>
 sample_events = <integer>
 * Events read per index/sourcetype pair for fieldsummary. Default 200.
 sample_timeout_seconds = <integer>
+
+[deployment]
+require_approval = <boolean>
+* A submitted revision must be approved by a user with ucm_deploy before it can be deployed. Default true.
+allow_self_approval = <boolean>
+* Allow the submitter to approve their own revision. Default false (four-eyes principle).
+block_enable_states = <comma-separated readiness states>
+* Enabling a deployed search whose readiness is in this list requires an override reason. Default blocked.
+default_cron = <five-field cron>
+* Schedule proposed for new drafts. Default */15 * * * *.
+default_earliest = <relative-time>
+default_latest = <relative-time>
+default_alert_mode = none|track
+* track: an alert that adds to Triggered Alerts when results exceed the threshold; no external actions.
+* none: a scheduled report. Default track.
+max_revisions = <integer 2-100>
+* Revisions kept per deployment. The deployed and previous deployed revisions are always kept. Default 20.
+verify_interval_minutes = <integer>
+* The worker compares deployed saved searches with their revision at this interval. 0 disables. Default 60.

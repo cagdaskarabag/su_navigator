@@ -87,7 +87,7 @@ require([
         if (!rd) {
             return el("div", {}, ucm.stateBox("info", "Readiness: not assessed",
                 "This use case has not been evaluated against this deployment yet. Assessment runs automatically after " +
-                "environment discovery. Deployment state: not selected, not deployed."),
+                "environment discovery."),
                 el("div", { "class": "ucm-actions" }, assessBtn));
         }
         var counts = rd.counts || {};
@@ -130,7 +130,7 @@ require([
                 sel ? el("button", { "class": "btn", type: "button", text: "Clear", onclick: function () {
                     ucm.post("selections/delete", { id: uc.content_id }).done(load);
                 } }) : null),
-            el("div", { "class": "ucm-sub", text: "Your selection is stored per user and is not changed by content sync. Deployment is WP5." }));
+            el("div", { "class": "ucm-sub", text: "Your selection is stored per user and is not changed by content sync." }));
     }
 
     function validationBox(uc) {
@@ -164,6 +164,133 @@ require([
                             .fail(function (err) { window.alert(err.message); });
                     } })),
             el("div", { "class": "ucm-sub", text: "Preview forces a short time window and a result cap. Searches with delete, outputlookup, collect, script or similar commands are refused. Field sampling uses a constructed fieldsummary, not the imported pipeline." }));
+    }
+
+    var ACTION_LABELS = { submit: "Submit for approval", approve: "Approve", reject: "Reject", deploy: "Deploy (disabled)",
+        enable: "Enable", disable: "Disable", rollback: "Roll back", retire: "Retire", verify: "Verify now" };
+
+    function runAction(uc, dep, action) {
+        var body = { id: uc.content_id };
+        var settings = dep.settings || {};
+        if (action === "enable") {
+            var rd = uc.readiness ? uc.readiness.state : "not_assessed";
+            if ((settings.block_enable_states || []).indexOf(rd) >= 0) {
+                var reason = window.prompt("Readiness is " + rd + ". Enter an override reason (at least 10 characters). It is audited.");
+                if (!reason) { return; }
+                body.override_reason = reason;
+            }
+        } else if (action === "retire") {
+            if (!window.confirm("Retire this deployment? The saved search is deleted from Splunk.")) { return; }
+        } else if (action === "approve" || action === "reject" || action === "rollback") {
+            var note = window.prompt("Optional note for the audit trail:", "");
+            if (note === null) { return; }
+            body.note = note;
+        }
+        ucm.post("deployment/" + action, body).done(load).fail(function (err) { window.alert(err.message); });
+    }
+
+    function draftForm(uc, dep, current) {
+        var defaults = (dep.settings && dep.settings.defaults) || {};
+        var cur = current || {};
+        var source = el("select", { "class": "ucm-input" },
+            el("option", { value: "primary", text: "Primary SPL" }),
+            uc.cim_spl ? el("option", { value: "cim", text: "CIM SPL" }) : null,
+            el("option", { value: "custom", text: "Custom (edited copy)" }));
+        source.value = cur.spl_source || "primary";
+        var custom = el("textarea", { "class": "ucm-input ucm-mono", rows: "6" });
+        custom.value = cur.spl_source === "custom" ? cur.spl : (uc.spl || "");
+        var customWrap = el("div", { style: source.value === "custom" ? "" : "display:none" }, custom);
+        source.addEventListener("change", function () { customWrap.style.display = source.value === "custom" ? "" : "none"; });
+        function input(value) { var i = el("input", { "class": "ucm-input", type: "text" }); i.value = value; return i; }
+        var cron = input(cur.cron || defaults.cron || "*/15 * * * *");
+        var earliest = input(cur.earliest || defaults.earliest || "-15m");
+        var latest = input(cur.latest || defaults.latest || "now");
+        var mode = el("select", { "class": "ucm-input" }, el("option", { value: "track", text: "Alert (Triggered Alerts only)" }),
+            el("option", { value: "none", text: "Scheduled report" }));
+        mode.value = cur.alert_mode || defaults.alert_mode || "track";
+        var severity = el("select", { "class": "ucm-input" }, ["info", "low", "medium", "high", "critical"].map(function (s) {
+            return el("option", { value: s, text: s });
+        }));
+        severity.value = cur.severity || (uc.criticality === "critical" ? "critical" : (uc.criticality === "high" ? "high" : "medium"));
+        var threshold = input(String(cur.threshold === undefined ? 0 : cur.threshold));
+        var notes = input("");
+        var save = el("button", { "class": "btn btn-primary", type: "button", text: "Save draft", onclick: function () {
+            this.disabled = true;
+            ucm.post("deployment/draft", { id: uc.content_id, spl_source: source.value, custom_spl: custom.value,
+                cron: cron.value, earliest: earliest.value, latest: latest.value, alert_mode: mode.value,
+                severity: severity.value, threshold: threshold.value, notes: notes.value })
+                .done(load).fail(function (err) { save.disabled = false; window.alert(err.message); });
+        } });
+        return el("div", { "class": "ucm-form" }, kv([
+            ["Search", source], ["Custom SPL", customWrap], ["Schedule (cron)", cron], ["Earliest", earliest],
+            ["Latest", latest], ["Type", mode], ["Severity", severity], ["Trigger when results >", threshold],
+            ["Notes", notes]]),
+            el("div", { "class": "ucm-actions" }, save),
+            el("div", { "class": "ucm-sub", text: "The draft is parsed by Splunk. Searches with side-effect commands cannot be submitted. No email, webhook or script actions are configured." }));
+    }
+
+    var LIVE_KIND = { enabled: "ok", disabled: "info", missing: "error", unmanaged: "error", absent: "neutral" };
+    var STATE_KIND = { draft: "neutral", pending_approval: "warn", approved: "info", rejected: "high",
+        deployed: "ok", failed: "error", retired: "neutral" };
+
+    function deploymentBox(uc) {
+        var view = uc.deployment || { deployment: null, allowed_actions: [] };
+        var dep = view.deployment;
+        var allowed = view.allowed_actions || [];
+        var head = el("div", { "class": "ucm-readiness-head" }, el("strong", { text: "Deployment" }),
+            dep ? ucm.badge(dep.state.replace("_", " "), STATE_KIND[dep.state] || "neutral") : ucm.badge("not deployed", "neutral"),
+            dep ? ucm.badge("saved search: " + ((dep.live && dep.live.status) || "absent"), LIVE_KIND[(dep.live && dep.live.status) || "absent"]) : null,
+            dep && dep.content_changed ? ucm.badge("provider content changed since this revision", "warn") : null);
+        var card = el("div", { "class": "ucm-card" }, head);
+        if (!dep) {
+            if (allowed.indexOf("draft") < 0) {
+                card.appendChild(el("div", { "class": "ucm-sub", text: "Not deployed. Preparing a deployment needs the ucm_run_discovery or ucm_deploy capability." }));
+                return card;
+            }
+            card.appendChild(draftForm(uc, view, null));
+            return card;
+        }
+        var revs = dep.revisions || [];
+        var latest = revs[revs.length - 1] || {};
+        card.appendChild(el("div", { "class": "ucm-sub" }, el("span", { "class": "ucm-mono", text: dep.saved_search.name }),
+            " in app " + dep.saved_search.app + (dep.live && dep.live.owner ? ", owner " + dep.live.owner : "") +
+            ". Latest revision " + dep.revision + (dep.deployed_revision ? ", deployed revision " + dep.deployed_revision : ", nothing deployed") + "."));
+        card.appendChild(el("div", { "class": "ucm-sub", text: "Revision " + latest.rev + ": " + latest.spl_source + " SPL, cron " +
+            latest.cron + ", " + latest.earliest + " → " + latest.latest + ", " + (latest.alert_mode === "track" ? "alert, severity " +
+            latest.severity + ", results > " + latest.threshold : "scheduled report") + ". " +
+            (latest.parse_ok ? "Parsed by Splunk." : "Parse failed: " + (latest.parse_error || "")) +
+            (latest.side_effects && latest.side_effects.length ? " Side effects: " + latest.side_effects.join(", ") + "." : "") +
+            (latest.submitted_by ? " Submitted by " + latest.submitted_by + "." : "") +
+            (latest.approved_by ? " Approved by " + latest.approved_by + "." : "") }));
+        if (dep.last_error) { card.appendChild(ucm.stateBox("error", "Last error", dep.last_error)); }
+        var drift = (dep.live && dep.live.drift) || [];
+        if (drift.length) {
+            card.appendChild(ucm.stateBox("warn", "Drift detected (" + (dep.live.verified_at || "") + " UTC)",
+                drift.map(function (d) { return d.field + (d.detail ? ": " + d.detail : (" expected " + d.expected + ", observed " + d.observed)); }).join("; ")));
+        }
+        card.appendChild(el("div", { "class": "ucm-actions" }, allowed.filter(function (a) { return a !== "draft"; }).map(function (a) {
+            return el("button", { "class": "btn" + (a === "deploy" || a === "approve" || a === "submit" ? " btn-primary" : ""),
+                type: "button", text: ACTION_LABELS[a] || a, onclick: function () { runAction(uc, view, a); } });
+        })));
+        if (allowed.indexOf("draft") >= 0) {
+            card.appendChild(el("details", { "class": "ucm-details" }, el("summary", { text: dep.state === "draft" ? "Edit draft" : "Start a new revision" }),
+                draftForm(uc, view, latest)));
+        }
+        var spl = latest.spl ? el("details", { "class": "ucm-details" }, el("summary", { text: "Revision " + latest.rev + " SPL" }),
+            el("pre", { "class": "ucm-spl", text: latest.spl })) : null;
+        var hist = el("tbody", {});
+        (dep.history || []).slice(-10).reverse().forEach(function (h) {
+            hist.appendChild(el("tr", {}, el("td", { text: h.at }), el("td", { text: h.actor }), el("td", { text: h.action }),
+                el("td", { text: (h.from || "–") + " → " + h.to }), el("td", { text: h.revision === null ? "" : String(h.revision) }),
+                el("td", { "class": "ucm-sub", text: h.note || "" })));
+        });
+        card.appendChild(spl);
+        card.appendChild(el("details", { "class": "ucm-details" }, el("summary", { text: "History" }),
+            el("table", { "class": "ucm-table" }, el("thead", {}, el("tr", {}, ["Time (UTC)", "Actor", "Action", "State", "Rev", "Note"].map(function (t) {
+                return el("th", { text: t });
+            }))), hist)));
+        card.appendChild(el("div", { "class": "ucm-sub", text: "Every deploy and rollback writes the saved search disabled. Enabling is a separate, audited step. The search runs as its owner." }));
+        return card;
     }
 
     function mitreLink(m) {
@@ -242,6 +369,7 @@ require([
         root.appendChild(readinessBox(uc));
         root.appendChild(selectionBox(uc));
         root.appendChild(validationBox(uc));
+        root.appendChild(deploymentBox(uc));
 
         root.appendChild(section("Description", text(uc.description)));
         root.appendChild(section("Business value", text(uc.business_value)));

@@ -37,3 +37,13 @@ access = read : [ * ], write : [ admin, sc_admin, ucm_admin, ucm_analyst ]
 
 [ucm]
 access = read : [ * ], write : [ admin, sc_admin, ucm_admin ]
+
+# Deployed use cases are saved searches in this app (WP5). Deployment operators
+# write them with their own session; the REST handler gates every change.
+[savedsearches]
+access = read : [ * ], write : [ admin, sc_admin, ucm_admin, ucm_deployment_operator ]
+
+# Workflow records (approvals) are written only with the REST handler's system
+# token after the capability check, so participants cannot forge approvals.
+[collections/uc_deployments]
+access = read : [ * ], write : [ admin, sc_admin ]

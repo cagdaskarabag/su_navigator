@@ -90,9 +90,23 @@ yet; SHC and Cloud unvalidated.
 Gaps: event-condition sampling still unverified; no shared team backlog;
 preview does not open Splunk's Search view.
 
-## WP5 — Deployment engine ⬜
-State machine, approval, disabled-first saved searches in an app namespace,
-verification, enable/disable/rollback, audit.
+## WP5 — Deployment engine ✅
+1. `uc_deployments` with workflow state, frozen revisions, observed saved-search
+   status, drift and history (D-029).
+2. State machine draft → pending_approval → approved → deployed, with
+   rejected, failed and retired. Four-eyes approval (configurable).
+3. Saved searches written with the operator's session in this app, owned by
+   the operator (D-028), always disabled on deploy and rollback; read back and
+   compared after each write; name conflicts and unmanaged searches refused.
+4. Enable gated on readiness (override reason audited); disable; rollback to
+   the previous deployed revision; retire deletes the search.
+5. Drift verification on demand and every `verify_interval_minutes` in the
+   worker.
+6. UI: Deployment card on the use-case page (draft form, actions allowed for
+   the caller, drift, history) and a Deployments view.
+
+Gaps: no alert actions (email, webhook); no bulk deployment; ownership cannot
+be moved to a service account by the app.
 
 ## WP6 — Frameworks and dashboards ⬜
 Generic framework model, versioned ATT&CK Enterprise/ICS, matrix, dashboard
@@ -122,4 +136,5 @@ already run in WP1 and are repeated here.
 | Readiness worker | ✅ auto-schedule once per discovery, timeout, captain gate | ✅ queued and ran within one worker interval | ⬜ captain-only election | ⬜ |
 | Selection / backlog | ✅ per-user intents, catalogue + backlog UI | ✅ viewer can select; isolated from other users | ⬜ | ⬜ |
 | SPL parser + preview + field sample | ✅ parser candidates, side-effect gate, constructed fieldsummary | ✅ 13.1.1 parses; preview records missing lookup; `_time`/`host`/`group`/`name` sampled | ⬜ | ⬜ |
+| Deployment workflow and saved searches | ✅ state machine, four eyes, disabled-first, drift, rollback, trim, concurrency, RBAC | ✅ operator drafts and deploys, admin approves, operator owns the search, enable override, external edit detected as drift, rollback restores cron, retire deletes; operator KV write to `uc_deployments` 403 | ⬜ | ⬜ |
 | Packaging | n/a | ✅ AppInspect 4.4.0 precert (all checks and cloud tags): 0 failures | n/a | ⬜ vetting |

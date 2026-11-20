@@ -5,8 +5,8 @@ deploy monitoring use cases. Content comes from pluggable providers; the first
 is the [Fenre monitoring use-case catalogue](https://github.com/fenre/splunk-monitoring-use-cases)
 (MIT).
 
-**Status: WP4, content ingestion, catalogue, discovery, readiness,
-selection and SPL validation.** Guided deployment is not implemented yet.
+**Status: WP5, content ingestion, catalogue, discovery, readiness,
+selection, SPL validation and guided deployment.**
 See [docs/IMPLEMENTATION_PLAN.md](docs/IMPLEMENTATION_PLAN.md).
 
 ## What works today
@@ -28,6 +28,9 @@ See [docs/IMPLEMENTATION_PLAN.md](docs/IMPLEMENTATION_PLAN.md).
   Field presence and SPL parse results become evidence after validation.
 - Per-user selection and backlog. Bounded SPL preview (no side-effect
   commands) and field sampling via a constructed `fieldsummary`.
+- Guided deployment: draft, four-eyes approval, saved search written
+  disabled, read back and checked, enable gated on readiness, rollback,
+  retire and drift detection.
 - Capability-based access control and an audit trail.
 
 ## Layout

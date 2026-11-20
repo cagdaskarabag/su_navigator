@@ -4,6 +4,7 @@
   <view name="ucm_inventory" />
   <view name="ucm_readiness" />
   <view name="ucm_backlog" />
+  <view name="ucm_deployments" />
   <collection label="Administration">
     <view name="ucm_content_admin" />
   </collection>

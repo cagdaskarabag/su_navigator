@@ -47,7 +47,7 @@ not packaged.
 | 6 | Readiness Assessment | `readiness/` | WP3 | Implemented (inventory evidence; field/SPL checks in WP4) |
 | 7 | Use Case Selection | `selection/` | WP4 | Implemented |
 | 8 | SPL Validation | `spl/parser.py`, `validation/` | WP4 | Implemented |
-| 9 | Deployment Manager | `deployment/` | WP5 | Planned |
+| 9 | Deployment Manager | `deployment/` | WP5 | Implemented |
 | 10 | Framework Mapping | `frameworks/` | WP6 | Planned (mappings captured in WP1) |
 | 11 | Dashboard Templates | `dashboards/` | WP6 | Planned |
 | 12 | Audit | `audit.py` | WP1 | Implemented |
@@ -68,6 +68,12 @@ Mark disappeared records `withdrawn`; record job in uc_sync_state; audit
 Imported SPL is data. It is never dispatched by the content subsystem.
 Discovery searches are a constructed ``tstats`` template over index names
 returned by ``/services/data/indexes`` (D-020, D-021).
+
+Deployment flow (WP5, D-028/D-029): draft (parse) ─▶ submit ─▶ approve (other
+user) ─▶ deploy: create or update the saved search **disabled** with the
+operator's session ─▶ read back and compare ─▶ `deployed` or `failed` ─▶
+enable / disable / rollback (each read back) ─▶ retire (delete). The worker
+re-verifies deployed searches periodically.
 
 Readiness flow (WP3): ``EnvironmentSnapshot.load`` (sources + mappings +
 discovery state, once per job) ─▶ ``StoredNormalizer`` re-derives each active
@@ -123,7 +129,7 @@ All collections are app-scoped (`nobody` owner) and replicated in SHC.
 | `uc_readiness` | same as `uc_catalog` | shared | readiness job / analyst | `state`, `score`, `coverage`, `blockers`, `gaps`, `counts`, per-requirement `results[]` (status, code, detail, observed, via_mapping), `engine_version`, `discovery_at`, `source_hash`. ~3 KB. Staleness computed on read. |
 | `uc_selections` | `sel_<user>_<content_id>` | per-user | user | Bookmark / select / defer / reject. Sync never writes this collection. |
 | `uc_validation` | same as `uc_catalog` | shared | analyst | Parser outcome, side-effects, bounded preview metadata (no event payloads), field samples. |
-| `uc_deployments` | — | shared | WP5 | Planned |
+| `uc_deployments` | `dep_<catalog key>` | shared | REST (system token), worker | Workflow `state`, `revisions[]` (frozen SPL, schedule, parse result, submitter, approver, deploy time), `deployed_revision`, `live` (status, drift, owner, next run), `history[]` (last 100), `version`. |
 | `uc_frameworks` | — | shared | WP6 | Planned |
 
 Accelerated fields (`collections.conf`): `uc_catalog` on `category_key`,
@@ -173,6 +179,12 @@ from `raw_json` without network access (`POST /ucm/catalog/reindex`, WP1).
 | `GET ucm/validation?id=` | read | Last parse / preview / field-sample document. |
 | `POST ucm/validate` | `ucm_run_discovery` | Parse with `/services/search/parser`, optionally sample fields and re-assess (`sample`). |
 | `POST ucm/preview` | `ucm_run_discovery` | Bounded preview of imported SPL; refused when side-effect commands are present. |
+| `GET ucm/deployments` | read | Deployments (`state`, `live`, `drift=1`, `summary=1`, paging). |
+| `GET ucm/deployment?id=` | read | Deployment document plus `allowed_actions` for the caller. Also embedded in `GET ucm/usecase`. |
+| `POST ucm/deployment/draft` | `ucm_run_discovery` or `ucm_deploy` | Create or replace a draft revision (`spl_source`, `custom_spl`, `cron`, `earliest`, `latest`, `alert_mode`, `severity`, `threshold`, `notes`). |
+| `POST ucm/deployment/submit` | `ucm_run_discovery` or `ucm_deploy` | Submit the draft for approval. |
+| `POST ucm/deployment/{approve,reject,deploy,enable,disable,rollback,retire}` | `ucm_deploy` | Workflow and saved-search actions (`note`; `override_reason` for enable). |
+| `POST ucm/deployment/verify` | `ucm_run_discovery` or `ucm_deploy` | Compare the saved search with its revision. |
 
 Writes check an app capability (`authorize.conf`) from the request context in
 addition to collection ACLs (defence in depth). Request bodies must be sent as

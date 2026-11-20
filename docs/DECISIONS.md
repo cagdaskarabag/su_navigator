@@ -254,3 +254,54 @@ imported pipeline is never used for sampling. Presence updates readiness
 (`met` / `not_met`); if no active sourcetype exists the field stays
 `unverified`. `spl_validity` is injected at assessment time for use cases
 that have primary SPL (not stored in the provider record).
+
+## D-028 Deployed searches are owned by the deploying user
+**Context.** Saved searches created through `/servicesNS/nobody/<app>/saved/searches`
+are owned by the caller (verified on 10.2.9). Changing the owner to `nobody`
+needs `admin_all_objects` ("You do not have permission to change the owner").
+A search owned by `nobody` runs as `splunk-system-user`, which would let an
+operator schedule a search with more access than they have.
+**Decision.** The saved search is written with the operator's session and
+stays owned by them (`sharing = app`). `metadata/default.meta [savedsearches]`
+gives `ucm_deployment_operator` and `ucm_admin` write access in this app, and
+the role gets `schedule_search` (the `user` role on Splunk 10 does not have
+it; without it Splunk rejects `alert.*` arguments). The deployment record
+shows the observed owner. An admin can reassign ownership in Splunk.
+**Consequences.** A search stops (orphaned) if its owner is removed; the
+verifier reports the owner so this is visible. Deployment operators can also
+edit saved searches of this app directly in Splunk; such edits are reported
+as drift.
+
+## D-029 Deployment workflow: four eyes, frozen SPL, disabled first
+* One `uc_deployments` document per use case: workflow `state` of the latest
+  revision (`draft → pending_approval → approved → deployed`, plus `rejected`,
+  `failed`, `retired`) and the observed saved-search status `live`
+  (`absent`, `disabled`, `enabled`, `missing`, `unmanaged`) with drift.
+* A revision copies the SPL (primary, CIM or a custom edit) and schedule. The
+  approved text is what gets deployed; later upstream changes only raise a
+  `content_changed` flag.
+* Drafts are parsed with `/services/search/parser`; submit, approve and
+  deploy refuse unparsable SPL and side-effect commands (D-026). Deploy
+  re-parses.
+* The submitter cannot approve their own revision unless
+  `allow_self_approval = true`; `require_approval = false` auto-approves on
+  submit (recorded as `approval: not_required`).
+* Every deploy and rollback writes the search **disabled**; enabling is a
+  separate action. Enabling while readiness is in `block_enable_states`
+  (default `blocked`) needs an override reason of at least 10 characters,
+  which is stored in the audit record.
+* After every write the saved search is read back and compared (search hash,
+  cron, time window, scheduled, disabled, no alert actions). A mismatch marks
+  the deployment `failed` and disables the search.
+* The app only modifies saved searches whose description carries its marker
+  and content id; an existing search with the same name is never overwritten
+  (`name_conflict`).
+* Alerts add to Triggered Alerts only (`alert.track`); email, webhook or
+  script actions are not configured by the app.
+* `uc_deployments` is writable only by `admin`/`sc_admin`; the REST handler
+  writes it with the system token after the capability check, so analysts and
+  operators cannot forge approvals through the KV REST API (verified live).
+  KV Store has no compare-and-swap; a `version` counter re-read before each
+  write rejects most concurrent edits.
+* The worker re-verifies deployed searches every `verify_interval_minutes`
+  (default 60) and audits only changes.

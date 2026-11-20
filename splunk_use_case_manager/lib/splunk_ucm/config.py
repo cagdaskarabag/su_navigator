@@ -35,6 +35,11 @@ DEFAULTS: Dict[str, Dict[str, str]] = {
         "earliest": "-15m", "latest": "now", "preview_max_events": "50",
         "preview_timeout_seconds": "30", "sample_events": "200", "sample_timeout_seconds": "30",
     },
+    "deployment": {
+        "require_approval": "true", "allow_self_approval": "false", "block_enable_states": "blocked",
+        "default_cron": "*/15 * * * *", "default_earliest": "-15m", "default_latest": "now",
+        "default_alert_mode": "track", "max_revisions": "20", "verify_interval_minutes": "60",
+    },
 }
 
 _TRUE = {"1", "true", "t", "yes", "y", "on"}

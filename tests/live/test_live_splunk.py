@@ -254,3 +254,96 @@ class LiveApiTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+@unittest.skipUnless(LIVE, "set UCM_LIVE_SPLUNK=1 to run against a real Splunk instance")
+class LiveDeploymentTest(unittest.TestCase):
+    """WP5: four-eyes approval, disabled-first saved search, enable gate, drift, rollback, retire."""
+
+    OPERATOR = "ucm_test_operator_" + uuid.uuid4().hex[:6]
+    OPERATOR_PW = "T3st!" + uuid.uuid4().hex
+    UC = "fenre:UC-9.1.2"
+    SAVED = "/servicesNS/nobody/splunk_use_case_manager/saved/searches/"
+
+    @classmethod
+    def setUpClass(cls):
+        cls.admin = transport()
+        status, _ = cls.admin.request("POST", "/services/authentication/users",
+                                      form={"name": cls.OPERATOR, "password": cls.OPERATOR_PW,
+                                            "roles": "ucm_deployment_operator"})
+        assert status in (200, 201), status
+        cls.operator = transport(cls.OPERATOR, cls.OPERATOR_PW)
+        bundle = helpers.fixture_bundle(record_ids=["9.1.2"])
+        status, body = api(cls.admin, "POST", "import", raw=json.dumps(bundle).encode("utf-8"))
+        assert status == 200, body
+        cls.kv = KVStore(cls.admin)
+        cls.kv.delete(C.DEPLOYMENTS, "dep_fenre_UC-9.1.2")
+
+    @classmethod
+    def tearDownClass(cls):
+        doc = cls.kv.get(C.DEPLOYMENTS, "dep_fenre_UC-9.1.2")
+        if doc:
+            from urllib.parse import quote
+            cls.admin.request("DELETE", cls.SAVED + quote(doc["saved_search"]["name"], safe=""))
+            cls.kv.delete(C.DEPLOYMENTS, "dep_fenre_UC-9.1.2")
+        cls.admin.request("DELETE", "/services/authentication/users/" + cls.OPERATOR)
+
+    def act(self, who, action, **body):
+        body["id"] = self.UC
+        return api(who, "POST", "deployment/" + action, body=body)
+
+    def saved(self, name):
+        from urllib.parse import quote
+        status, content = self.admin.request("GET", self.SAVED + quote(name, safe=""), {"output_mode": "json"})
+        if status == 404:
+            return None
+        entry = json.loads(content)["entry"][0]
+        return dict(entry["content"], owner=entry["acl"]["owner"])
+
+    def test_lifecycle(self):
+        status, body = self.act(self.operator, "draft", cron="*/30 * * * *", earliest="-30m@m", latest="@m")
+        self.assertEqual(status, 200, body)
+        self.assertTrue(body["deployment"]["revisions"][0]["parse_ok"], body)
+        name = body["deployment"]["saved_search"]["name"]
+        self.assertEqual(self.act(self.operator, "submit")[0], 200)
+        status, body = self.act(self.operator, "approve")
+        self.assertEqual(status, 403, body)
+        status, _ = self.operator.request(
+            "POST", "/servicesNS/nobody/splunk_use_case_manager/storage/collections/data/uc_deployments",
+            json_body={"_key": "dep_fenre_UC-9.1.2", "state": "approved"})
+        self.assertEqual(status, 403)
+        self.assertEqual(self.act(self.admin, "approve", note="live test")[0], 200)
+        status, body = self.act(self.operator, "deploy")
+        self.assertEqual(status, 200, body)
+        dep = body["deployment"]
+        self.assertEqual((dep["state"], dep["live"]["status"], dep["live"]["drift"]), ("deployed", "disabled", []))
+        live = self.saved(name)
+        self.assertTrue(live["disabled"])
+        self.assertEqual(live["owner"], self.OPERATOR)
+        self.assertEqual(live["cron_schedule"], "*/30 * * * *")
+        status, body = self.act(self.operator, "enable", override_reason="live test override reason")
+        self.assertEqual(status, 200, body)
+        self.assertEqual(body["deployment"]["live"]["status"], "enabled")
+        self.assertFalse(self.saved(name)["disabled"])
+        from urllib.parse import quote
+        self.admin.request("POST", self.SAVED + quote(name, safe=""), form={"cron_schedule": "*/5 * * * *"})
+        status, body = self.act(self.operator, "verify")
+        self.assertEqual([d["field"] for d in body["deployment"]["live"]["drift"]], ["cron_schedule"])
+        self.act(self.operator, "draft", cron="0 * * * *")
+        self.act(self.operator, "submit")
+        self.act(self.admin, "approve")
+        status, body = self.act(self.operator, "deploy")
+        self.assertEqual(body["deployment"]["deployed_revision"], 2)
+        self.assertTrue(self.saved(name)["disabled"])
+        status, body = self.act(self.operator, "rollback", note="live test")
+        self.assertEqual(status, 200, body)
+        self.assertEqual(body["deployment"]["deployed_revision"], 1)
+        self.assertEqual(self.saved(name)["cron_schedule"], "*/30 * * * *")
+        status, body = self.act(self.operator, "retire")
+        self.assertEqual((status, body["deployment"]["state"]), (200, "retired"))
+        self.assertIsNone(self.saved(name))
+        _, audit = api(self.admin, "GET", "audit", {"prefix": "deployment.", "limit": "50"})
+        mine = [e["action"] for e in audit["events"] if e["object_id"] == self.UC]
+        for action in ("deployment.approve", "deployment.deploy", "deployment.enable", "deployment.rollback",
+                       "deployment.retire"):
+            self.assertIn(action, mine)

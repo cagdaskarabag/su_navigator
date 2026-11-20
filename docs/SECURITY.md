@@ -1,7 +1,6 @@
 # Security model
 
-Status: WP4 (catalogue, discovery, readiness, selection, SPL validation).
-Later work packages extend this document when they add deployment.
+Status: WP5 (catalogue, discovery, readiness, selection, SPL validation, deployment).
 
 ## Trust boundaries
 
@@ -13,6 +12,7 @@ Later work packages extend this document when they add deployment.
 | Imported SPL preview | Dispatched only after an explicit user action, a successful `/services/search/parser` parse, and a side-effect command gate. Time window and `max_count` are forced. Event payloads are not stored. |
 | Field sampling | Constructed `| search index=… sourcetype=… \| head N \| fieldsummary` over discovered pairs. Imported pipelines are not used. |
 | Selections | Per-user KV rows; the handler only reads and writes the caller's `user` field. |
+| Deployment | Saved searches are written with the operator's session, owned by the operator (D-028), disabled first, read back and compared. Only searches carrying the app's marker are modified. No alert actions. Workflow records are written with the system token after the capability check (D-029). |
 | Reference links | Rendered as links only when absolute `http(s)`; other values are dropped or shown as plain repository paths. |
 | Browser → app API | Splunk Web proxy (`/splunkd/__raw/services/ucm/*`), Splunk session + CSRF form key. All inputs are validated against allowlists; KV queries are built from structured filters, free text is regex-escaped. |
 | App → GitHub | HTTPS only, host allowlist (`api.github.com`, `raw.githubusercontent.com` by default, configurable), TLS verification on, optional proxy / CA bundle, response size caps, bounded retries, rate-limit aware. |
@@ -24,7 +24,7 @@ Later work packages extend this document when they add deployment.
 | *(none)* | Read catalogue, categories, use-case detail, sync status, platform report, inventory, mappings, discovery status. |
 | `ucm_manage_content` | Remote sync, provider manifest check, offline import, catalogue reindex, audit read. |
 | `ucm_run_discovery` | Queue discovery jobs; create and delete **local** source mappings; run readiness assessments (full or single). |
-| `ucm_deploy` | Reserved for WP5 (guided deployment). Grants nothing yet. |
+| `ucm_deploy` | Approve, reject, deploy, enable, disable, roll back and retire deployments. Drafting and submitting also accept `ucm_run_discovery`. |
 | `ucm_admin` | Audit read; app administration in later WPs. |
 
 | Role | Imports | Capabilities |
@@ -32,7 +32,7 @@ Later work packages extend this document when they add deployment.
 | `ucm_viewer` | `user` | none |
 | `ucm_analyst` | `ucm_viewer` | `ucm_run_discovery` |
 | `ucm_content_manager` | `ucm_analyst` | `ucm_manage_content` |
-| `ucm_deployment_operator` | `ucm_analyst` | `ucm_deploy` |
+| `ucm_deployment_operator` | `ucm_analyst` | `ucm_deploy`, `schedule_search` |
 | `ucm_admin` | content manager + deployment operator | all |
 
 `admin` and `sc_admin` receive all app capabilities.
@@ -47,12 +47,20 @@ import, reindex, manifest and audit).
   `uc_sync_state`): readable by all app users, writable by `admin`, `sc_admin`,
   `ucm_content_manager` and `ucm_admin`. Direct KV writes by viewers are
   rejected by splunkd (verified live).
+- `uc_deployments`: readable by all app users, writable only by `admin` /
+  `sc_admin`. The REST handler writes it with the system token after checking
+  `ucm_deploy` (or `ucm_run_discovery` for drafts), so approvals cannot be
+  forged through the KV REST API (verified live: an operator gets 403).
+- `savedsearches` in this app: writable by `admin`, `sc_admin`, `ucm_admin`
+  and `ucm_deployment_operator`.
 - `uc_audit`: readable by admins and content managers, writable only by
   `admin` / `sc_admin`. The REST handler appends audit records with the
   request's system token (`passSystemAuth = true`), so users cannot forge or
   delete audit entries through the KV REST API.
 
-Known limitation: content managers can write provider-owned collections
+Known limitations: analysts can write `uc_readiness` directly, which could
+lift the readiness gate on enable (the gate is advisory and overridable
+anyway; every enable is audited with the readiness state). Content managers can write provider-owned collections
 directly through the KV REST API, bypassing validation. Those collections are
 derived data (rebuildable by sync/reindex) and never hold customer-owned
 state.
