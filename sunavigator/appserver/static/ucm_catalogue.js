@@ -11,7 +11,8 @@ require([
     var state = {
         q: initial.q || "", domain: initial.domain || "", category: initial.category || "",
         criticality: initial.criticality || "", difficulty: initial.difficulty || "",
-        sourcetype: initial.sourcetype || "", mitre: initial.mitre || "", sort: initial.sort || "id",
+        sourcetype: initial.sourcetype || "", mitre: initial.mitre || "", provider: initial.provider || "",
+        sort: initial.sort || "id",
         offset: parseInt(initial.offset || "0", 10) || 0
     };
     var categories = [];
@@ -50,9 +51,11 @@ require([
         sortSel.querySelector("option").value = "id";
         return el("div", { "class": "ucm-toolbar" },
             textInput("q", "Search", "Title, id, sourcetype, MITRE id…", "ucm-search"),
+            select("provider", "Source", [{ value: "fenre", label: "Fenre catalogue" },
+                { value: "lantern", label: "Splunk Lantern" }], state.provider),
             select("domain", "Domain", opts(ucm.DOMAINS), state.domain),
             select("category", "Category", categories.map(function (c) {
-                return { value: c._key, label: c.category_id + ". " + c.name };
+                return { value: c._key, label: /^[0-9]+$/.test(c.category_id) ? c.category_id + ". " + c.name : c.name };
             }), state.category),
             select("criticality", "Criticality", opts(ucm.CRITICALITY), state.criticality),
             select("difficulty", "Difficulty", opts(ucm.DIFFICULTY), state.difficulty),
@@ -66,6 +69,8 @@ require([
         return el("tr", {},
             el("td", { "class": "ucm-mono", text: item.record_id }),
             el("td", { "class": "ucm-title" },
+                item.provider === "lantern" ? ucm.badge("Splunk Lantern", "lantern") : null,
+                item.needs_review ? ucm.badge("needs review", "warn") : null,
                 el("a", { href: href, text: item.title }),
                 el("div", { "class": "ucm-sub", text: item.summary || "" })),
             el("td", {}, ucm.chips(item.domains, 3)),
@@ -89,13 +94,14 @@ require([
     function renderResults(data) {
         ucm.clear(results);
         if (!data.items.length) {
-            var filtered = state.q || state.domain || state.category || state.criticality ||
+            var filtered = state.q || state.provider || state.domain || state.category || state.criticality ||
                 state.difficulty || state.sourcetype || state.mitre;
             results.appendChild(filtered
                 ? ucm.stateBox("empty", "No use cases match these filters.", "Clear one or more filters to widen the search.")
                 : el("div", {}, ucm.stateBox("empty", "No content has been imported yet.",
-                    "Synchronize categories from the provider or import an offline bundle."),
-                    el("a", { href: "ucm_content_admin", "class": "btn btn-primary", text: "Open Content Administration" })));
+                    "Synchronize categories from the provider, import an offline bundle, or import articles from Splunk Lantern."),
+                    el("a", { href: "ucm_content_admin", "class": "btn btn-primary", text: "Open Content Administration" }), " ",
+                    el("a", { href: "ucm_lantern_import", "class": "btn", text: "Import from Splunk Lantern" })));
             return;
         }
         var total = data.total === null ? "" : data.total + " use cases";
@@ -116,7 +122,7 @@ require([
         ucm.setQueryParams(state);
         ucm.clear(results).appendChild(el("div", { "class": "ucm-loading", text: "Loading…" }));
         var params = { offset: state.offset, count: PAGE, sort: state.sort };
-        ["q", "domain", "category", "criticality", "difficulty", "sourcetype", "mitre"].forEach(function (k) {
+        ["q", "provider", "domain", "category", "criticality", "difficulty", "sourcetype", "mitre"].forEach(function (k) {
             if (state[k]) { params[k] = state[k]; }
         });
         ucm.get("catalog", params).done(function (data) {

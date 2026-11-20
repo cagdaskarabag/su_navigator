@@ -206,6 +206,10 @@ require([
     root.appendChild(el("div", { "class": "ucm-cards" }, stateCard, platformCard));
     root.appendChild(providerSection());
     root.appendChild(importSection());
+    root.appendChild(el("div", { "class": "ucm-section" }, el("h3", { text: "Splunk Lantern (secondary provider)" }),
+        el("div", { "class": "ucm-sub", text: "Import individual Splunk Lantern articles or selections from Lantern collection pages. " +
+            "Lantern content is kept separate from the Fenre catalogue and carries its own provenance." }),
+        el("div", { "class": "ucm-actions" }, el("a", { href: "ucm_lantern_import", "class": "btn", text: "Open Import from Splunk Lantern" }))));
     root.appendChild(jobsBox);
     root.appendChild(auditBox);
     refresh();
