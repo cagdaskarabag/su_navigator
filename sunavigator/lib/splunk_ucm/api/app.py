@@ -16,6 +16,8 @@ from ..catalog.detail import UseCaseDetailService
 from ..catalog.query import CatalogFilter, CatalogQueryService
 from ..config import AppConfig, load_config
 from ..content.importer import BundleImportService
+from ..content.lantern.sessions import LanternSessionService, preview_usecase
+from ..content.lantern.sessions import settings_from_config as lantern_settings
 from ..content.registry import remote_provider
 from ..content.reindex import ReindexService
 from ..content.sync import SyncService, SyncSettings, new_job
@@ -220,7 +222,8 @@ def get_catalog(ctx: Context, req: Request) -> Response:
         q=req.arg("q").strip(), domains=req.args("domain"), category_keys=req.args("category"),
         criticality=req.args("criticality"), difficulty=req.args("difficulty"),
         sourcetype=req.arg("sourcetype").strip(), mitre=req.arg("mitre").strip().upper(),
-        provider_status=req.arg("status", "active"), sort=req.arg("sort", "id"),
+        provider_status=req.arg("status", "active"), provider=req.arg("provider").strip(),
+        sort=req.arg("sort", "id"),
         offset=_int(req.arg("offset"), 0, "offset"), count=_int(req.arg("count"), 25, "count"),
         with_total=req.arg("total", "1") != "0")
     max_page = ctx.config.get_int("catalog", "max_page_size", 100, 10, 500)
@@ -300,6 +303,79 @@ def post_import(ctx: Context, req: Request) -> Response:
     service = BundleImportService(ctx.sync_service(), max_mb * 1024 * 1024)
     job = service.import_bytes(req.body, ctx.user, _bool(req.arg("allow_schema_change")), cats or None)
     return Response(200, {"job": job})
+
+
+def _lantern(ctx: Context) -> Tuple[LanternSessionService, bool]:
+    ctx.require(CAP_MANAGE_CONTENT)
+    service = LanternSessionService(ctx.records(), ctx.audit, lantern_settings(ctx.config), content_store=ctx.store)
+    return service, CAP_ADMIN in ctx.capabilities()
+
+
+def _url_list(body: Dict[str, Any], name: str = "urls") -> List[str]:
+    urls = body.get(name)
+    if not isinstance(urls, list) or not all(isinstance(u, str) for u in urls):
+        raise ValidationError("%s must be a list of URLs" % name)
+    return urls
+
+
+def get_lantern(ctx: Context, req: Request) -> Response:
+    service, is_admin = _lantern(ctx)
+    return Response(200, {"settings": service.settings.public(),
+                          "sessions": service.list_sessions(ctx.user, is_admin)})
+
+
+def get_lantern_session(ctx: Context, req: Request) -> Response:
+    service, is_admin = _lantern(ctx)
+    return Response(200, {"session": service.get(req.arg("id"), ctx.user, is_admin)})
+
+
+def get_lantern_staged(ctx: Context, req: Request) -> Response:
+    service, is_admin = _lantern(ctx)
+    data = service.staged(ctx.user, is_admin, req.arg("id"), req.arg("url"))
+    return Response(200, {"item": data["item"], "raw": data["raw"], "usecase": preview_usecase(data["raw"])})
+
+
+def post_lantern_inspect(ctx: Context, req: Request) -> Response:
+    service, _ = _lantern(ctx)
+    url = req.json().get("url")
+    if not isinstance(url, str):
+        raise ValidationError("url is required")
+    return Response(202, {"session": service.create(ctx.user, url)})
+
+
+def post_lantern_fetch(ctx: Context, req: Request) -> Response:
+    service, is_admin = _lantern(ctx)
+    body = req.json()
+    return Response(202, {"session": service.request_fetch(ctx.user, is_admin, str(body.get("id", "")),
+                                                           _url_list(body))})
+
+
+def post_lantern_expand(ctx: Context, req: Request) -> Response:
+    service, is_admin = _lantern(ctx)
+    body = req.json()
+    return Response(202, {"session": service.request_expand(ctx.user, is_admin, str(body.get("id", "")),
+                                                            _url_list(body))})
+
+
+def post_lantern_import(ctx: Context, req: Request) -> Response:
+    service, is_admin = _lantern(ctx)
+    body = req.json()
+    items = body.get("items")
+    if not isinstance(items, list):
+        raise ValidationError("items must be a list of {url, action}")
+    return Response(200, service.import_items(ctx.user, is_admin, str(body.get("id", "")), items,
+                                              body.get("confirm") is True, ctx.sync_service()))
+
+
+def post_lantern_cancel(ctx: Context, req: Request) -> Response:
+    service, is_admin = _lantern(ctx)
+    return Response(200, {"session": service.cancel(ctx.user, is_admin, str(req.json().get("id", "")))})
+
+
+def post_lantern_discard(ctx: Context, req: Request) -> Response:
+    service, is_admin = _lantern(ctx)
+    service.discard(ctx.user, is_admin, str(req.json().get("id", "")))
+    return Response(200, {"discarded": True})
 
 
 def post_reindex(ctx: Context, req: Request) -> Response:
@@ -668,6 +744,15 @@ def build_router() -> Router:
     router.add("GET", "provider/manifest", get_manifest)
     router.add("POST", "import", post_import)
     router.add("POST", "catalog/reindex", post_reindex)
+    router.add("GET", "lantern", get_lantern)
+    router.add("GET", "lantern/session", get_lantern_session)
+    router.add("GET", "lantern/staged", get_lantern_staged)
+    router.add("POST", "lantern/inspect", post_lantern_inspect)
+    router.add("POST", "lantern/fetch", post_lantern_fetch)
+    router.add("POST", "lantern/expand", post_lantern_expand)
+    router.add("POST", "lantern/import", post_lantern_import)
+    router.add("POST", "lantern/cancel", post_lantern_cancel)
+    router.add("POST", "lantern/discard", post_lantern_discard)
     router.add("GET", "platform", get_platform)
     router.add("GET", "audit", get_audit)
     router.add("GET", "inventory", get_inventory)

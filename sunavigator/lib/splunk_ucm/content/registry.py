@@ -7,17 +7,32 @@ from .bundle import OfflineBundleProvider
 from .fenre.normalizer import FenreNormalizer, fenre_validation_policy
 from .fenre.provider import FenreConfig, FenreJsonProvider, load_bundled_schema
 from .http import HttpConfig
+from .lantern.normalizer import LanternNormalizer, lantern_validation_policy
 from .provider import ContentProvider, Normalizer, ProviderManifest
 from .validation import RecordValidator
 
-_NORMALIZERS: Dict[str, Callable[[], Normalizer]] = {"fenre": FenreNormalizer}
+_NORMALIZERS: Dict[str, Callable[[], Normalizer]] = {"fenre": FenreNormalizer, "lantern": LanternNormalizer}
+
+PROVIDER_LABELS = {"fenre": "Fenre catalogue", "lantern": "Splunk Lantern"}
 
 
 def _fenre_validator(manifest: ProviderManifest) -> RecordValidator:
     return RecordValidator(fenre_validation_policy(), manifest.schema or load_bundled_schema())
 
 
-_VALIDATORS: Dict[str, Callable[[ProviderManifest], RecordValidator]] = {"fenre": _fenre_validator}
+def _lantern_validator(manifest: ProviderManifest) -> RecordValidator:
+    return RecordValidator(lantern_validation_policy())
+
+
+_VALIDATORS: Dict[str, Callable[[ProviderManifest], RecordValidator]] = {
+    "fenre": _fenre_validator, "lantern": _lantern_validator}
+
+
+def validator_for(provider_id: str, manifest: ProviderManifest) -> RecordValidator:
+    try:
+        return _VALIDATORS[provider_id](manifest)
+    except KeyError:
+        raise ValidationError("unsupported provider", {"provider": provider_id})
 
 
 def supported_providers():
@@ -33,7 +48,8 @@ def normalizer_for(provider_id: str) -> Normalizer:
 
 def bundle_provider(bundle: Dict[str, Any]) -> OfflineBundleProvider:
     provider_id = bundle.get("provider") if isinstance(bundle, dict) else None
-    if provider_id not in _NORMALIZERS:
+    # Lantern content only enters through the reviewed, user-directed import flow.
+    if provider_id not in _NORMALIZERS or provider_id == "lantern":
         raise ValidationError("unsupported provider in bundle", {"provider": provider_id})
     return OfflineBundleProvider(bundle, normalizer_for(provider_id), _VALIDATORS[provider_id])
 

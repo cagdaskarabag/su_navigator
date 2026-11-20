@@ -9,6 +9,7 @@ from splunk_ucm import __version__
 from splunk_ucm.api.app import build_router
 from splunk_ucm.catalog.summary import SUMMARY_VERSION
 from splunk_ucm.config import AppConfig
+from splunk_ucm.content.lantern.sessions import LanternWorker
 from splunk_ucm.content.worker import SyncWorker
 from splunk_ucm.deployment.worker import DeploymentWorker
 from splunk_ucm.discovery.worker import DiscoveryWorker
@@ -27,7 +28,7 @@ EPOCH = NOW.timestamp()
 
 # POST routes any authenticated app user may call; everything else needs a capability.
 CALLER_SCOPED_POSTS = {"selections", "selections/delete", "dashboards/preview"}
-RESTRICTED_GETS = {"audit", "provider/manifest"}
+RESTRICTED_GETS = {"audit", "provider/manifest", "lantern", "lantern/session", "lantern/staged"}
 
 
 def _load_worker_module():
@@ -117,6 +118,7 @@ class LeaderElectionTest(unittest.TestCase):
             DiscoveryWorker(store, config, None, not_leader),
             ReadinessWorker(store, config, not_leader),
             DeploymentWorker(store, config, None, not_leader),
+            LanternWorker(store, config, not_leader),
         ]
         for w in workers:
             self.assertEqual(w.run_once(), {"action": "skipped", "reason": "not_shc_captain"}, type(w).__name__)

@@ -20,7 +20,7 @@ def sort_key_for(record_id: str) -> str:
 
 # Bump when catalog_summary gains or changes fields; the upgrade migration
 # re-derives older summaries from stored raw records (no network).
-SUMMARY_VERSION = 2
+SUMMARY_VERSION = 3
 
 
 def catalog_summary(uc: UseCase) -> Dict[str, Any]:
@@ -65,12 +65,15 @@ def catalog_summary(uc: UseCase) -> Dict[str, Any]:
         "mitre_ids": mitre,
         "frameworks": frameworks,
         "framework_controls": controls,
-        "has_spl": bool(uc.spl or uc.cim_spl),
+        "has_spl": bool(uc.spl or uc.cim_spl or any(v.spl for v in uc.spl_variants)),
         "requirement_count": len(uc.requirements),
         "review_status": uc.review_status,
         "provider_status": STATUS_ACTIVE,
         "provider_version": uc.provenance.provider_version,
         "source_ref": uc.provenance.source_ref,
+        "source_url": uc.provenance.source_url,
+        "needs_review": bool((uc.provider_extras.get(uc.provenance.provider) or {}).get("needs_review"))
+        if isinstance(uc.provider_extras.get(uc.provenance.provider), dict) else False,
         "source_hash": uc.provenance.source_hash,
         "source_blob_sha": uc.provenance.source_blob_sha,
         "normalizer_version": uc.provenance.normalizer_version,
