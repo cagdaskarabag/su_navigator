@@ -5,9 +5,12 @@ deploy monitoring use cases. Content comes from pluggable providers; the first
 is the [Fenre monitoring use-case catalogue](https://github.com/fenre/splunk-monitoring-use-cases)
 (MIT).
 
-**Status: WP5, content ingestion, catalogue, discovery, readiness,
-selection, SPL validation and guided deployment.**
-See [docs/IMPLEMENTATION_PLAN.md](docs/IMPLEMENTATION_PLAN.md).
+**Status: 0.7.0 (WP7).** Content ingestion, catalogue, discovery, readiness,
+selection, SPL validation, guided deployment, coverage and generated
+dashboards.
+
+- **Install, use and troubleshooting:** [docs/OPERATOR_GUIDE.md](docs/OPERATOR_GUIDE.md)
+- Work packages and validation: [docs/IMPLEMENTATION_PLAN.md](docs/IMPLEMENTATION_PLAN.md)
 
 ## What works today
 
@@ -52,7 +55,7 @@ Not yet validated on a search head cluster or a Splunk Cloud stack; see
 | `tools/` | Operator CLI, bundle builder, packaging, dev deploy, perf check. |
 | `tests/unit/` | Mocked tests: no Splunk, no network. |
 | `tests/live/` | Tests against a real Splunk instance (opt-in). |
-| `docs/` | Discovery, architecture, decisions, plan, security. |
+| `docs/` | Operator guide, discovery, architecture, decisions, plan, security. |
 
 ## Install (development)
 
@@ -63,7 +66,10 @@ SPLUNK_HOME=/opt/splunk ./tools/dev_deploy.sh --restart
 ```
 
 Then open **Use Case Manager → Administration**, check the manifest, select
-categories and synchronize, or import an offline bundle.
+categories and synchronize, or import an offline bundle. Full steps,
+roles, configuration and troubleshooting (including Splunk Web install
+timeouts and macOS KV Store certificate trust) are in
+[docs/OPERATOR_GUIDE.md](docs/OPERATOR_GUIDE.md).
 
 Optional GitHub token (raises the API rate limit). It is stored in Splunk's
 credential store, never in configuration files:
