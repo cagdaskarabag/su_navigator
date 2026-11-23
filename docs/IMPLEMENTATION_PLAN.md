@@ -146,38 +146,6 @@ Not validated here, required before 1.0.0: a real search head cluster
 (captain-only jobs, KV replication, generated view replication) and a Splunk
 Cloud stack (vetting submission, egress, `sc_admin`).
 
-## WP8 — Splunk Lantern secondary provider ✅ (0.8.0)
-Gap analysis against the existing app: the provider contract, sync engine,
-normalizer registry, catalogue and use-case views could carry a second
-provider without structural change; missing were a user-directed retrieval
-path (no crawler), a URL/SSRF policy, an HTML extractor, a reviewed staging
-area, duplicate/update handling and UI for the flow (D-037).
-1. `content/lantern/urls.py`, `robots.py`, `fetcher.py`: exact-host https
-   URL policy and canonicalization; robots.txt with wildcards and crawl
-   delay; SSRF-safe transport (DNS vetting, IP pinning, TLS, manual
-   redirects, size/type/time caps, retry, shared rate gate).
-2. `html.py`, `parser.py`: bounded DOM; classifier (article, collection,
-   unsupported); collection parser (categories, subcategories, dedupe,
-   navigation skipped); article extractor (blocks, SPL verbatim, sections →
-   fields, confidence, content hash, diff).
-3. `normalizer.py`, `provider.py`, registry: canonical `lantern:LN-…` use
-   cases with provenance; partial staged provider through `SyncService`.
-4. `sessions.py`: inspect / fetch / expand / import / cancel / discard;
-   duplicate, unchanged, update and conflict handling; `uc_lantern`
-   collection; `LanternWorker` in the existing modular input; REST routes.
-5. UI: **Import Use Cases → From Splunk Lantern**, catalogue Source filter
-   and badges, Lantern banner and sections on the use-case page, deployment
-   search picker for multi-search articles.
-6. Tests: 85 new mocked tests against synthetic MindTouch-like fixtures and a
-   fake site (URL policy, robots, SSRF vetting, redirects, limits, parsing,
-   normalization, the three acceptance scenarios, conflicts, tampering,
-   cancel/discard, worker, REST/RBAC), plus an opt-in live test
-   (`UCM_LIVE_LANTERN=1`).
-
-Not validated here: the Lantern view inside a running Splunk instance (the
-0.8.0 work was done without installing or modifying Splunk); SHC and Splunk
-Cloud egress to `lantern.splunk.com`.
-
 ## Validation status (keep current)
 
 "Live" means Splunk Enterprise 10.2.9, single instance, in the development VM.
@@ -203,7 +171,4 @@ Cloud egress to `lantern.splunk.com`.
 | Upgrades and migrations | ✅ reindex migration, fresh install, version record, idempotent re-run | ✅ 0.4.0 package → 0.7.0 package: 164 summaries reindexed in one worker run, `local/ucm.conf` kept, app state recorded | ⬜ | ⬜ |
 | Retention | ✅ audit cutoff, job history per type, queued jobs kept, interval, audit of purges | ✅ 500-day-old audit record purged by the worker after upgrade | ⬜ | ⬜ |
 | RBAC review | ✅ every POST route without capabilities, every GET | ✅ per-feature 403 checks in the live suite | ⬜ | ⬜ |
-| Lantern URL policy, robots, fetcher | ✅ look-alikes, IP forms, credentials, ports, namespaces, redirects, private-address vetting, size/gzip/type/timeouts, retry, rate gate | ⬜ (production fetcher checked against lantern.splunk.com outside Splunk) | ⬜ | ⬜ (egress per stack) |
-| Lantern parsing and normalization | ✅ synthetic collection/article/malformed/unknown fixtures | ⬜ (live check: Splunk and Cisco collection, 36 articles in 5 categories; two articles imported into an in-memory store, re-inspection reports unchanged) | n/a | n/a |
-| Lantern import sessions and UI | ✅ single article, collection selection, duplicate/update with customer state unchanged, conflict, tamper, cancel/discard, REST/RBAC | ⬜ not exercised in Splunk Web | ⬜ | ⬜ |
 | Packaging | n/a | ✅ AppInspect 4.4.0 precert (all checks; `cloud`, `private_victoria`, `private_classic` tags): 0 failures, 0 errors | n/a | ⬜ vetting |

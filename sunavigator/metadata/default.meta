@@ -56,9 +56,3 @@ access = read : [ * ], write : [ admin, sc_admin ]
 
 [collections/uc_dashboards]
 access = read : [ * ], write : [ admin, sc_admin ]
-
-# Splunk Lantern import sessions and staged extractions: written only by the
-# REST handler (system token, after the ucm_manage_content check) and the
-# background worker, so staged content cannot be altered before import (D-037).
-[collections/uc_lantern]
-access = read : [ admin, sc_admin, ucm_admin, ucm_content_manager ], write : [ admin, sc_admin ]

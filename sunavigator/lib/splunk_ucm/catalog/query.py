@@ -18,9 +18,8 @@ LIST_FIELDS = (
     "_key", "content_id", "record_id", "title", "summary", "domains", "category_key", "category_name",
     "subcategory", "criticality", "difficulty", "monitoring_types", "sourcetypes", "datamodels",
     "mitre_ids", "provider", "provider_status", "provider_version", "review_status", "has_spl",
-    "imported_at", "source_url", "needs_review",
+    "imported_at",
 )
-PROVIDERS = ("fenre", "lantern")
 SORTS = {
     "id": [("sort_key", 1)],
     "title": [("title", 1), ("sort_key", 1)],
@@ -43,7 +42,6 @@ class CatalogFilter:
     sourcetype: str = ""
     mitre: str = ""
     provider_status: str = STATUS_ACTIVE
-    provider: str = ""
     sort: str = "id"
     offset: int = 0
     count: int = 25
@@ -64,8 +62,6 @@ def build_query(f: CatalogFilter) -> Dict[str, Any]:
     if f.provider_status not in ("", "any"):
         _check_all([f.provider_status], (STATUS_ACTIVE, STATUS_WITHDRAWN), "provider_status")
         clauses.append({"provider_status": f.provider_status})
-    if f.provider:
-        clauses.append({"provider": _check_all([f.provider], PROVIDERS, "provider")[0]})
     if f.domains:
         clauses.append({"domains": {"$in": _check_all(f.domains, DOMAINS, "domain")}})
     if f.category_keys:

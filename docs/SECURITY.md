@@ -1,6 +1,6 @@
 # Security model
 
-Status: 0.8.0 (catalogue, discovery, readiness, selection, SPL validation, deployment, frameworks, dashboards, Splunk Lantern import).
+Status: WP5 (catalogue, discovery, readiness, selection, SPL validation, deployment).
 
 ## Trust boundaries
 
@@ -15,10 +15,6 @@ Status: 0.8.0 (catalogue, discovery, readiness, selection, SPL validation, deplo
 | Deployment | Saved searches are written with the operator's session, owned by the operator (D-028), disabled first, read back and compared. Only searches carrying the app's marker are modified. No alert actions. Workflow records are written with the system token after the capability check (D-029). |
 | Reference links | Rendered as links only when absolute `http(s)`; other values are dropped or shown as plain repository paths. |
 | Browser → app API | Splunk Web proxy (`/splunkd/__raw/services/ucm/*`), Splunk session + CSRF form key. All inputs are validated against allowlists; KV queries are built from structured filters, free text is regex-escaped. |
-| User-supplied Lantern URL | Untrusted. Parsed (never substring-matched) and accepted only as `https://lantern.splunk.com/<path>`: no other host or look-alike, no IP literal (including integer/hex/octal forms), no user info, no port other than 443, no control characters, backslashes or `.`/`..` segments, no MindTouch service namespaces (`Special:`, `/@api`, `/deki/`, ...) and no file extensions. The same check runs on every redirect target and every link found on a page. Validation happens in the REST request; the request itself never contacts Lantern. |
-| App → Splunk Lantern | Only the background worker connects, only to `lantern.splunk.com:443`. DNS answers are vetted and the connection is pinned to the vetted address; private, loopback, link-local, CGNAT, multicast, reserved and IPv4-mapped private addresses are refused (SSRF). TLS certificate and hostname verification are always on; optional HTTP CONNECT proxy and CA bundle. Redirects are followed manually (≤3), each re-validated. Only `text/html`/XHTML, ≤3 MB (declared and streamed, gzip output capped), 15 s timeouts, ≤150 requests per session. `robots.txt` is honoured (disallow and crawl delay) and an outage of `robots.txt` stops retrieval. A KV-persisted gate spaces requests ≥5 s across users and processes; 429/5xx get one bounded retry. |
-| Lantern pages | Untrusted HTML. Parsed with a bounded stdlib parser (node and depth caps); `script`, `style`, `iframe`, `svg`, forms and similar are dropped; text only is extracted. Nothing from the page is rendered as HTML: the UI uses `textContent`, and links are shown only for validated https URLs. SPL from Lantern is stored as text, labelled untrusted and never executed by the import. |
-| Lantern import | Two explicit user actions: fetch selected articles, then import with `confirm: true`. Staged extractions are re-hashed before import and refused if they do not match the preview; an update is applied only with an explicit per-article `update` action and refused as a conflict when SUN's stored version changed after the preview. Updates write only provider-owned collections. |
 | App → GitHub | HTTPS only, host allowlist (`api.github.com`, `raw.githubusercontent.com` by default, configurable), TLS verification on, optional proxy / CA bundle, response size caps, bounded retries, rate-limit aware. |
 
 ## Capabilities and roles
@@ -26,7 +22,7 @@ Status: 0.8.0 (catalogue, discovery, readiness, selection, SPL validation, deplo
 | Capability | Grants |
 | --- | --- |
 | *(none)* | Read catalogue, categories, use-case detail, sync status, platform report, inventory, mappings, discovery status. |
-| `ucm_manage_content` | Remote sync, provider manifest check, offline import, catalogue reindex, audit read, framework import and activation, Splunk Lantern import (inspect, fetch, expand, import, cancel, discard; own sessions only unless `ucm_admin`). |
+| `ucm_manage_content` | Remote sync, provider manifest check, offline import, catalogue reindex, audit read, framework import and activation. |
 | `ucm_run_discovery` | Queue discovery jobs; create and delete **local** source mappings; run readiness assessments (full or single). |
 | `ucm_deploy` | Approve, reject, deploy, enable, disable, roll back and retire deployments; create and delete generated dashboards. Drafting and submitting also accept `ucm_run_discovery`. |
 | `ucm_admin` | Audit read; app administration in later WPs. |
@@ -65,13 +61,6 @@ routes and dashboard preview, so a new route without a check fails the build
   system token, so dashboard creators do not need view-write permissions; the
   app only overwrites or deletes views that carry its marker and have a
   record (D-032).
-- `uc_lantern`: readable by admins and content managers, writable only by
-  `admin` / `sc_admin`. Sessions and staged extractions are written by the
-  REST handler with the system token after the `ucm_manage_content` check,
-  and by the worker. Staged content therefore cannot be forged through the
-  KV REST API by users who may write `uc_sync_state`; the import also
-  re-hashes every staged extraction. Lantern content cannot enter through
-  offline bundles (`provider: lantern` bundles are refused).
 - `savedsearches` in this app: writable by `admin`, `sc_admin`, `ucm_admin`
   and `ucm_deployment_operator`.
 - `uc_audit`: readable by admins and content managers, writable only by
@@ -120,7 +109,4 @@ collections, logs or API responses, is sent only to the configured API host
   mappings, local SPL, deployment configuration, assessment history). The
   sync engine only writes `uc_catalog`, `uc_content`, `uc_categories` and
   `uc_sync_state`, and withdraws rather than deletes records that disappear
-  upstream. A Lantern import is a partial import: it adds or updates the
-  selected articles and never withdraws anything.
-- No external request is made while a page renders or while a REST request
-  is handled; Lantern retrieval happens only in the worker.
+  upstream.

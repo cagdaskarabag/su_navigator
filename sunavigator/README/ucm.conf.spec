@@ -22,37 +22,6 @@ proxy_url = <url>
 ca_bundle = <path>
 * Optional CA bundle file for TLS verification.
 
-[provider:lantern]
-* User-directed import from Splunk Lantern. The host is fixed to lantern.splunk.com
-* and cannot be configured. Pages are requested only by the background worker after a
-* user submits a URL; catalogue rendering never contacts Lantern.
-enabled = <boolean>
-* Whether "Import Use Cases > From Splunk Lantern" accepts new requests.
-remote_fetch_enabled = <boolean>
-* Set to false on stacks without outbound internet access.
-timeout = <seconds 3-60>
-max_page_kb = <integer 64-10240>
-* Pages larger than this are rejected.
-max_redirects = <integer 0-5>
-* Every redirect target is validated; redirects off lantern.splunk.com are refused.
-min_request_interval_seconds = <integer 5-60>
-* Minimum spacing between requests. robots.txt Crawl-delay/Request-rate raise it; it never drops below 5.
-max_articles_per_fetch = <integer 1-50>
-max_items_per_collection = <integer 10-1000>
-max_session_items = <integer 10-3000>
-max_pages_per_session = <integer 5-500>
-max_expand_depth = <integer 0-2>
-* How many levels of sub-collections a user may expand (each expansion is explicit).
-session_ttl_hours = <integer 1-168>
-* Import sessions and staged extractions are deleted after this time.
-max_active_sessions_per_user = <integer 1-20>
-worker_time_budget_seconds = <integer 30-900>
-* Maximum time one worker run spends on Lantern retrieval before yielding.
-proxy_url = <url>
-* Optional http:// CONNECT proxy.
-ca_bundle = <path>
-* Optional CA bundle file for TLS verification.
-
 [sync]
 schedule_interval_hours = <integer>
 * 0 disables scheduled synchronization.

@@ -16,8 +16,6 @@ Splunk Web (Simple XML 1.1 + app JS)          Background (modular input)
    api/        request routing, input validation, JSON responses
    content/    ContentProvider ABC, FenreJsonProvider, OfflineBundleProvider,
                validation (schema subset + safety), normalizer, SyncService
-   content/lantern/  Splunk Lantern: URL policy, robots, SSRF-safe fetcher,
-               HTML parser, classifier/extractor, normalizer, import sessions
    catalog/    CatalogQueryService (filters → KV query, paging), detail view
    spl/        static SPL analysis (requirements extraction, safety hints)
    storage/    SplunkdTransport, KVStore client, repositories
@@ -54,7 +52,6 @@ not packaged.
 | 11 | Dashboard Templates | `dashboards/` | WP6 | Implemented |
 | 12 | Audit | `audit.py` | WP1 | Implemented (retention in WP7) |
 | 14 | Maintenance (migrations, retention) | `maintenance/` | WP7 | Implemented |
-| 15 | Lantern provider (secondary, user-directed) | `content/lantern/`, `ucm_lantern_import` view | 0.8.0 | Implemented (D-037) |
 | 13 | Platform Capability Adapter | `platform/` | WP1 / WP2 | Implemented (captain gate unit-tested; real SHC and Cloud stack not validated) |
 
 ## 3. Content flow
@@ -68,32 +65,6 @@ Normalizer.normalize(raw, provenance) ─▶ UseCase    (canonical)
 Stage per category ─▶ batch_save uc_content + uc_catalog, upsert uc_categories
 Mark disappeared records `withdrawn`; record job in uc_sync_state; audit
 ```
-
-Lantern import flow (0.8.0, D-037) — user-directed, never a crawl:
-
-```
-UI: paste URL ─▶ POST lantern/inspect: validate_url (https, exact host, no IP/credentials/port)
-             ─▶ uc_lantern session (queued)                     ── no network in the request
-worker (LanternWorker, leader only, one session per run):
-   robots.txt (cached 24 h, crawl-delay) ─▶ RateGate (≥5 s, shared via KV)
-   HttpsTransport: resolve + refuse private/loopback/link-local, pin IP, TLS verify,
-                   ≤3 redirects (each re-validated), HTML only, ≤3 MB, 15 s timeout
-   parse_html (bounded DOM, scripts dropped) ─▶ classify: article | collection | unsupported
-   collection ─▶ parse_collection: list links by category/subcategory, deduplicated
-   article    ─▶ extract_article: blocks, SPL verbatim, sections → fields, confidence,
-                 content_hash ─▶ staged in uc_lantern; status new / unchanged / updated (+diff)
-UI: select ─▶ POST lantern/fetch / lantern/expand (bounded) ─▶ worker as above
-UI: confirm ─▶ POST lantern/import {confirm:true}: hash/conflict/stage-integrity checks,
-             pre-validation ─▶ StagedLanternProvider (partial manifest) ─▶ SyncService.run
-             ─▶ uc_content / uc_catalog / uc_categories (provider "lantern"); audit
-```
-
-Lantern records use the same canonical model, so catalogue, search,
-readiness, selection, validation, deployment and coverage work unchanged:
-`normalizer_for("lantern")` re-derives them from the stored extraction like
-Fenre records. The partial manifest means a Lantern import never withdraws
-anything, and the provider-scoped keys (`lantern_LN-…`, `lantern_cat-…`)
-cannot collide with Fenre.
 
 Imported SPL is data. It is never dispatched by the content subsystem.
 Discovery searches are a constructed ``tstats`` template over index names
@@ -116,7 +87,7 @@ last assessment (D-024).
 
 Python dataclasses in `model/canonical.py`; serialised as plain dicts.
 
-* **identity** — `content_id` (`fenre:UC-1.1.1`, `lantern:LN-<20 hex>`), `key` (`fenre_UC-1.1.1`),
+* **identity** — `content_id` (`fenre:UC-1.1.1`), `key` (`fenre_UC-1.1.1`),
   `provider`, `provider_record_id`, `title`, `description`, `provider_version`,
   `source_ref` (commit), `source_url`, `source_hash` (sha256 of canonical JSON),
   `source_blob_sha`, `source_schema`, `imported_at`, `normalizer_version`.
@@ -138,13 +109,6 @@ Python dataclasses in `model/canonical.py`; serialised as plain dicts.
 * **quality** — `review_status`, `spl_status`, `last_reviewed`, `reviewer`,
   `references[]`, `known_false_positives`, `provider_extras{}` (unmapped
   upstream fields kept verbatim).
-* **Lantern provenance** — `provider_extras.lantern`: `source_url`,
-  `source_title`, `source_retrieved_at`, `source_content_hash`,
-  `source_last_updated`, `imported_by`, `imported_at`, `extraction_version`,
-  `extraction_confidence`, `needs_review`, `warnings`, `found_in[]`
-  (collection, category, subcategory), plus the extracted sections and
-  article blocks. `provenance.provider = "lantern"`, `source_hash` = content
-  hash. Fields the article does not state stay empty or `unknown`.
 
 Customer-owned state (selection, bookmarks, readiness, deployment, local SPL
 overrides) lives in **separate collections** keyed by `content_id`; sync never
@@ -169,7 +133,6 @@ All collections are app-scoped (`nobody` owner) and replicated in SHC.
 | `uc_deployments` | `dep_<catalog key>` | shared | REST (system token), worker | Workflow `state`, `revisions[]` (frozen SPL, schedule, parse result, submitter, approver, deploy time), `deployed_revision`, `live` (status, drift, owner, next run), `history[]` (last 100), `version`. |
 | `uc_frameworks` | `fw_<id>_<version>` / `active_<id>` | shared | REST (system token) | Imported framework definitions (`ucm.framework/1`) and the active version per framework. Bundled versions are files, not documents. |
 | `uc_dashboards` | `dash_<view name>` | shared | REST (system token) | Generated view record: template, params, label, XML hash, created/updated by. |
-| `uc_lantern` | `session::<id>`, `stage::<session>::<LN-id>`, `gate`, `robots` | shared, admin-write | REST (system token, after capability check), Lantern worker | Import sessions (page, items, statuses, errors, last import), staged extractions (expire with the session, default 24 h), the shared rate-gate timestamp and the cached `robots.txt`. |
 
 Accelerated fields (`collections.conf`): `uc_catalog` on `category_key`,
 `criticality_rank`, `provider_status`, `sort_key`; `uc_sync_state` on
@@ -198,30 +161,21 @@ App state (`uc_sync_state`, D-033):
 | `job::`, `djob::`, `rjob::<uuid>` | `job`, `discovery_job`, `readiness_job` | Job records, trimmed to `[retention] job_history` per type |
 
 The background worker runs, in order and one job per run: maintenance
-(pending migrations, then retention when due), Lantern retrieval (one
-session step), content sync, discovery, readiness and deployment
-verification. All of them are leader-gated (D-035).
+(pending migrations, then retention when due), content sync, discovery,
+readiness and deployment verification. All of them are leader-gated (D-035).
 Downgrades are not supported (D-033).
 
 ## 6. REST API (`/services/ucm/...`)
 
 | Method & path | Capability (role) | Purpose |
 |---|---|---|
-| `GET ucm/catalog` | read collections | Filtered, paged catalogue (`q, domain, category, criticality, difficulty, sourcetype, mitre, provider (fenre\|lantern), status, sort, offset, count`). |
+| `GET ucm/catalog` | read collections | Filtered, paged catalogue (`q, domain, category, criticality, difficulty, sourcetype, mitre, status, sort, offset, count`). |
 | `GET ucm/usecase?id=` | read | Canonical detail (normalized on read) + provenance. |
 | `GET ucm/categories` | read | Category list with sync state. |
 | `GET ucm/sync` | read | Provider state + recent jobs. |
 | `POST ucm/sync` | `ucm_manage_content` | Queue a sync job (`categories`, optional `ref`). |
 | `POST ucm/import` | `ucm_manage_content` | Import an offline bundle (JSON body). |
 | `POST ucm/catalog/reindex` | `ucm_manage_content` | Re-derive summaries from stored raw records. |
-| `GET ucm/lantern` | `ucm_manage_content` | Lantern settings and the caller's recent import sessions (all sessions for `ucm_admin`). |
-| `GET ucm/lantern/session?id=` | `ucm_manage_content` (owner or admin) | One import session: page, items, statuses, changes, errors, last import. |
-| `GET ucm/lantern/staged?id=&url=` | `ucm_manage_content` (owner or admin) | Staged extraction of one article plus the canonical use case it would become (nothing written). |
-| `POST ucm/lantern/inspect` | `ucm_manage_content` | Validate a Lantern URL and queue an inspection (`url`). HTTP 202. |
-| `POST ucm/lantern/fetch` | `ucm_manage_content` | Queue retrieval of selected articles (`id`, `urls`, at most `max_articles_per_fetch`). HTTP 202. |
-| `POST ucm/lantern/expand` | `ucm_manage_content` | Queue listing of selected sub-collections (`id`, `urls`, depth-limited). HTTP 202. |
-| `POST ucm/lantern/import` | `ucm_manage_content` | Import fetched articles (`id`, `items[{url, action}]`, `confirm: true` required; `action: "update"` applies updates). |
-| `POST ucm/lantern/{cancel,discard}` | `ucm_manage_content` | Stop a running step / delete the session and its staged data. |
 | `GET ucm/provider/manifest` | `ucm_manage_content` | Resolve the remote manifest (optional `ref`) without importing. |
 | `GET ucm/platform` | read | Capability report. |
 | `GET ucm/audit` | `ucm_manage_content` or `ucm_admin` | Recent audit events (`limit`, `prefix`). |
@@ -286,9 +240,6 @@ Full model: `docs/SECURITY.md`.
 * GitHub token (optional) read from `storage/passwords`; never logged or stored
   in conf/KV.
 * Audit every import, sync request, sync outcome and configuration change.
-* Lantern: exact-host https URL policy, DNS vetting with IP pinning
-  (no private/loopback/link-local destinations), re-validated redirects,
-  robots.txt and a shared ≥5 s rate gate; retrieval only in the worker.
 
 ## 9. Known limitations
 
@@ -302,10 +253,6 @@ Full model: `docs/SECURITY.md`.
   about 0.5 s per request at 20,000 use cases on a single instance.
 * Run status relies on the scheduler log in `_internal`, which most
   non-admin roles cannot search (D-031).
-* Lantern extraction follows Lantern's current MindTouch template; unknown
-  layouts degrade to low confidence. Content that Lantern loads with browser
-  JavaScript (for example "Recommended articles") is not seen. Each step
-  waits for the next worker run (≤60 s) plus the crawl delay per page.
 
 See also `docs/IMPLEMENTATION_PLAN.md` "Validation status" and
 `docs/PROJECT_DISCOVERY.md` §6.

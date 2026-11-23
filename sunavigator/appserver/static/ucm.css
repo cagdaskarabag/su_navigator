@@ -78,21 +78,3 @@ textarea.ucm-input { font-family: Menlo, Consolas, monospace; font-size: 12px; }
 .ucm-row-active td { background: #eef4fa; }
 .ucm-chip { display: inline-block; padding: 1px 6px; margin: 0 4px 2px 0; font-size: 11px; border-radius: 10px; background: #eef4fa; }
 .ucm-toolbar label { display: inline-flex; align-items: center; gap: 4px; margin: 0 8px; }
-.ucm-badge-lantern { background: #ec008c; color: #fff; }
-.ucm-steps { display: flex; gap: 6px; flex-wrap: wrap; margin: 4px 0 14px; padding: 0; list-style: none; }
-.ucm-steps li { padding: 4px 10px; border-radius: 12px; background: #eef3f7; color: #5c6773; font-size: 12px; }
-.ucm-steps li.ucm-step-active { background: #1f4e79; color: #fff; }
-.ucm-steps li.ucm-step-done { background: #dbe8f4; color: #1f4e79; }
-.ucm-progress { height: 8px; background: #e8ecef; border-radius: 4px; overflow: hidden; margin: 6px 0; max-width: 480px; }
-.ucm-progress > span { display: block; height: 100%; background: #1f4e79; transition: width .3s; }
-.ucm-group-row td { background: #f4f6f8; font-weight: 600; }
-.ucm-group-row td .ucm-sub { font-weight: 400; }
-.ucm-provenance { padding: 10px 14px; margin: 8px 0 12px; border-left: 4px solid #ec008c; background: #fdf2f8; }
-.ucm-article h4 { margin: 14px 0 4px; font-size: 14px; }
-.ucm-article h5 { margin: 10px 0 4px; font-size: 13px; }
-.ucm-article pre { background: #f6f8fa; border: 1px solid #e1e6eb; padding: 8px; white-space: pre-wrap; word-break: break-word; }
-.ucm-article pre.ucm-spl { border-left: 3px solid #1f4e79; }
-.ucm-article .ucm-note { background: #f2f7fb; padding: 6px 10px; }
-.ucm-preview { border: 1px solid #c3cbd4; border-radius: 4px; padding: 12px 16px; margin: 10px 0; background: #fff; }
-.ucm-confirm { border: 2px solid #1f4e79; border-radius: 4px; padding: 12px 16px; margin: 12px 0; background: #f8fbfe; }
-.ucm-changes { margin: 4px 0 0 16px; padding: 0; font-size: 12px; color: #5c6773; }

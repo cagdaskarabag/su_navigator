@@ -11,9 +11,6 @@
     <view name="ucm_dashboards" />
     <view source="unclassified" match="ucm_gen_" />
   </collection>
-  <collection label="Import Use Cases">
-    <view name="ucm_lantern_import" />
-  </collection>
   <collection label="Administration">
     <view name="ucm_content_admin" />
   </collection>

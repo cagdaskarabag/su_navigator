@@ -57,8 +57,8 @@ class ReadinessWorker:
         disc = self.store.get(C.SYNC_STATE, "discovery::local") or {}
         if not disc.get("last_completed_at"):
             return None
-        content_at = max((self.store.get(C.SYNC_STATE, "provider::" + p) or {}).get("last_success_at") or ""
-                         for p in ("fenre", "lantern"))
+        provider = self.store.get(C.SYNC_STATE, "provider::fenre") or {}
+        content_at = provider.get("last_success_at") or ""
         state = self.service.state()
         if state.get("last_attempt_status") == JOB_FAILED and state.get("last_attempt_at", "") >= max(
                 disc.get("last_completed_at", ""), content_at):

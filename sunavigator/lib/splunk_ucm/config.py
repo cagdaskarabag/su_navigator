@@ -19,13 +19,6 @@ DEFAULTS: Dict[str, Dict[str, str]] = {
         "schema_path": "schemas/uc.schema.json", "version_path": "VERSION", "allowed_hosts": "",
         "fetch_concurrency": "4", "timeout": "30", "max_attempts": "4", "proxy_url": "", "ca_bundle": "",
     },
-    "provider:lantern": {
-        "enabled": "true", "remote_fetch_enabled": "true", "timeout": "15", "max_page_kb": "3072",
-        "max_redirects": "3", "min_request_interval_seconds": "5", "max_articles_per_fetch": "25",
-        "max_items_per_collection": "300", "max_session_items": "1000", "max_pages_per_session": "150",
-        "max_expand_depth": "1", "session_ttl_hours": "24", "max_active_sessions_per_user": "5",
-        "worker_time_budget_seconds": "240", "proxy_url": "", "ca_bundle": "",
-    },
     "sync": {"schedule_interval_hours": "0", "job_timeout_seconds": "3600", "max_invalid_ratio": "0.2"},
     "import": {"max_bundle_mb": "50"},
     "catalog": {"max_page_size": "100"},

@@ -193,18 +193,13 @@ require([
         var defaults = (dep.settings && dep.settings.defaults) || {};
         var cur = current || {};
         var source = el("select", { "class": "ucm-input" },
-            uc.spl ? el("option", { value: "primary", text: "Primary SPL" }) : null,
+            el("option", { value: "primary", text: "Primary SPL" }),
             uc.cim_spl ? el("option", { value: "cim", text: "CIM SPL" }) : null,
             el("option", { value: "custom", text: "Custom (edited copy)" }));
-        source.value = cur.spl_source || (uc.spl ? "primary" : "custom");
+        source.value = cur.spl_source || "primary";
         var custom = el("textarea", { "class": "ucm-input ucm-mono", rows: "6" });
-        var variants = (uc.spl_variants || []).filter(function (v) { return v.spl; });
-        custom.value = cur.spl_source === "custom" ? cur.spl : (uc.spl || (variants[0] ? variants[0].spl : ""));
-        var picker = variants.length ? el("select", { "class": "ucm-input", "aria-label": "Start from a search in the content",
-            onchange: function () { if (picker.value !== "") { custom.value = variants[parseInt(picker.value, 10)].spl; } } },
-            el("option", { value: "", text: "Start from a search in the content…" }),
-            variants.map(function (v, i) { return el("option", { value: String(i), text: v.model }); })) : null;
-        var customWrap = el("div", { style: source.value === "custom" ? "" : "display:none" }, picker, custom);
+        custom.value = cur.spl_source === "custom" ? cur.spl : (uc.spl || "");
+        var customWrap = el("div", { style: source.value === "custom" ? "" : "display:none" }, custom);
         source.addEventListener("change", function () { customWrap.style.display = source.value === "custom" ? "" : "none"; });
         function input(value) { var i = el("input", { "class": "ucm-input", type: "text" }); i.value = value; return i; }
         var cron = input(cur.cron || defaults.cron || "*/15 * * * *");
@@ -247,11 +242,6 @@ require([
             dep ? ucm.badge("saved search: " + ((dep.live && dep.live.status) || "absent"), LIVE_KIND[(dep.live && dep.live.status) || "absent"]) : null,
             dep && dep.content_changed ? ucm.badge("provider content changed since this revision", "warn") : null);
         var card = el("div", { "class": "ucm-card" }, head);
-        if (!dep && !uc.spl && !uc.cim_spl && !(uc.spl_variants || []).length) {
-            card.appendChild(el("div", { "class": "ucm-sub", text: "This content contains no SPL search, so there is nothing to deploy from it. " +
-                "Follow its implementation guidance instead." }));
-            return card;
-        }
         if (!dep) {
             if (allowed.indexOf("draft") < 0) {
                 card.appendChild(el("div", { "class": "ucm-sub", text: "Not deployed. Preparing a deployment needs the ucm_run_discovery or ucm_deploy capability." }));
@@ -365,39 +355,6 @@ require([
         }));
     }
 
-    function lanternList(values) {
-        return values && values.length ? el("ul", {}, values.map(function (v) { return el("li", { text: v }); }))
-            : text("", "Not stated in the Lantern article.");
-    }
-
-    function articleBlocks(blocks) {
-        var box = el("div", { "class": "ucm-article" });
-        (blocks || []).forEach(function (b) {
-            if (b.type === "heading") { box.appendChild(el(b.level <= 2 ? "h4" : "h5", { text: b.text })); }
-            else if (b.type === "paragraph") { box.appendChild(el("p", { "class": b.note ? "ucm-note" : null, text: b.text })); }
-            else if (b.type === "list") { box.appendChild(el(b.ordered ? "ol" : "ul", {}, b.items.map(function (t) { return el("li", { text: t }); }))); }
-            else if (b.type === "table") {
-                box.appendChild(el("table", { "class": "ucm-table" },
-                    b.header && b.header.length ? el("thead", {}, el("tr", {}, b.header.map(function (h) { return el("th", { text: h }); }))) : null,
-                    el("tbody", {}, b.rows.map(function (r) { return el("tr", {}, r.map(function (c) { return el("td", { text: c }); })); }))));
-            } else if (b.type === "code") { box.appendChild(el("pre", { "class": b.is_spl ? "ucm-spl" : null, text: b.text })); }
-        });
-        return box;
-    }
-
-    function lanternBanner(uc, lantern) {
-        return el("div", { "class": "ucm-provenance" },
-            el("div", {}, ucm.badge("Splunk Lantern", "lantern"), " ",
-                el("strong", { text: "Content imported from Splunk Lantern. " }),
-                el("a", { href: uc.provenance.source_url, target: "_blank", rel: "noopener noreferrer", text: "Open the original article" })),
-            el("div", { "class": "ucm-sub", text: "Last updated on Lantern: " + (lantern.source_last_updated || "unknown") +
-                " · retrieved " + (lantern.source_retrieved_at || "unknown") + (lantern.imported_by ? " · imported by " + lantern.imported_by : "") +
-                " · extraction confidence " + (lantern.extraction_confidence || "unknown") + "." }),
-            lantern.needs_review ? ucm.stateBox("warn", "Flagged for manual review",
-                (lantern.warnings || []).join(" ") || "The extraction may be incomplete; compare with the original article.") : null,
-            el("div", {}, el("a", { href: "ucm_lantern_import?inspect=" + encodeURIComponent(uc.provenance.source_url), "class": "btn btn-small", text: "Check for updates" })));
-    }
-
     function render(uc) {
         var p = uc.provenance;
         ucm.clear(root);
@@ -408,8 +365,6 @@ require([
                 ucm.badge(uc.difficulty, "neutral"), ucm.chips(uc.domains), ucm.badge("review: " + uc.review_status, "info"),
                 uc.provider_status === "withdrawn" ? ucm.badge("withdrawn upstream", "warn") : null),
             el("div", { "class": "ucm-sub", text: [uc.category_name, uc.subcategory].filter(Boolean).join(" › ") })));
-        var lantern = p.provider === "lantern" ? ((uc.provider_extras || {}).lantern || {}) : null;
-        if (lantern) { root.appendChild(lanternBanner(uc, lantern)); }
 
         root.appendChild(readinessBox(uc));
         root.appendChild(selectionBox(uc));
@@ -431,31 +386,10 @@ require([
         root.appendChild(section("Implementation", text(uc.instructions),
             uc.detailed_instructions ? el("details", { "class": "ucm-details" }, el("summary", { text: "Detailed implementation guide" }), text(uc.detailed_instructions)) : null,
             uc.visualization ? el("details", { "class": "ucm-details" }, el("summary", { text: "Suggested visualization" }), text(uc.visualization)) : null));
-        if (lantern) {
-            root.appendChild(section("Prerequisites", lanternList(lantern.prerequisites)));
-            root.appendChild(section("Dashboards", lanternList((lantern.dashboards || []).map(function (d) { return d.title; }))));
-            root.appendChild(section("Related Lantern articles", (lantern.related_articles || []).concat(lantern.internal_links || []).length
-                ? el("ul", {}, (lantern.related_articles || []).concat(lantern.internal_links || []).map(function (r) {
-                    return el("li", {}, el("a", { href: r.url, target: "_blank", rel: "noopener noreferrer", text: r.title || r.url }));
-                })) : text("", "No related articles linked from the article.")));
-            root.appendChild(section("Article content (as extracted from Splunk Lantern)",
-                el("details", { "class": "ucm-details" }, el("summary", { text: (lantern.blocks || []).length + " blocks: headings, lists, tables and code" }),
-                    articleBlocks(lantern.blocks))));
-        }
         root.appendChild(section("Framework mappings", frameworks(uc)));
         root.appendChild(section("Known false positives", text(uc.known_false_positives)));
         root.appendChild(section("References", references(uc)));
-        root.appendChild(section("Provenance", kv(lantern ? [
-            ["Provider", "lantern (Splunk Lantern)"], ["Provider record id", p.provider_record_id],
-            ["Source title", lantern.source_title],
-            ["Source", el("a", { href: p.source_url, target: "_blank", rel: "noopener noreferrer", text: p.source_url })],
-            ["Source last updated", lantern.source_last_updated], ["Retrieved (UTC)", lantern.source_retrieved_at],
-            ["Imported by", lantern.imported_by], ["Imported (UTC)", p.imported_at],
-            ["Content hash (SHA-256)", el("span", { "class": "ucm-mono", text: p.source_hash })],
-            ["Extraction version", lantern.extraction_version], ["Extraction confidence", lantern.extraction_confidence],
-            ["Schema", p.source_schema], ["Normalizer", p.normalizer_version],
-            ["Found in", (lantern.found_in || []).map(function (f) { return [f.title, f.category, f.subcategory].filter(Boolean).join(" › "); }).join("; ")]
-        ] : [
+        root.appendChild(section("Provenance", kv([
             ["Provider", p.provider], ["Provider record id", p.provider_record_id],
             ["Catalogue version", p.provider_version], ["Source commit", el("span", { "class": "ucm-mono", text: p.source_ref })],
             ["Source", p.source_url.indexOf("https://") === 0

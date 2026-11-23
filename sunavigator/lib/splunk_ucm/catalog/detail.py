@@ -15,7 +15,7 @@ from ..model.canonical import Category
 from ..storage.repositories import CategoryRepository, ContentRepository, decode_raw
 
 _KEY_RE = re.compile(r"^[A-Za-z0-9._-]{1,120}$")
-_CONTENT_ID_RE = re.compile(r"^([a-z][a-z0-9_]{1,31}):(UC-[0-9.]{1,40}|LN-[0-9a-f]{20})$")
+_CONTENT_ID_RE = re.compile(r"^([a-z][a-z0-9_]{1,31}):(UC-[0-9.]{1,40})$")
 
 
 def key_from_id(value: str) -> str:

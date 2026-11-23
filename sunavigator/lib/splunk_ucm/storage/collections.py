@@ -13,6 +13,5 @@ VALIDATION = "uc_validation"
 DEPLOYMENTS = "uc_deployments"
 FRAMEWORKS = "uc_frameworks"
 DASHBOARDS = "uc_dashboards"
-LANTERN = "uc_lantern"
 
 DOC_SCHEMA = 1
