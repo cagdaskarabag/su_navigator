@@ -177,6 +177,12 @@ python3 tools/ucm_cli.py build-bundle --repo /tmp/fenre --categories 9,10 --outp
 
 In SUNavigator, navigate to **Administration → Offline import**, upload `bundle.json`, and click **Import bundle**. Every record is validated against its git blob SHA hash, matching remote sync integrity.
 
+Splunk ES Content Update detections can be imported the same way as a second provider (`escu`), from the release package:
+
+```bash
+python3 tools/ucm_cli.py build-escu-bundle --package DA-ESS-ContentUpdate-latest.tar.gz --output escu.json
+```
+
 ---
 
 ## Deployment Workflow & Governance
@@ -232,7 +238,7 @@ sun_navigator/
 │   └── appserver/static/         # Simple XML JS modules and styles
 ├── tools/                        # Development, packaging, and bundle CLI tools
 ├── tests/                        # Automated test suites
-│   ├── unit/                     # 299 mocked unit tests (runs without Splunk)
+│   ├── unit/                     # 324 mocked unit tests (runs without Splunk)
 │   ├── fixtures/readiness/       # Readiness regression corpus and its baseline
 │   └── live/                     # Integration tests against live Splunk instances
 └── docs/                         # Specifications, ADRs, operator guide, and screenshots

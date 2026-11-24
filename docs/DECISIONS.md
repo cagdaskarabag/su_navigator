@@ -823,3 +823,32 @@ as drift.
   SHA-256 of the file.
 * Web exposure: `default/web.conf` exposes `ucm/deployments/export` explicitly
   (the `ucm/deployment/*` pattern does not cover it).
+
+## D-053 ESCU as an offline-bundle provider
+*0.7.3+ (T-22).*
+* Source: the Splunk ES Content Update package (`DA-ESS-ContentUpdate`, 6.11.1
+  on the lab, 2,230 correlation searches, 16 deprecated). The package is conf
+  files only, so the parser is stdlib (`splunk_ucm/conf.py`). No YAML.
+* Shape: a `ucm-content-bundle` v1 (`provider = escu`), so the existing import,
+  validation, withdrawal and reindex paths handle it. No remote transport: the
+  release is fetched by the operator and built with
+  `tools/ucm_cli.py build-escu-bundle` (directory or `.tar.gz`, read in memory,
+  never extracted, size-capped). Splunkbase downloads need login (404
+  anonymously), so the GitHub release asset is the documented source.
+* Identity: `content_id = escu:UC-<detection_id>` (UUID). The content id regex
+  accepts UUIDs now; the record id pattern for `escu` is a UUID.
+* Categories: fixed ids (1 endpoint, 2 network, 3 threat, 4 identity,
+  5 access, 6 audit, 7 unassigned) so keys stay stable across releases.
+* Requirements: the derivation moved from the Fenre normalizer into
+  `content/requirements.py` (no behaviour change; Fenre tests unchanged) so
+  both providers use one implementation.
+* Discovery: `DA-ESS-ContentUpdate` (Splunkbase 3449, title "Splunk ES Content
+  Update") was added to the verified Splunkbase list (D-048).
+* Validation: ESCU records go through the same validator (schema subset,
+  id pattern, title, SPL size). Full package on the lab: 2,214 records, 0
+  invalid, 0 warnings; reimport unchanged.
+* Not covered: ESCU's own macro definitions are not imported (the installed
+  ESCU app provides them); drilldowns, risk scores and the `fbd` finding-group
+  settings are kept only as raw data in the stored record; `cis20`, `nist`,
+  `cve` and kill-chain phases are kept in `provider_extras`, not mapped to a
+  framework (no ATT&CK-style registry for them in the app).

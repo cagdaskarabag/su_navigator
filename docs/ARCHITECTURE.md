@@ -39,7 +39,7 @@ not packaged.
 
 | # | Service | Module | WP | Status |
 |---|---|---|---|---|
-| 1 | Content Provider | `content/provider.py`, `content/fenre/provider.py`, `content/bundle.py` | WP1 | Implemented |
+| 1 | Content Provider | `content/provider.py`, `content/fenre/provider.py`, `content/bundle.py`, `content/escu/` (ESCU offline bundles, D-053), `content/requirements.py` (shared) | WP1 | Implemented |
 | 2 | Content Normalization | `content/fenre/normalizer.py`, `model/canonical.py` | WP1 | Implemented |
 | 3 | Content Synchronization | `content/sync.py`, `bin/ucm_sync_worker.py` | WP1 | Implemented |
 | 4 | Environment Discovery | `discovery/` | WP2 | Implemented |

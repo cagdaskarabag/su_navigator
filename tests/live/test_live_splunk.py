@@ -436,6 +436,32 @@ class LiveApiTest(unittest.TestCase):
             self.admin.request("DELETE", "/services/apps/local/" + probe)
             self.run_discovery()
 
+    def test_escu_provider_import_and_detail(self):
+        self.wait_idle()
+        status, body = api(self.admin, "POST", "import", raw=json.dumps(helpers.escu_fixture_bundle()).encode("utf-8"))
+        self.assertEqual(status, 200, body)
+        self.assertEqual((body["job"]["status"], body["job"]["provider"], body["job"]["totals"]["invalid"]),
+                         ("succeeded", "escu", 0), body)
+        status, detail = api(self.viewer, "GET", "usecase", {"id": "escu:UC-11111111-2222-4333-8444-555555555501"})
+        self.assertEqual(status, 200, detail)
+        self.assertEqual((detail["criticality"], detail["category_name"], detail["domains"]),
+                         ("high", "Endpoint", ["endpoint"]), detail)
+        self.assertEqual([(m["framework"], m["object_id"], m["object_type"]) for m in detail["framework_mappings"]],
+                         [("mitre_attack", "T1562.001", "sub-technique")])
+        self.assertIn("security_content_summariesonly",
+                      [r["value"] for r in detail["requirements"] if r["type"] == "macro"])
+
+    def test_escu_package_detected_as_addon_when_installed(self):
+        self.wait_idle()
+        self.run_discovery()
+        status, inv = api(self.admin, "GET", "inventory", {"kind": "app", "q": "DA-ESS-ContentUpdate"})
+        self.assertEqual(status, 200, inv)
+        installed = [i for i in inv["items"] if i.get("package_id") == "DA-ESS-ContentUpdate"]
+        if not installed:
+            self.skipTest("DA-ESS-ContentUpdate (ESCU) is not installed on this Splunk instance")
+        self.assertEqual(installed[0].get("name"), "DA-ESS-ContentUpdate", installed[0])
+
+
     def test_discovery_inventory_and_local_mapping(self):
         self.wait_idle()
         job = self.run_discovery()

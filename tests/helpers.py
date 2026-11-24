@@ -52,6 +52,15 @@ def fixture_files() -> Dict[str, bytes]:
     return out
 
 
+ESCU_FIXTURE_PACKAGE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "fixtures", "escu",
+                                    "DA-ESS-ContentUpdate")
+
+
+def escu_fixture_bundle() -> Dict:
+    from splunk_ucm.content.escu.package import build_bundle
+    return copy.deepcopy(build_bundle(ESCU_FIXTURE_PACKAGE)[0])
+
+
 def fixture_bundle(record_ids=None, category_ids=None) -> Dict:
     from ucm_bundle_builder import build_bundle_from_directory
     return copy.deepcopy(build_bundle_from_directory(FIXTURE_REPO, category_ids, record_ids=record_ids))

@@ -390,6 +390,43 @@ PYTHONPATH="$PWD/sunavigator/lib" \
   "$SPLUNK_HOME/bin/python3.13" tools/ucm_cli.py validate --repo /tmp/fenre --categories 9
 ```
 
+### 5.2a Splunk ES Content Update (ESCU) detections (D-053)
+
+ESCU is a second provider, `escu`, imported the same way (no remote sync).
+Use the release package from the Splunk ES Content Update release (the
+`DA-ESS-ContentUpdate` tarball or its extracted directory). Splunkbase requires
+a login for anonymous downloads, so take the package from the release asset.
+
+```bash
+python3 tools/ucm_cli.py build-escu-bundle \
+  --package /path/to/DA-ESS-ContentUpdate-latest.tar.gz --output /tmp/escu_bundle.json
+curl -k -u "$SPLUNK_USER:$SPLUNK_PASSWORD" -H "Content-Type: application/json" \
+  --data-binary @/tmp/escu_bundle.json https://127.0.0.1:8089/services/ucm/import
+```
+
+The CLI reports the record count, skipped counts and categories. Each
+detection (`action.correlationsearch.metadata.detection_id`) becomes one use
+case, `escu:UC-<detection id>`:
+
+- Deprecated detections (`deprecated = 1`) and stanzas without a detection id
+  are left out and counted. The build is deterministic; the same package gives
+  the same bytes.
+- Category comes from `action.notable.param.security_domain` (endpoint,
+  network, threat, identity, access, audit). Detections without a notable
+  domain go to **Unassigned**; in ESCU 6.11.1 that is about half the content.
+- Analytic stories are tags; the first story is the subcategory. MITRE
+  techniques become ATT&CK mappings (sub-technique or technique).
+- Requirements come from the SPL (sourcetypes, indexes, data models, macros,
+  lookups) with the same rules as the other provider. ESCU macros are defined
+  in the ESCU app: install it, or the macro requirements stay unmet.
+- A re-import of a newer release updates records whose content changed and
+  withdraws detections that the new package no longer lists (within the ESCU
+  provider only; Fenre records are untouched).
+
+Installing the ESCU app itself is optional for the catalogue. It is needed for
+the macro requirements, and when installed, discovery matches it by
+Splunkbase id 3449 and package id `DA-ESS-ContentUpdate`.
+
 ### 5.3 Scheduled sync
 
 Default `[sync] schedule_interval_hours = 0` (off). To poll Fenre on a

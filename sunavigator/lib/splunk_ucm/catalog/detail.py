@@ -17,11 +17,11 @@ from ..storage.repositories import CategoryRepository, ContentRepository, decode
 from .quality import ordered
 
 _KEY_RE = re.compile(r"^[A-Za-z0-9._-]{1,120}$")
-_CONTENT_ID_RE = re.compile(r"^([a-z][a-z0-9_]{1,31}):(UC-[0-9.]{1,40})$")
+_CONTENT_ID_RE = re.compile(r"^([a-z][a-z0-9_]{1,31}):(UC-[0-9A-Za-z.\-]{1,80})$")
 
 
 def key_from_id(value: str) -> str:
-    """Accept a storage key (``fenre_UC-1.1.1``) or a content id (``fenre:UC-1.1.1``)."""
+    """Accept a storage key (``fenre_UC-1.1.1``) or a content id (``fenre:UC-1.1.1``, ``escu:UC-<uuid>``)."""
     match = _CONTENT_ID_RE.match(value or "")
     if match:
         return "%s_%s" % (match.group(1), match.group(2))

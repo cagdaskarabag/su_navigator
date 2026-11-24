@@ -32,6 +32,7 @@ SPLUNKBASE_APPS: Dict[int, Tuple[str, str]] = {
     3088: ("Splunk_TA_google-cloudplatform", "Splunk Add-on for Google Cloud Platform"),
     3110: ("Splunk_TA_microsoft-cloudservices", "Splunk Add-on for Microsoft Cloud Services"),
     3215: ("splunk_TA_vmware", "Splunk Add-on for VMware"),
+    3449: ("DA-ESS-ContentUpdate", "Splunk ES Content Update"),
     3757: ("TA-MS-AAD", "Splunk Add on for Microsoft Azure"),
     4055: ("splunk_ta_o365", "Splunk Add-on for Microsoft Office 365"),
     4060: ("TA-tenable", "Tenable Add-On for Splunk"),

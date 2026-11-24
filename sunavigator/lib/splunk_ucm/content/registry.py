@@ -4,20 +4,26 @@ from typing import Any, Callable, Dict
 
 from ..errors import ValidationError
 from .bundle import OfflineBundleProvider
+from .escu.normalizer import ESCU_SCHEMA, EscuNormalizer, escu_validation_policy
 from .fenre.normalizer import FenreNormalizer, fenre_validation_policy
 from .fenre.provider import FenreConfig, FenreJsonProvider, load_bundled_schema, parse_allowed_refs
 from .http import HttpConfig
 from .provider import ContentProvider, Normalizer, ProviderManifest
 from .validation import RecordValidator
 
-_NORMALIZERS: Dict[str, Callable[[], Normalizer]] = {"fenre": FenreNormalizer}
+_NORMALIZERS: Dict[str, Callable[[], Normalizer]] = {"fenre": FenreNormalizer, "escu": EscuNormalizer}
 
 
 def _fenre_validator(manifest: ProviderManifest) -> RecordValidator:
     return RecordValidator(fenre_validation_policy(), manifest.schema or load_bundled_schema())
 
 
-_VALIDATORS: Dict[str, Callable[[ProviderManifest], RecordValidator]] = {"fenre": _fenre_validator}
+def _escu_validator(manifest: ProviderManifest) -> RecordValidator:
+    return RecordValidator(escu_validation_policy(), manifest.schema or ESCU_SCHEMA)
+
+
+_VALIDATORS: Dict[str, Callable[[ProviderManifest], RecordValidator]] = {"fenre": _fenre_validator,
+                                                                         "escu": _escu_validator}
 
 
 def supported_providers():
