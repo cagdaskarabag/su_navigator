@@ -9,6 +9,7 @@ Status: WP5 (catalogue, discovery, readiness, selection, SPL validation, deploym
 | Upstream content (GitHub, offline bundles) | Untrusted. Size-capped, git-blob-SHA verified, schema- and safety-validated, normalized by allowlisted field mapping. Stored as opaque JSON text (`raw_json`). |
 | Imported SPL | Displayed only, labelled "untrusted". Never executed by the catalogue or by discovery. SPL analysis is lexical (no search is dispatched). Side-effect commands (`delete`, `outputlookup`, `collect`, ...) are flagged, and so are indirect-execution and unknown commands (D-038). |
 | Discovery searches | Only a constructed `tstats` template over index names from `/services/data/indexes`, validated against `^[A-Za-z0-9_][A-Za-z0-9_-]{0,79}$`. Relative time window and result cap are required. |
+| Interactive search (browser) | Started only by a click on **Run search** on the use-case page. The browser dispatches the SPL through Splunk's search API (`splunkjs/mvc/searchmanager`) with the user's own session: their role, capabilities, index access and search quotas apply, and the app is not involved. This is deliberately outside the preview guard rails (D-058, below). |
 | Imported SPL preview | Dispatched only after an explicit user action, a successful parse in the app namespace, a side-effect command gate, and a refusal of indirect-execution (`map`, `savedsearch`, `rest`, ...) and unknown commands (D-038). Time window and `max_count` are forced. Event payloads are not stored. |
 | Field sampling | Constructed `| search index=… sourcetype=… \| head N \| eval … \| fields <validated names> \| fieldsummary` over discovered pairs, in a window ending at the pair's newest event. Imported pipelines are not used. Only presence, counts and the index / sourcetype where a field was seen are kept; event values are not stored (D-044). |
 | Selections | Per-user KV rows; the handler only reads and writes the caller's `user` field. |
@@ -87,6 +88,62 @@ from the app's REST API (it answers with a `storage_error`, HTTP 502) and
 HTTP 404 from the KV collections, while a `ucm_viewer` still works.
 Redacting names per caller was the alternative (D2 option a), not chosen
 for 0.7.x.
+
+## Interactive search runs as the user (D-058)
+
+The use-case page can run the displayed SPL from the browser. This is the only
+path on which imported SPL is dispatched without the server's guard rails.
+
+What the path is:
+
+* `SearchManager` from `splunkjs/mvc` posts the search to `/services/search/jobs`
+  through Splunk Web with the **user's own session**. Splunk applies that user's
+  role: the `search` capability, index and app access, search quotas and
+  filters. The app's REST handler, its system token and its capabilities are not
+  involved, so the search cannot do anything the user could not do in Splunk's
+  own Search app.
+* The search runs in the app namespace (`sunavigator`) as the user, so macros
+  and lookups shared by the app resolve as they do for that user.
+
+What it intentionally does not have, compared with the bounded preview:
+
+* no forced short time window (the user picks 15 minutes to 7 days; time
+  modifiers inside the SPL win), no server-side result cap (the browser fetches
+  and displays 100 rows; the job itself may produce more), no server-side
+  command policy (D-038);
+* **no app audit record.** The browser dispatches the search, so the app never
+  sees it and cannot write `ucm_audit`. Splunk's own records (job history, the
+  `_audit` index) hold the search under the user's name. The app cannot show who
+  ran what from this path.
+* the results stay in the browser. The app does not receive, store or export
+  them (no export feature, OD-6).
+
+Controls that remain, and their limits:
+
+* An explicit click is required; the search never starts on page load.
+* The button is disabled, with the reason shown, for SPL that contains a
+  side-effect command. The list equals `spl.analysis.SIDE_EFFECT_COMMANDS` plus
+  `fit … into`, and the segmentation equals `analysis._split_pipeline`; unit tests
+  compare the lists and run both implementations over the fixture SPL.
+* SPL with macros is refused until a stored server-side parse of the current
+  content (`source_hash` equal) shows that no side-effect command is hidden in
+  the expanded pipeline. The parse is stored by the existing
+  **Parse and sample fields** action, so a user who never ran it sees a reason,
+  not a search.
+* Indirect and unknown commands (`map`, `rest`, `savedsearch`, custom
+  commands) only produce a warning, because they run with the user's permissions.
+* The search is finalised after 120 seconds and cancelled when the user leaves
+  the page.
+* These checks are a convenience guard, **not a security boundary**: a user can
+  run any search in Splunk directly. To switch the feature off for a role, remove
+  the Splunk `search` capability from it; the button is then disabled. A
+  failure to read the user's capabilities does not enable anything that Splunk
+  would not enforce itself.
+
+Residual risks: imported SPL is untrusted content and can be expensive
+(`index=*`, subsearches, `join`); a user can consume their own search quota and
+see events on screen that they may view in Splunk anyway. There is no app-side
+rate limit or audit for this path.
 
 ## Control tests write to Splunk (D-054)
 

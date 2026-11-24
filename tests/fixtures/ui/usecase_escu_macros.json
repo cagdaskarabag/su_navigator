@@ -1,0 +1,306 @@
+{
+ "addons": [],
+ "addons_text": "",
+ "business_value": "",
+ "category_key": "escu_cat-threat",
+ "category_name": "Threat",
+ "cim_models": [],
+ "cim_spl": "",
+ "content_id": "escu:UC-00958c7b-35db-4e7a-ad13-31550a7a7c64",
+ "control_test": {},
+ "criticality": "medium",
+ "data_sources_text": "Office 365 Universal Audit Log",
+ "datamodel_acceleration_text": "",
+ "deployment": {
+  "allowed_actions": [
+   "draft"
+  ],
+  "deployment": null,
+  "settings": {
+   "allow_self_approval": false,
+   "block_enable_states": [
+    "blocked"
+   ],
+   "defaults": {
+    "alert_mode": "track",
+    "cron": "*/15 * * * *",
+    "earliest": "-20m@m",
+    "latest": "-5m@m",
+    "schedule_window": "auto"
+   },
+   "require_approval": true
+  }
+ },
+ "description": "The following analytic identifies when a malicious file is detected within the Microsoft Office 365 ecosystem through the Advanced Threat Protection engine. Attackers may stage and execute malicious files from within the Microsoft Office 365 ecosystem. Any detections from built-in Office 365 capabilities should be monitored and responded to appropriately. Certain premium Office 365 capabilities such as Safe Attachment and Safe Links further enhance these detection and response functions.",
+ "detailed_instructions": "",
+ "difficulty": "unknown",
+ "domains": [
+  "security"
+ ],
+ "environment_summary": {
+  "note": "Presence is an inventory match, not a readiness assessment.",
+  "requirements_applicable": 0,
+  "requirements_present": 0
+ },
+ "equipment": [],
+ "exclusions": "",
+ "framework_mappings": [
+  {
+   "attributes": {},
+   "domain": "enterprise",
+   "framework": "mitre_attack",
+   "framework_version": null,
+   "object_id": "T1204.002",
+   "object_type": "sub-technique"
+  }
+ ],
+ "framework_na_reasons": [],
+ "hardware": "",
+ "instructions": "",
+ "key": "escu_UC-00958c7b-35db-4e7a-ad13-31550a7a7c64",
+ "known_false_positives": "",
+ "last_reviewed": "",
+ "lookups": [],
+ "macros": [
+  "o365_management_activity",
+  "security_content_ctime(1)",
+  "o365_threat_intelligence_suspicious_file_detected_filter"
+ ],
+ "monitoring_types": [
+  "TTP"
+ ],
+ "normalized_with": "escu-1.0.0",
+ "pillar": "",
+ "premium_apps": [],
+ "prerequisite_use_cases": [],
+ "products": [
+  "Splunk Enterprise Security"
+ ],
+ "provenance": {
+  "imported_at": "2026-11-24T11:20:03Z",
+  "normalizer_version": "escu-1.0.0",
+  "provider": "escu",
+  "provider_record_id": "00958c7b-35db-4e7a-ad13-31550a7a7c64",
+  "provider_version": "6.11.1",
+  "source_blob_sha": "f5f8459b888f4a20178c465e9e5dafb2fcb7e4d6",
+  "source_hash": "cdef55816f6ef5b6ac7b8d175798d4ede55dbe86444c43c54f0449e89e107e45",
+  "source_path": "detections/threat/00958c7b-35db-4e7a-ad13-31550a7a7c64.json",
+  "source_ref": "escu-package:sha256:c8235474f92203a4fecc7fb6250f5bf4616e84c911e7b4be2f8ece14e8488ee4",
+  "source_schema": "escu-record@1.0",
+  "source_url": "bundle:escu-package:sha256:c8235474f92203a4fecc7fb6250f5bf4616e84c911e7b4be2f8ece14e8488ee4:detections/threat/00958c7b-35db-4e7a-ad13-31550a7a7c64.json"
+ },
+ "provider_extras": {
+  "cis20": [
+   "CIS 10"
+  ],
+  "cve": [],
+  "detectionType": "ebd",
+  "detectionVersion": "12",
+  "enabled": true,
+  "killChainPhases": [
+   "Installation"
+  ],
+  "nist": [
+   "DE.CM"
+  ],
+  "publishTime": 1778630400.0,
+  "securityDomain": "threat",
+  "stanza": "ESCU - O365 Threat Intelligence Suspicious File Detected - Rule"
+ },
+ "provider_status": "active",
+ "quality_flags": [],
+ "readiness": {
+  "_key": "escu_UC-00958c7b-35db-4e7a-ad13-31550a7a7c64",
+  "_user": "nobody",
+  "blockers": [],
+  "category_key": "escu_cat-threat",
+  "category_name": "Threat",
+  "content_id": "escu:UC-00958c7b-35db-4e7a-ad13-31550a7a7c64",
+  "counts": {
+   "met": 3,
+   "not_applicable": 0,
+   "not_met": 0,
+   "partial": 0,
+   "unknown": 0,
+   "unverified": 1
+  },
+  "coverage": 1,
+  "criticality": "medium",
+  "criticality_rank": 2,
+  "discovery_at": "2026-11-24T12:11:31Z",
+  "discovery_job_id": "684d6c9136c048d3af807687c471db98",
+  "doc_schema": 1,
+  "domains": [
+   "security"
+  ],
+  "engine_version": "ucm.readiness/3",
+  "evaluated_at": "2026-11-24T12:12:31Z",
+  "gaps": [],
+  "job_id": "226608f53ad94704bf0ed7b6bff82fe7",
+  "record_id": "00958c7b-35db-4e7a-ad13-31550a7a7c64",
+  "requirement_count": 4,
+  "results": [
+   {
+    "code": "present_global",
+    "confidence": "medium",
+    "detail": "Macro is shared globally.",
+    "level": "required",
+    "observed": [
+     {
+      "app": "DA-ESS-ContentUpdate",
+      "name": "o365_management_activity",
+      "sharing": "global"
+     }
+    ],
+    "req_id": "macro:o365_management_activity",
+    "source": "derived_spl",
+    "status": "met",
+    "type": "macro",
+    "value": "o365_management_activity",
+    "via_mapping": null
+   },
+   {
+    "code": "present_global",
+    "confidence": "medium",
+    "detail": "Macro is shared globally.",
+    "level": "required",
+    "observed": [
+     {
+      "app": "DA-ESS-ContentUpdate",
+      "name": "security_content_ctime(1)",
+      "sharing": "global"
+     }
+    ],
+    "req_id": "macro:security_content_ctime(1)",
+    "source": "derived_spl",
+    "status": "met",
+    "type": "macro",
+    "value": "security_content_ctime(1)",
+    "via_mapping": null
+   },
+   {
+    "code": "present_global",
+    "confidence": "medium",
+    "detail": "Macro is shared globally.",
+    "level": "required",
+    "observed": [
+     {
+      "app": "DA-ESS-ContentUpdate",
+      "name": "o365_threat_intelligence_suspicious_file_detected_filter",
+      "sharing": "global"
+     }
+    ],
+    "req_id": "macro:o365_threat_intelligence_suspicious_file_detected_filter",
+    "source": "derived_spl",
+    "status": "met",
+    "type": "macro",
+    "value": "o365_threat_intelligence_suspicious_file_detected_filter",
+    "via_mapping": null
+   },
+   {
+    "code": "not_parsed",
+    "confidence": "medium",
+    "detail": "Primary SPL has not been parsed with Splunk's search parser.",
+    "level": "required",
+    "observed": [],
+    "req_id": "spl_validity:primary",
+    "source": "derived_spl",
+    "status": "unverified",
+    "type": "spl_validity",
+    "value": "primary",
+    "via_mapping": null
+   }
+  ],
+  "score": 100,
+  "score_sort": 100,
+  "search_text": "00958c7b-35db-4e7a-ad13-31550a7a7c64 escu:uc-00958c7b-35db-4e7a-ad13-31550a7a7c64 o365 threat intelligence suspicious file detected",
+  "source_hash": "cdef55816f6ef5b6ac7b8d175798d4ede55dbe86444c43c54f0449e89e107e45",
+  "stale": false,
+  "stale_reasons": [],
+  "state": "ready",
+  "title": "O365 Threat Intelligence Suspicious File Detected",
+  "unverified": 1
+ },
+ "references": [],
+ "required_fields": [],
+ "requirement_summary": {
+  "assessment": "ready",
+  "by_level": {
+   "required": 3
+  },
+  "by_source": {
+   "derived_spl": 3
+  },
+  "total": 3
+ },
+ "requirements": [
+  {
+   "attributes": {},
+   "confidence": "medium",
+   "environment": {
+    "applicable": false
+   },
+   "level": "required",
+   "notes": "",
+   "req_id": "macro:o365_management_activity",
+   "source": "derived_spl",
+   "type": "macro",
+   "value": "o365_management_activity"
+  },
+  {
+   "attributes": {},
+   "confidence": "medium",
+   "environment": {
+    "applicable": false
+   },
+   "level": "required",
+   "notes": "",
+   "req_id": "macro:security_content_ctime(1)",
+   "source": "derived_spl",
+   "type": "macro",
+   "value": "security_content_ctime(1)"
+  },
+  {
+   "attributes": {},
+   "confidence": "medium",
+   "environment": {
+    "applicable": false
+   },
+   "level": "required",
+   "notes": "",
+   "req_id": "macro:o365_threat_intelligence_suspicious_file_detected_filter",
+   "source": "derived_spl",
+   "type": "macro",
+   "value": "o365_threat_intelligence_suspicious_file_detected_filter"
+  }
+ ],
+ "review_status": "released",
+ "reviewer": "Splunk Threat Research Team",
+ "schedule": {
+  "cron": "0 * * * *",
+  "earliest": "-70m@m",
+  "latest": "-10m@m",
+  "window": "auto"
+ },
+ "schema_version": "ucm.usecase/1",
+ "script_example": "",
+ "selection": null,
+ "spl": "`o365_management_activity` Workload=ThreatIntelligence Operation=AtpDetection\n| eval dest=\"NA\"\n| eval src=\"NA\"\n| stats values(DetectionMethod) as category values(FileData.FileName) as file_name values(FileData.FilePath) as file_path values(FileData.FileSize) as file_size values(FileData.MalwareFamily) as signature count, min(_time) as firstTime, max(_time) as lastTime\nBY Id, UserId, dest,\nsrc, vendor_account, vendor_product\n| rename Id as signature_id, UserId as user\n| `security_content_ctime(firstTime)`\n| `security_content_ctime(lastTime)`\n| `o365_threat_intelligence_suspicious_file_detected_filter`",
+ "spl_duplicates": [],
+ "spl_status": "",
+ "spl_variants": [],
+ "splunk_versions": [],
+ "stored_normalizer_version": "escu-1.0.0",
+ "subcategory": "Azure Active Directory Account Takeover",
+ "tags": [
+  "Azure Active Directory Account Takeover",
+  "Office 365 Account Takeover",
+  "Ransomware Cloud"
+ ],
+ "title": "O365 Threat Intelligence Suspicious File Detected",
+ "validation": null,
+ "validation_warning_count": 0,
+ "validation_warnings": [],
+ "visualization": "",
+ "wave": ""
+}

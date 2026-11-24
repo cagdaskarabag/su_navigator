@@ -22,6 +22,8 @@ function ucmViewMain($, ucm) {
         return el("div", { "class": "ucm-section" }, el("h3", { text: title }), body);
     }
 
+    function anchored(id, node) { node.setAttribute("id", id); return node; }
+
     function text(value, empty) {
         return value ? el("div", { "class": "ucm-pre", text: value })
             : el("div", { "class": "ucm-sub", text: empty || "Not provided by the content provider." });
@@ -62,37 +64,116 @@ function ucmViewMain($, ucm) {
         return group && group.length ? el("div", { "class": "ucm-sub", text: "any of: " + group.join(", ") }) : null;
     }
 
-    function requirementsTable(reqs, readiness) {
-        if (!reqs.length) { return text("", "No requirements could be derived from this record."); }
-        var byId = {};
-        ((readiness && readiness.results) || []).forEach(function (r) { byId[r.req_id] = r; });
+    var LEVEL_ORDER = ["critical", "required", "recommended"];
+    var STATUS_ORDER = ["not_met", "unknown", "partial", "unverified", "met", "not_applicable"];
+    var LEVEL_HELP = "How much the requirement matters. Critical: if checked and not met, the use case is blocked. " +
+        "Required: if not met, the use case cannot be ready. Recommended: lowers the score only. Weights in the score are 3, 2 and 1.";
+    var SOURCE_HELP = "Where the requirement came from: stated by the content provider, or derived from the SPL.";
+    var CONFIDENCE_HELP = "How sure the app is that the requirement is real. Requirements derived from SPL are hypotheses with lower confidence and weight.";
+
+    function requirementRow(r, res) {
+        var evidence = res ? evidenceText(res) : (r.notes || "");
+        return el("tr", {},
+            el("td", { text: r.type }),
+            el("td", { "class": "ucm-mono" }, r.value, anyOf(r, res)),
+            el("td", {}, ucm.badge(r.level, r.level === "critical" ? "critical" : (r.level === "required" ? "high" : "neutral"))),
+            el("td", { text: r.source.replace("_", " ") }),
+            el("td", { text: r.confidence }),
+            el("td", {}, res ? ucm.statusBadge(res.status) : ucm.badge("not assessed", "neutral")),
+            el("td", { "class": "ucm-sub" }, evidence,
+                res && res.observed && res.observed.length
+                    ? el("details", { "class": "ucm-details" }, el("summary", { text: "Observed (" + res.observed.length + ")" }),
+                        el("pre", { "class": "ucm-pre ucm-mono", text: res.observed.map(function (o) {
+                            return Object.keys(o).filter(function (k) { return o[k] !== null && o[k] !== undefined && o[k] !== ""; })
+                                .map(function (k) { return k + "=" + o[k]; }).join("  ");
+                        }).join("\n") }))
+                    : null));
+    }
+
+    function requirementsHead() {
         var head = el("tr", {});
-        ["Type", "Requirement", "Level", "Source", "Confidence"].forEach(function (h) {
-            head.appendChild(el("th", { text: h }));
-        });
+        head.appendChild(el("th", { text: "Type" }));
+        head.appendChild(el("th", { text: "Requirement" }));
+        head.appendChild(ucm.helpHeader("Level", LEVEL_HELP));
+        head.appendChild(ucm.helpHeader("Source", SOURCE_HELP));
+        head.appendChild(ucm.helpHeader("Confidence", CONFIDENCE_HELP));
         head.appendChild(ucm.helpHeader("Status", "Result of checking this requirement against the inventory. Hover a status for its meaning."));
         head.appendChild(el("th", { text: "Evidence" }));
-        var body = el("tbody", {});
-        reqs.forEach(function (r) {
-            var res = byId[r.req_id];
-            var evidence = res ? evidenceText(res) : (r.notes || "");
-            body.appendChild(el("tr", {},
-                el("td", { text: r.type }),
-                el("td", { "class": "ucm-mono" }, r.value, anyOf(r, res)),
-                el("td", {}, ucm.badge(r.level, r.level === "critical" ? "critical" : (r.level === "required" ? "high" : "neutral"))),
-                el("td", { text: r.source.replace("_", " ") }),
-                el("td", { text: r.confidence }),
-                el("td", {}, res ? ucm.statusBadge(res.status) : ucm.badge("not assessed", "neutral")),
-                el("td", { "class": "ucm-sub" }, evidence,
-                    res && res.observed && res.observed.length
-                        ? el("details", { "class": "ucm-details" }, el("summary", { text: "Observed (" + res.observed.length + ")" }),
-                            el("pre", { "class": "ucm-pre ucm-mono", text: res.observed.map(function (o) {
-                                return Object.keys(o).filter(function (k) { return o[k] !== null && o[k] !== undefined && o[k] !== ""; })
-                                    .map(function (k) { return k + "=" + o[k]; }).join("  ");
-                            }).join("\n") }))
-                        : null)));
+        return el("thead", {}, head);
+    }
+
+    /* Order rows so the ones that need attention come first; ties keep the provider's order. */
+    function sortRequirements(rows, by) {
+        var primary = by === "level" ? LEVEL_ORDER : STATUS_ORDER;
+        var secondary = by === "level" ? STATUS_ORDER : LEVEL_ORDER;
+        function rank(list, v) { var i = list.indexOf(v); return i < 0 ? list.length : i; }
+        function key(row, which) {
+            return which === "level" ? row.r.level : (row.res ? row.res.status : "unassessed");
+        }
+        return rows.map(function (row, i) { row.i = i; return row; }).sort(function (x, y) {
+            return rank(primary, key(x, by)) - rank(primary, key(y, by)) ||
+                rank(secondary, key(x, by === "level" ? "status" : "level")) - rank(secondary, key(y, by === "level" ? "status" : "level")) ||
+                x.i - y.i;
         });
-        return el("table", { "class": "ucm-table" }, el("thead", {}, head), body);
+    }
+
+    function groupLabel(by, value) {
+        if (by === "level") { return value; }
+        return value === "unassessed" ? "not assessed" : ({ not_met: "not met", not_applicable: "n/a", unverified: "not verified" }[value] || value);
+    }
+
+    /*
+     * Rows for the table: each requirement with its result, plus results that have no requirement of their
+     * own (the SPL validity check). Readiness counts cover both, so the table must too.
+     */
+    function requirementRows(reqs, readiness) {
+        var byId = {};
+        var results = (readiness && readiness.results) || [];
+        results.forEach(function (r) { byId[r.req_id] = r; });
+        var known = {};
+        var rows = reqs.map(function (r) { known[r.req_id] = true; return { r: r, res: byId[r.req_id] }; });
+        var extra = results.filter(function (res) { return !known[res.req_id]; }).map(function (res) {
+            return { r: { req_id: res.req_id, type: res.type, value: res.value, level: res.level, source: res.source || "derived_spl",
+                confidence: res.confidence || "", notes: "" }, res: res, extra: true };
+        });
+        return { rows: rows.concat(extra), extra: extra.length };
+    }
+
+    function requirementsTable(reqs, readiness) {
+        var built = requirementRows(reqs, readiness);
+        var rows = built.rows;
+        if (!rows.length) { return text("", "No requirements could be derived from this record."); }
+        var by = readiness ? "status" : "level";
+        var holder = el("div", {});
+        var grouping = el("select", { "aria-label": "Group requirements by", onchange: function () { draw(grouping.value); } },
+            el("option", { value: "status", text: "status" }), el("option", { value: "level", text: "level" }),
+            el("option", { value: "none", text: "no grouping" }));
+        grouping.value = by;
+
+        function draw(mode) {
+            ucm.clear(holder);
+            if (mode === "none") {
+                holder.appendChild(el("table", { "class": "ucm-table" }, requirementsHead(),
+                    el("tbody", {}, rows.map(function (row) { return requirementRow(row.r, row.res); }))));
+                return;
+            }
+            var sorted = sortRequirements(rows.slice(), mode);
+            var groups = [];
+            sorted.forEach(function (row) {
+                var k = mode === "level" ? row.r.level : (row.res ? row.res.status : "unassessed");
+                if (!groups.length || groups[groups.length - 1].key !== k) { groups.push({ key: k, rows: [] }); }
+                groups[groups.length - 1].rows.push(row);
+            });
+            groups.forEach(function (g) {
+                holder.appendChild(el("h4", { "class": "ucm-group", text: groupLabel(mode, g.key) + " (" + g.rows.length + ")" }));
+                holder.appendChild(el("table", { "class": "ucm-table" }, requirementsHead(),
+                    el("tbody", {}, g.rows.map(function (row) { return requirementRow(row.r, row.res); }))));
+            });
+        }
+        draw(by);
+        return el("div", {}, el("div", { "class": "ucm-actions" }, el("label", { text: "Group by " }, grouping),
+            el("span", { "class": "ucm-sub", text: reqs.length + " requirements" + (built.extra
+                ? " and " + built.extra + " additional check" + (built.extra > 1 ? "s" : "") + " (for example whether the SPL has been parsed)" : "") })), holder);
     }
 
     function readinessBox(uc) {
@@ -314,9 +395,11 @@ function ucmViewMain($, ucm) {
         if (!dep) {
             if (allowed.indexOf("draft") < 0) {
                 card.appendChild(el("div", { "class": "ucm-sub", text: "Not deployed. Preparing a deployment needs the ucm_run_discovery or ucm_deploy capability." }));
+                card.appendChild(unavailableActions(view));
                 return card;
             }
             card.appendChild(draftForm(uc, view, null));
+            card.appendChild(unavailableActions(view));
             return card;
         }
         var revs = dep.revisions || [];
@@ -352,6 +435,7 @@ function ucmViewMain($, ucm) {
             return el("button", { "class": "btn" + (a === "deploy" || a === "approve" || a === "submit" ? " btn-primary" : ""),
                 type: "button", text: ACTION_LABELS[a] || a, onclick: function () { runAction(uc, view, a); } });
         })));
+        card.appendChild(unavailableActions(view));
         if (allowed.indexOf("draft") >= 0) {
             card.appendChild(el("details", { "class": "ucm-details" }, el("summary", { text: dep.state === "draft" ? "Edit draft" : "Start a new revision" }),
                 draftForm(uc, view, latest)));
@@ -371,6 +455,281 @@ function ucmViewMain($, ucm) {
             }))), hist)));
         card.appendChild(el("div", { "class": "ucm-sub", text: "Every deploy and rollback writes the saved search disabled. Enabling is a separate, audited step. The search runs as its owner." }));
         return card;
+    }
+
+    var ACTION_ORDER = ["draft", "submit", "approve", "reject", "deploy", "enable", "disable", "rollback", "retire", "verify", "controltest"];
+
+    /* Why an action is not offered, from the documented workflow (deployment/service.py allowed_actions). */
+    function whyNot(action, dep, view) {
+        var state = dep ? dep.state : null;
+        var live = dep && dep.live && dep.live.status ? dep.live.status : "absent";
+        var settings = view.settings || {};
+        var shown = state ? state.replace("_", " ") : "";
+        var deployed = !!(dep && dep.deployed_revision);
+        var capability = "Needs the ucm_deploy capability.";
+        switch (action) {
+        case "draft": return "Needs the ucm_run_discovery or ucm_deploy capability.";
+        case "submit":
+            if (!dep) { return "Save a draft first."; }
+            if (state !== "draft") { return "Only a draft can be submitted; this deployment is " + shown + ". Save a new revision to start a draft."; }
+            return "Needs the ucm_run_discovery or ucm_deploy capability.";
+        case "approve":
+        case "reject":
+            if (state !== "pending_approval") { return "Nothing is waiting for approval" + (dep ? " (state: " + shown + ")." : "."); }
+            return action === "approve" && !settings.allow_self_approval
+                ? "Needs the ucm_deploy capability and a person other than the one who submitted it (self-approval is off)."
+                : capability;
+        case "deploy":
+            if (!dep) { return "Nothing to deploy yet: save a draft, submit it and have it approved."; }
+            if (state !== "approved" && state !== "failed") { return "Needs an approved revision (state: " + shown + ")."; }
+            return capability;
+        case "enable":
+        case "disable":
+            if (!deployed) { return "Nothing is deployed yet."; }
+            if (live !== "enabled" && live !== "disabled") { return "The saved search is " + live + ", so it cannot be switched."; }
+            if (action === "enable" && live === "enabled") { return "Already enabled."; }
+            if (action === "disable" && live === "disabled") { return "Already disabled."; }
+            return capability;
+        case "rollback":
+            return deployed ? "Needs an earlier deployed revision to return to, and the ucm_deploy capability." : "Nothing is deployed yet.";
+        case "retire":
+            if (!dep) { return "Nothing to retire."; }
+            return state === "retired" ? "Already retired." : capability;
+        case "verify":
+            return deployed ? capability : "Nothing is deployed yet.";
+        case "controltest":
+            return deployed ? "Needs the ucm_deploy capability, and control tests must be available on this server." : "Nothing is deployed yet.";
+        default: return "Not available in the current state.";
+        }
+    }
+
+    function unavailableActions(view) {
+        var allowed = view.allowed_actions || [];
+        var dep = view.deployment;
+        var missing = ACTION_ORDER.filter(function (a) { return allowed.indexOf(a) < 0; });
+        if (!missing.length) { return null; }
+        return el("details", { "class": "ucm-details ucm-unavailable" },
+            el("summary", { text: "Actions not available to you right now (" + missing.length + ")" }),
+            el("dl", { "class": "ucm-kv" }, missing.map(function (a) {
+                return [el("dt", { text: a === "draft" ? "Save draft" : (ACTION_LABELS[a] || a) }), el("dd", { text: whyNot(a, dep, view) })];
+            })));
+    }
+
+    function jump(id, label) {
+        return el("a", { href: "#" + id, text: label, onclick: function (ev) {
+            if (ev && ev.preventDefault) { ev.preventDefault(); }
+            var target = document.getElementById(id);
+            if (target && target.scrollIntoView) { target.scrollIntoView(); }
+        } });
+    }
+
+    function tile(title, anchor, nodes) {
+        return el("div", { "class": "ucm-card ucm-tile" }, el("div", { "class": "ucm-sub", text: title }),
+            nodes, el("div", {}, jump(anchor, "Details")));
+    }
+
+    /* Requirements -> readiness -> deployment, then the user's own decision. */
+    function summaryStrip(uc) {
+        var rd = uc.readiness;
+        var counts = (rd && rd.counts) || {};
+        var reqs = uc.requirements || [];
+        var byLevel = {};
+        reqs.forEach(function (r) { byLevel[r.level] = (byLevel[r.level] || 0) + 1; });
+        var levels = LEVEL_ORDER.filter(function (l) { return byLevel[l]; }).map(function (l) { return byLevel[l] + " " + l; }).join(", ");
+        var reqTile = tile("Requirements", "ucm-sec-requirements", [
+            el("div", { "class": "ucm-big", text: String(reqs.length) }),
+            el("div", { "class": "ucm-sub", text: levels || "none derived" }),
+            requirementRows(reqs, rd).extra ? el("div", { "class": "ucm-sub", text: "plus " + requirementRows(reqs, rd).extra + " additional check" + (requirementRows(reqs, rd).extra > 1 ? "s" : "") }) : null,
+            rd ? el("div", { "class": "ucm-sub", text: "results: " + (counts.met || 0) + " met, " + (counts.partial || 0) + " partial, " +
+                (counts.not_met || 0) + " not met, " + (counts.unknown || 0) + " unknown, " + (rd.unverified || 0) + " not verified" })
+                : el("div", { "class": "ucm-sub", text: "not checked yet" })]);
+        var rdTile = tile("Readiness", "ucm-sec-requirements", [
+            el("div", {}, rd ? ucm.readinessBadge(rd.state) : ucm.badge("not assessed", "neutral"), rd && rd.stale ? ucm.badge("stale", "warn") : null),
+            el("div", { "class": "ucm-big", text: rd && rd.score !== null && rd.score !== undefined ? rd.score + " / 100" : "–" }),
+            el("div", { "class": "ucm-sub", text: rd ? "coverage " + Math.round((rd.coverage || 0) * 100) + "%" : "from the requirement results" })]);
+        var view = uc.deployment || {};
+        var dep = view.deployment;
+        var depTile = tile("Deployment", "ucm-sec-deployment", [
+            el("div", {}, dep ? ucm.badge(dep.state.replace("_", " "), STATE_KIND[dep.state] || "neutral") : ucm.badge("not deployed", "neutral")),
+            el("div", { "class": "ucm-sub", text: dep ? "saved search: " + ((dep.live && dep.live.status) || "absent") : "no draft yet" }),
+            (view.settings && (view.settings.block_enable_states || []).length)
+                ? el("div", { "class": "ucm-sub", text: "Enabling is blocked while readiness is " + view.settings.block_enable_states.join(", ") + " (an override is audited)." })
+                : null]);
+        var sel = uc.selection;
+        var selTile = tile("Your selection", "ucm-sec-selection", [
+            el("div", {}, sel ? ucm.badge(sel.intent, sel.intent === "select" ? "ok" : "info") : ucm.badge("not selected", "neutral")),
+            el("div", { "class": "ucm-sub", text: "private to you" })]);
+        return el("div", { "class": "ucm-flow" }, reqTile, el("span", { "class": "ucm-arrow", text: "→" }), rdTile,
+            el("span", { "class": "ucm-arrow", text: "→" }), depTile, selTile);
+    }
+
+    /* ---- Interactive search (D-058): SearchManager under the user's own permissions ---- */
+
+    var SEARCH_RANGES = [["-15m", "Last 15 minutes"], ["-1h", "Last hour"], ["-4h", "Last 4 hours"], ["-24h", "Last 24 hours"], ["-7d", "Last 7 days"]];
+    var SEARCH_ROW_CAP = 100;
+    var SEARCH_MAX_SECONDS = 120;
+    var CELL_CAP = 500;
+
+    function cellText(value) {
+        var t = Array.isArray(value) ? value.join(", ") : (value === null || value === undefined ? "" : String(value));
+        return t.length > CELL_CAP ? t.slice(0, CELL_CAP) + "…" : t;
+    }
+
+    function visibleFields(fields) {
+        return (fields || []).filter(function (f) { return f === "_time" || f === "_raw" || f.charAt(0) !== "_"; });
+    }
+
+    function renderResults(box, fields, rows, total) {
+        ucm.clear(box);
+        var names = visibleFields(fields);
+        if (!rows.length) { box.appendChild(ucm.stateBox("empty", "The search returned no results.", "That is a result of the search, not an error.")); return; }
+        var shown = rows.slice(0, SEARCH_ROW_CAP);
+        var index = names.map(function (n) { return fields.indexOf(n); });
+        box.appendChild(el("div", { "class": "ucm-sub", text: "Showing " + shown.length + (total && total > shown.length ? " of " + total : "") +
+            " results (display limit " + SEARCH_ROW_CAP + "). The results are shown here only; SUNavigator does not store or export them." }));
+        box.appendChild(el("div", { "class": "ucm-scroll" }, el("table", { "class": "ucm-table" },
+            el("thead", {}, el("tr", {}, names.map(function (n) { return el("th", { text: n }); }))),
+            el("tbody", {}, shown.map(function (row) {
+                return el("tr", {}, index.map(function (i) { return el("td", { "class": "ucm-mono", text: cellText(row[i]) }); }));
+            })))));
+    }
+
+    function searchBox(uc, sources) {
+        var searchable = sources.filter(function (x) { return x.spl; });
+        if (!searchable.length) { return null; }
+        var which = el("select", { "aria-label": "Search to run" }, searchable.map(function (x, i) { return el("option", { value: String(i), text: x.label }); }));
+        var range = el("select", { "aria-label": "Time range" }, SEARCH_RANGES.map(function (r) { return el("option", { value: r[0], text: r[1] }); }));
+        range.value = "-24h";
+        var runBtn = el("button", { "class": "btn btn-primary", type: "button", text: "Run search" });
+        var stopBtn = el("button", { "class": "btn", type: "button", text: "Cancel", disabled: "disabled" });
+        var reason = el("div", { "class": "ucm-sub ucm-search-reason" });
+        var status = el("div", { "class": "ucm-sub", "aria-live": "polite" });
+        var out = el("div", {});
+        var canSearch = null;
+        var active = null;
+
+        function current() { return searchable[parseInt(which.value, 10) || 0]; }
+
+        function refreshGuard() {
+            var src = current();
+            var guard = ucm.searchGuard(src.spl, uc.validation, uc.provenance.source_hash, src.primary);
+            var why = guard.reason;
+            var ok = guard.ok;
+            if (ok && canSearch === false) { ok = false; why = "Your Splunk role does not have the search capability, so Splunk would refuse this search."; }
+            if (ok && active) { ok = false; why = "A search is running. Cancel it first."; }
+            runBtn.disabled = !ok;
+            if (ok) { runBtn.removeAttribute("title"); } else { runBtn.setAttribute("title", why); }
+            ucm.clear(reason);
+            if (!ok) { reason.appendChild(ucm.stateBox("warn", "Run search is disabled.", why)); }
+            guard.warnings.forEach(function (w) { reason.appendChild(ucm.stateBox("info", "Check before you run.", w)); });
+            return guard;
+        }
+
+        function finish() {
+            active = null;
+            stopBtn.disabled = true;
+            refreshGuard();
+        }
+
+        function stop(label) {
+            if (!active) { return; }
+            var run = active;
+            active = null;
+            try { run.manager.cancel(); } catch (e) { /* the job may already be gone */ }
+            try { run.manager.dispose(); } catch (e2) { /* nothing to release */ }
+            if (label) { status.textContent = label; }
+            stopBtn.disabled = true;
+            refreshGuard();
+        }
+
+        function start(SearchManager) {
+            var src = current();
+            var guard = ucm.searchGuard(src.spl, uc.validation, uc.provenance.source_hash, src.primary);
+            if (!guard.ok) { refreshGuard(); return; }
+            var run = { manager: null };
+            var settings = { id: "ucm_run_" + Date.now(), search: ucm.searchableSpl(src.spl), earliest_time: range.value, latest_time: "now",
+                autostart: false, preview: false, cache: false, status_buckets: 0, max_time: SEARCH_MAX_SECONDS, cancelOnUnload: true,
+                app: "sunavigator" };
+            run.manager = new SearchManager(settings, { tokens: false });
+            active = run;
+            ucm.clear(out);
+            status.textContent = "Running…";
+            stopBtn.disabled = false;
+            refreshGuard();
+            var manager = run.manager;
+            manager.on("search:progress", function (p) {
+                var c = (p && p.content) || {};
+                if (active === run && !c.isDone) {
+                    status.textContent = "Running… " + (c.scanCount || 0) + " events scanned, " + (c.resultCount || 0) + " results so far.";
+                }
+            });
+            manager.on("search:done", function (p) {
+                if (active !== run) { return; }
+                var c = (p && p.content) || {};
+                var total = c.resultCount || 0;
+                status.textContent = "Done: " + total + " results from " + (c.scanCount || 0) + " events scanned" +
+                    (c.runDuration !== undefined ? " in " + c.runDuration + " s" : "") + "." +
+                    (c.isFinalized ? " The search was finalized before it completed (limit " + SEARCH_MAX_SECONDS + " s)." : "");
+                var results = manager.data("results", { count: SEARCH_ROW_CAP, offset: 0, output_mode: "json_rows" });
+                results.on("data", function () {
+                    if (active !== run) { return; }
+                    var d = results.data() || {};
+                    renderResults(out, d.fields || [], d.rows || [], total);
+                    finish();
+                });
+                results.on("error", function () {
+                    ucm.clear(out).appendChild(ucm.stateBox("error", "The results could not be read.", "Splunk did not return them."));
+                    finish();
+                });
+            });
+            manager.on("search:failed", function (p) {
+                var msgs = ((p && p.content && p.content.messages) || []).map(function (m) { return m.text; }).filter(Boolean);
+                ucm.clear(out).appendChild(ucm.stateBox("error", "Splunk could not run the search.", msgs.join(" ") || "The job failed."));
+                status.textContent = "Failed.";
+                finish();
+            });
+            manager.on("search:error", function (message) {
+                ucm.clear(out).appendChild(ucm.stateBox("error", "Splunk refused the search.", String(message || "The search could not be started.")));
+                status.textContent = "Not run.";
+                finish();
+            });
+            manager.on("search:cancelled", function () { if (active === run) { status.textContent = "Cancelled."; finish(); } });
+            manager.startSearch();
+        }
+
+        runBtn.addEventListener("click", function () {
+            if (runBtn.disabled) { return; }
+            runBtn.disabled = true;
+            require(["splunkjs/mvc/searchmanager"], start, function () {
+                status.textContent = "The Splunk search component could not be loaded.";
+                refreshGuard();
+            });
+        });
+        stopBtn.addEventListener("click", function () { stop("Cancelled."); });
+        which.addEventListener("change", function () { ucm.clear(out); status.textContent = ""; refreshGuard(); });
+        if (window.addEventListener) { window.addEventListener("pagehide", function () { stop(); }); }
+
+        ucm.rawGet("services/authentication/current-context").done(function (data) {
+            var caps = (((data.entry || [])[0] || {}).content || {}).capabilities || [];
+            canSearch = caps.indexOf("search") >= 0;
+            refreshGuard();
+        }).fail(function () { canSearch = null; refreshGuard(); });
+        refreshGuard();
+
+        return el("div", { "class": "ucm-card ucm-search" },
+            el("strong", { text: "Run this search" }),
+            ucm.stateBox("warn", "This runs as you, outside SUNavigator's guard rails.",
+                "The search runs in your browser through Splunk's search API, as your own Splunk user and with your own permissions. " +
+                "It is not subject to the bounded preview (forced short window, result cap, read-only command checks) that the server applies, " +
+                "and SUNavigator cannot audit it; Splunk records the search under your account. Nothing runs until you click Run search, " +
+                "and the results are shown here only. Searches with side-effect commands are not offered."),
+            el("div", { "class": "ucm-toolbar" },
+                searchable.length > 1 ? el("div", { "class": "ucm-field" }, el("label", { text: "Search" }), which) : null,
+                el("div", { "class": "ucm-field" }, el("label", { text: "Time range" }), range),
+                runBtn, stopBtn),
+            el("div", { "class": "ucm-sub", text: "The time range applies unless the SPL sets its own earliest= or latest=, which take precedence. The search is stopped after " + SEARCH_MAX_SECONDS +
+                " seconds or when you leave the page, and only the first " + SEARCH_ROW_CAP + " rows are displayed." }),
+            reason, status, out);
     }
 
     function mitreLink(m) {
@@ -488,27 +847,37 @@ function ucmViewMain($, ucm) {
                 uc.provider_status === "withdrawn" ? ucm.badge("withdrawn upstream", "warn") : null),
             el("div", { "class": "ucm-sub", text: [uc.category_name, uc.subcategory].filter(Boolean).join(" › ") })));
 
-        root.appendChild(readinessBox(uc));
-        root.appendChild(selectionBox(uc));
-        root.appendChild(validationBox(uc));
-        root.appendChild(deploymentBox(uc));
+        root.appendChild(el("div", { "class": "ucm-actions ucm-jump" }, el("span", { "class": "ucm-sub", text: "Jump to:" }),
+            jump("ucm-sec-requirements", "Requirements and readiness"), jump("ucm-sec-spl", "SPL and search"),
+            jump("ucm-sec-selection", "Your selection"), jump("ucm-sec-deployment", "Deployment"), jump("ucm-sec-details", "Details")));
+        root.appendChild(summaryStrip(uc));
 
         root.appendChild(section("Description", text(uc.description)));
         root.appendChild(section("Business value", text(uc.business_value)));
-        root.appendChild(section("Requirements", requirementsTable(uc.requirements, uc.readiness),
-            el("div", { "class": "ucm-sub", text: "Requirements come from the provider record or are derived from its SPL; derived requirements are hypotheses with lower confidence and weight." }),
+        root.appendChild(anchored("ucm-sec-requirements", section("Requirements and readiness",
+            readinessBox(uc),
+            requirementsTable(uc.requirements, uc.readiness),
+            el("div", { "class": "ucm-sub", text: "Requirements come from the provider record or are derived from its SPL; derived requirements are hypotheses with lower confidence and weight. " +
+                "Readiness combines the requirement results, and enabling a deployment is gated on it (see Deployment)." }),
             ucm.legend("What the statuses mean", ucm.STATUSES, ucm.statusBadge, ucm.STATUS_HELP),
             el("details", { "class": "ucm-details" }, el("summary", { text: "Provider data-source description" }), text(uc.data_sources_text)),
             uc.required_fields.length ? el("div", {}, el("strong", { text: "Required fields: " }), ucm.chips(uc.required_fields)) : null,
-            uc.datamodel_acceleration_text ? el("details", { "class": "ucm-details" }, el("summary", { text: "Data model acceleration notes" }), text(uc.datamodel_acceleration_text)) : null));
+            uc.datamodel_acceleration_text ? el("details", { "class": "ucm-details" }, el("summary", { text: "Data model acceleration notes" }), text(uc.datamodel_acceleration_text)) : null)));
         if ((uc.spl_duplicates || []).length) {
             root.appendChild(ucm.stateBox("warn", "The primary SPL is identical in other use cases",
                 "Deploying more than one of them runs the same search twice: " + uc.spl_duplicates.join(", ") + "."));
         }
-        root.appendChild(section("SPL",
-            ucm.stateBox("info", "Imported SPL is untrusted content.", "It is shown for review only and is never executed by the catalogue."),
+        var sources = [{ label: "Primary search", spl: uc.spl, primary: true }, { label: "CIM search", spl: uc.cim_spl, primary: false }]
+            .concat(uc.spl_variants.map(function (v) { return { label: "Variant: " + v.model, spl: v.spl, primary: false }; }));
+        root.appendChild(anchored("ucm-sec-spl", section("SPL and search",
+            ucm.stateBox("info", "Imported SPL is untrusted content.", "It is shown for review. The catalogue and SUNavigator's checks never run it; only the bounded preview and, at your request, the search below do."),
             spl("Primary search", uc.spl) || text("", "No primary SPL supplied."), spl("CIM search", uc.cim_spl),
-            uc.spl_variants.map(function (v) { return spl("Variant: " + v.model + " (" + v.sourcetypes.join(", ") + ")", v.spl); })));
+            uc.spl_variants.map(function (v) { return spl("Variant: " + v.model + " (" + v.sourcetypes.join(", ") + ")", v.spl); }),
+            validationBox(uc),
+            searchBox(uc, sources))));
+        root.appendChild(anchored("ucm-sec-selection", section("Your selection", selectionBox(uc))));
+        root.appendChild(anchored("ucm-sec-deployment", section("Deployment", deploymentBox(uc))));
+        root.appendChild(anchored("ucm-sec-details", el("div", { "class": "ucm-section" })));
         root.appendChild(section("Dependencies", dependencies(uc)));
         root.appendChild(section("Implementation", text(uc.instructions),
             uc.detailed_instructions ? el("details", { "class": "ucm-details" }, el("summary", { text: "Detailed implementation guide" }), text(uc.detailed_instructions)) : null,

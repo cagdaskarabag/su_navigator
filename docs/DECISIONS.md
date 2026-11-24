@@ -992,3 +992,47 @@ as drift.
   (ids, labels, order) equal to that dropdown and to `ucm.DOMAINS`.
 * Tests: `tests/js/test_home.js` runs the real view against a scripted API in
   the fake DOM (all state combinations, partial failure, links).
+
+## D-058 Interactive search from the use-case page (Alternative A)
+*0.8.2 (OD-3).*
+* Need: users want to see the output of a detection, not only parse results and
+  the bounded preview.
+* Alternatives: (A) the browser runs the search with `SearchManager` under the
+  user's own permissions; (B) extend the server-side preview (rejected as the
+  answer to this need: it is capped and refuses indirect commands by design);
+  (C) dispatch from the app under its system token (rejected: it would run user
+  clicks with the app's rights and widen what a viewer could reach). A was
+  approved, knowing that it bypasses the server-side guard rails.
+* What is built (`ucm_usecase.js`, `ucm_common.js`): a "Run this search" card in
+  the SPL section with a visible notice, a time range select (15 m, 1 h, 4 h,
+  24 h default, 7 d, no all-time and no real-time), **Run search** and **Cancel**
+  buttons, a status line and a result table. SearchManager settings:
+  `autostart false`, `preview false`, `cache false`, `status_buckets 0`,
+  `max_time 120`, `cancelOnUnload true`, `app sunavigator`, and the option
+  `tokens false`. The manager is created lazily on click, so nothing is loaded or
+  run on page view. Results are fetched with `count 100` and rendered with
+  `el()`/`textContent` only; cells are cut at 500 characters; underscore fields
+  other than `_time` and `_raw` are hidden. The manager is cancelled and disposed
+  on Cancel and on `pagehide`.
+* Verified on the lab (Splunk 10.2.9, Chromium): a `$` in the SPL reaches Splunk
+  unchanged with `tokens false` (`"a$b$c"`, `"$tok$"`, `"cost$"` came back as
+  typed), so Splunk's token substitution does not rewrite imported SPL; a search
+  without a leading `search` also runs, and the UI adds `search ` the way
+  `spl.parser.parser_candidates` does; `| rest` works under the user; 150 results
+  displayed as 100 with "Showing 100 of 150"; Cancel ends the job; a result cell
+  containing `<img onerror>` is shown as text and creates no element.
+* Guard (UI only): the side-effect list mirrors `analysis.SIDE_EFFECT_COMMANDS`
+  and `fit … into`; indirect commands mirror `policy.INDIRECT_COMMANDS`. Tests:
+  list equality, and a parity run of the Python and JavaScript command
+  extraction over fixture SPL and every SPL-like string in the SPL tests
+  (over 100 strings), which fails when either side changes. Macros: allowed only when
+  the stored parse of the same `source_hash` is clean, because the browser cannot
+  expand macros and a macro could hide `outputlookup`. This is stricter than the
+  approved wording on purpose and has a visible reason; it can be relaxed later.
+* Capability: the button is disabled with a reason when
+  `authentication/current-context` shows no `search` capability. Splunk enforces
+  the capability regardless, so a failed lookup leaves the button enabled.
+* Consequences, accepted: no app audit (documented in `docs/SECURITY.md`); no
+  server-side row cap; results exist only in the page; no export.
+* Not done: a custom time range, editing the SPL before running it, running the
+  deployed (approved) revision, or saving results.

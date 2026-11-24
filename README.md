@@ -127,7 +127,7 @@ Package the production `.tar.gz` bundle from this repository:
 git clone https://github.com/cagdaskarabag/sun_navigator.git
 cd sun_navigator
 ./tools/package.sh
-# Output: dist/sunavigator-0.8.1.tar.gz
+# Output: dist/sunavigator-0.8.2.tar.gz
 ```
 
 ### CLI Installation (Recommended)
@@ -135,7 +135,7 @@ cd sun_navigator
 Splunk Web's UI upload times out on packages over standard browser HTTP limits. Install via the Splunk CLI:
 
 ```bash
-$SPLUNK_HOME/bin/splunk install app dist/sunavigator-0.8.1.tar.gz \
+$SPLUNK_HOME/bin/splunk install app dist/sunavigator-0.8.2.tar.gz \
   -auth "$SPLUNK_USER:$SPLUNK_PASSWORD"
 
 $SPLUNK_HOME/bin/splunk restart
@@ -293,6 +293,7 @@ SPLUNK_HOME=/opt/splunk ./tools/dev_deploy.sh --restart
 
 - **Least Privilege**: Pre-bundled roles `ucm_analyst`, `ucm_content_manager`, and `ucm_deployment_operator` enforce strict privilege separation.
 - **Audit Logging**: All administrative actions (sync, discovery, approvals, overrides, deployments) generate tamper-resistant records in both the `uc_audit` KV collection and `_internal` logs (`sunavigator.log`).
+- **Interactive search runs as the user**: from the use-case page a user can run a use case's SPL in their browser with their own Splunk permissions, after an explicit click. This is outside the server-side preview guard rails and is not audited by the app; see [docs/SECURITY.md](docs/SECURITY.md#interactive-search-runs-as-the-user-d-058).
 - **Credential Storage**: External API keys and tokens are stored solely in Splunk's native `storage/passwords` encrypted endpoint.
 
 ---

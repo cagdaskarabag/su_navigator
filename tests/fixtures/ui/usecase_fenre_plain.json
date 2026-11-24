@@ -1,0 +1,495 @@
+{
+ "addons": [],
+ "addons_text": "Splunk Enterprise / Splunk Cloud Platform (native). Splunk Enterprise Security optional for notable/risk on high-severity rows. (Splunkbase) \u2014 Universal Forwarder (https://www.splunk.com/en_us/download/universal-forwarder.html)",
+ "business_value": "UC-22.50.46 accelerates insight into Information System ('Continuous Security Monitoring Across the Information System') by tracking `hosts` on UC-22.50.46 search results, reducing audit findings, regulatory gaps, and attestation delays before spreadsheet checks hide regressions.",
+ "category_key": "fenre_cat-22",
+ "category_name": "Regulatory and Compliance Frameworks",
+ "cim_models": [],
+ "cim_spl": "",
+ "content_id": "fenre:UC-22.50.46",
+ "control_test": {
+  "negativeScenario": "UC-22.50.46 negative (Information System): ingest benign `target_index` / `target_sourcetype` events where `entity` stays below `gap_minutes` > 120, `quiet` > 2, or `high_sev` > 0, or exclude the test entity via `compliance_exception_register.csv`. Variant 0 confirms zero alert rows for 'Continuous Security Monitoring Across the Information System'.",
+  "positiveScenario": "UC-22.50.46 positive (Continuous, Security, Monitoring, Across, the): ingest synthetic events into `index=target_index` sourcetype='target_sourcetype' where `hosts` grouped by `entity` satisfies `gap_minutes` > 120, `quiet` > 2, or `high_sev` > 0 for 'Continuous Security Monitoring Across the Information System'.  Run the saved search and confirm at least one alertable row."
+ },
+ "criticality": "critical",
+ "data_sources_text": "All in-scope security/audit indexes across the authorization boundary (or GLBA information systems), reconciled against the monitored-index inventory lookup `monitored_indexes.csv` (columns `index`, `owner`, `required`). Severity is read from the normalised `severity` field where present. Collected via Universal Forwarder (https://www.splunk.com/en_us/download/universal-forwarder.html) modular input or scripted poll into the index named in the SPL.",
+ "datamodel_acceleration_text": "",
+ "deployment": {
+  "allowed_actions": [
+   "draft"
+  ],
+  "deployment": null,
+  "settings": {
+   "allow_self_approval": false,
+   "block_enable_states": [
+    "blocked"
+   ],
+   "defaults": {
+    "alert_mode": "track",
+    "cron": "*/15 * * * *",
+    "earliest": "-20m@m",
+    "latest": "-5m@m",
+    "schedule_window": "auto"
+   },
+   "require_approval": true
+  }
+ },
+ "description": "Identifies 'Continuous Security Monitoring Across the Information System' (UC-22.50.46) using `index=target_index` sourcetype `configured sourcetype` by aggregating `hosts` grouped by `entity` over `the scheduled window` and alerting when `gap_minutes` > 120, `quiet` > 2, or `high_sev` > 0. Keywords: Continuous, Security, Monitoring, Across, the. Focuses on Information System behaviour so compliance teams can triage UC-22.50.46 without ad-hoc log review.",
+ "detailed_instructions": "## Prerequisites\n\n\u2022 **Splunk**: Enterprise \u22659.2 or Splunk Cloud. Splunk Enterprise Security optional for notable/risk on high-severity rows.\n\u2022 **Monitored-index inventory**: `monitored_indexes.csv` (index, owner, required) is the authoritative scope statement for what 'continuous monitoring' covers \u2014 version it in source control.\n\u2022 **Severity normalisation**: map a `severity` field across sources where attack detection depends on it (CIM alignment).\n\u2022 **Evidence index**: restricted `audit_evidence` with retention meeting the strictest applicable obligation.\n\u2022 **Regulatory mapping**: evidences FedRAMP `SI-4` and GLBA `\u00a7314.4(d)(2)`. Every result carries `monitor_status` and `reviewed_at`.\n\n## Step 1 \u2014 Own the monitored-feed inventory\n\nThe posture control can only prove 'continuous' if it knows what should be flowing. Populate monitored_indexes.csv from the authorization-boundary / information-system inventory; set `required=true` for feeds that must always be live and assign a named owner for STALE follow-up. Treat changes as change-controlled \u2014 a feed removed here drops out of the coverage denominator.\n\n## Step 2 \u2014 Implement the search\n\nThe search rolls events per index, counts high-severity events, and derives freshness (`gap_minutes`) from the latest event. `monitor_status` encodes the posture: STALE when a feed is quiet beyond budget, high-severity present, or nominal monitoring. Schedule on a short cadence with a daily snapshot:\n\n```ini\n[UC-22.50.46: Continuous Security Monitoring Across the Information System]\ncron_schedule = */15 * * * *\ndispatch.earliest_time = -24h\ndispatch.latest_time = now\nactions = summary_index\naction.summary_index._name = audit_evidence\naction.summary_index.marker = uc=22.50.46,controls=FedRAMP-SI-4;GLBA-314.4d2\n```\n\n## Step 3 \u2014 Validate\n\nPositive: pause a required feed and confirm a STALE row. Negative: with all feeds live and no high-severity events, confirm all rows show 'monitoring'.\n\n## Step 4 \u2014 Operationalize\n\nBuild 'Continuous security monitoring': single-value '% of in-scope feeds live', a per-index posture table (STALE/high-severity highlighted), and a high-severity trend. Schedule the daily evidence export to audit_evidence \u2014 that is the FedRAMP/GLBA continuous-monitoring artefact.\n\n## Step 5 \u2014 Troubleshooting and caveats\n\n\u2022 **A live feed shows STALE:** its events may be delayed or mis-timestamped; check ingestion latency and the freshness budget for that feed class.\n\n\u2022 **No high-severity ever:** confirm the severity field is normalised on sources where it matters.\n\n\u2022 **Scope discipline:** reconcile monitored_indexes.csv against the boundary inventory so the posture denominator stays complete.\n\n**Ecosystem integration:** Forward compliance detections to Splunk SOAR for automated incident triage and escalation playbooks. Enrich events with asset context from ServiceNow CMDB. Cross-reference with CrowdStrike Falcon or Microsoft Defender for Endpoint for host forensics and threat detection context. Integrate Okta or Azure AD identity context to determine if the acting user had appropriate authorisation. Feed validated findings into the GRC platform (e.g., RSA Archer, ServiceNow GRC, or AuditBoard) for regulatory compliance tracking and audit evidence management.\n\nStep 1 \u2014 Configure data collection\n\nInstall and configure the add-on referenced in the app field (Splunk Enterprise / Splunk Cloud Platform (native). Splunk Enterprise Security optional for notable/risk on high-severity rows. (Splunkbase) \u2014 Universal Forwarder (https://www.splunk.com/en_us/download/universal-forwarder.html)). Enable the modular input or HEC token that writes sourcetype=see SPL into index=main. Default poll interval 300\u2013900 seconds unless the vendor API rate-limits lower. Grant the ingestion role `list_inputs` and `search` on the target index.\n\nStep 2 \u2014 Create the search and alert\n\nSchedule the SPL with earliest=-24h@h and throttle per entity to avoid duplicate pages. Document tunable macros in the comment header. Understanding this SPL: filters in the first pipeline reduce license cost; stats/timechart aggregates define the alert grain; joins/lookups enrich owner or asset metadata for routing.\n\nStep 3 \u2014 Validate\n\nCompare `| tstats count where index=... sourcetype=...` against the vendor admin UI inventory count (+/-5%). Spot-check two known entities for field presence (`gap_minutes, high_sev, monitor_status, quiet`). Run `timechart count span=1h` over 7 days to find ingestion gaps longer than two poll intervals.\n\nStep 4 \u2014 Operationalize\n\nAdd a dashboard row with single-value KPI tiles, a 24-hour timechart, and a drilldown table mirroring the SPL output columns. Route critical severity to the platform on-call channel; route warning to the service owner from the lookup.\n\nStep 5 \u2014 Troubleshooting\n\nNo events: verify forwarder connectivity, HEC token ACLs, and that the modular input appears in `index=_internal source=*splunkd*`. NULL fields: check props/transforms order and TA version. Fewer results than expected: confirm index allow-lists on the search head role and that `_time` uses the correct timezone. API errors: inspect splunkd.log for HTTP 401/429 from the vendor endpoint configured in inputs.conf.",
+ "difficulty": "advanced",
+ "domains": [
+  "security",
+  "compliance"
+ ],
+ "environment_summary": {
+  "note": "Presence is an inventory match, not a readiness assessment.",
+  "requirements_applicable": 2,
+  "requirements_present": 0
+ },
+ "equipment": [],
+ "exclusions": "This is the continuous-security-monitoring posture control common to FedRAMP SI-4 (system monitoring) and the GLBA Safeguards Rule \u00a7314.4(d)(2) (continuous monitoring). It proves monitoring is operating across every in-scope index/feed and surfaces high-severity activity and any monitored feed that has gone quiet. It does NOT cover deep per-surface detection (network UC-22.7.51, auth UC-22.8.41), audit-log generation coverage (UC-22.35.6), or response. Out-of-scope feeds are excluded via the monitored-index inventory.",
+ "framework_mappings": [
+  {
+   "attributes": {},
+   "domain": "enterprise",
+   "framework": "mitre_attack",
+   "framework_version": null,
+   "object_id": "T1562.008",
+   "object_type": "sub-technique"
+  },
+  {
+   "attributes": {
+    "assurance": "full",
+    "assurance_rationale": "FedRAMP SI-4 (inheriting NIST 800-53 SI-4) requires monitoring the information system to detect attacks, indicators of potential attacks and unauthorized activity across the authorization boundary. This UC is the operating posture control: it confirms every in-scope monitored feed is live (no feed gone quiet), surfaces high-severity activity, and produces a dated per-index monitoring record across the boundary. Splunk is the sole-sufficient mechanism evidencing that continuous system monitoring operates, so the grade is full; specific detections (SI-4 enhancements) are layered by the per-surface UCs.",
+    "clause_url": "https://csrc.nist.gov/pubs/sp/800/53/r5/upd1/final",
+    "control_objective": "Evidence that FedRAMP SI-4 operates \u2014 the information system is continuously monitored across the boundary, with high-severity activity and silent feeds surfaced.",
+    "evidence_artifact": "Saved search 'UC-22.50.46' per-index monitoring record archived to audit_evidence for FedRAMP continuous monitoring.",
+    "mode": "satisfies",
+    "obligationRef": "fedramp@Rev.5 Baselines#SI-4",
+    "regulation_label": "fedramp"
+   },
+   "domain": null,
+   "framework": "regulation:fedramp",
+   "framework_version": "Rev.5 Baselines",
+   "object_id": "SI-4",
+   "object_type": "control"
+  },
+  {
+   "attributes": {
+    "assurance": "full",
+    "assurance_rationale": "The GLBA Safeguards Rule \u00a7314.4(d)(2) requires, in lieu of annual penetration testing plus semi-annual vulnerability assessments, continuous monitoring or periodic testing designed to detect actual and attempted attacks on or intrusions into information systems. This UC is the continuous-monitoring implementation that permits that election: it proves monitoring is operating across every in-scope feed, surfaces high-severity events, and flags any monitored feed that has gone quiet, producing dated evidence. Splunk is the sole-sufficient mechanism evidencing continuous monitoring under \u00a7314.4(d)(2), so the grade is full.",
+    "clause_url": "https://www.ecfr.gov/current/title-16/chapter-I/subchapter-C/part-314",
+    "control_objective": "Evidence that GLBA \u00a7314.4(d)(2) continuous monitoring operates \u2014 information systems are continuously monitored to detect attempted and actual attacks, with silent feeds flagged.",
+    "evidence_artifact": "Saved search 'UC-22.50.46' monitoring posture record archived to audit_evidence for the GLBA Safeguards examination.",
+    "mode": "satisfies",
+    "obligationRef": "glba@16 CFR 314 (2023 amendments)#\u00a7314.4(d)(2)",
+    "regulation_label": "glba"
+   },
+   "domain": null,
+   "framework": "regulation:glba",
+   "framework_version": "16 CFR 314 (2023 amendments)",
+   "object_id": "\u00a7314.4(d)(2)",
+   "object_type": "control"
+  }
+ ],
+ "framework_na_reasons": [],
+ "hardware": "",
+ "instructions": "(1) Maintain monitored_indexes.csv as the version-controlled inventory of in-scope feeds (index, owner, required); (2) normalise a `severity` field across sources where possible; (3) schedule on a short cadence (e.g. every 15 minutes) with a daily evidence snapshot; (4) route the per-index record to the restricted audit_evidence index and open a ticket for STALE feeds; (5) tune the freshness budget per feed class. Indexes required: all in-scope monitored indexes; Lookups: monitored_indexes.csv.",
+ "key": "fenre_UC-22.50.46",
+ "known_false_positives": "1. **Authorised FEDRAMP control testing** \u2014 Internal audit exercises 'Continuous Security Monitoring Across the Information System' (UC-22.50.46) on `entity` during scheduled clause SI-4 sampling. Match compliance programme calendar.\n\n2. **External assessor sampling** \u2014 QSA activity spikes `index=audit_evidence` `configured sourcetype` without crossing `gap_minutes` > 120. Cross-check engagement letter in `fedramp_exception_register.csv`.\n\n3. **Planned maintenance affecting control telemetry** \u2014 CAB change pauses ingestion to `audit_evidence` for `entity`. Compare `_time` with active change record.\n\n4. **Third-party processor under contract** \u2014 BAA/DPA-covered vendor generates expected rows grouped by `entity` during normal service delivery.\n\n**Suppression mechanism:** `fedramp_exception_register.csv` keyed on `entity`, `exception_reason`, `valid_until`, joined before alert threshold.",
+ "last_reviewed": "2026-06-09",
+ "lookups": [],
+ "macros": [],
+ "monitoring_types": [
+  "Compliance",
+  "Security"
+ ],
+ "normalized_with": "fenre-1.4.0",
+ "pillar": "Security",
+ "premium_apps": [],
+ "prerequisite_use_cases": [],
+ "products": [
+  "splunk-platform"
+ ],
+ "provenance": {
+  "imported_at": "2026-11-24T10:05:18Z",
+  "normalizer_version": "fenre-1.4.0",
+  "provider": "fenre",
+  "provider_record_id": "22.50.46",
+  "provider_version": "8.28.0",
+  "source_blob_sha": "9e721adcaeb55b2ce6b38c44104acd4dc4953ead",
+  "source_hash": "c2e1245d8ad37152feddffb7c18b2bed3ff0c58c115a13da2974a9ea5b3bd083",
+  "source_path": "content/cat-22-regulatory-compliance/UC-22.50.46.json",
+  "source_ref": "local:11838f59664ff9810e759fcec2838a4f0733c364f156ebb04c787f6e1f99bf38",
+  "source_schema": "uc.schema.json@1.11.0",
+  "source_url": "bundle:local:11838f59664ff9810e759fcec2838a4f0733c364f156ebb04c787f6e1f99bf38:content/cat-22-regulatory-compliance/UC-22.50.46.json"
+ },
+ "provider_extras": {
+  "controlFamily": "regulation-specific",
+  "evidence": "Saved search 'UC-22.50.46 \u2014 continuous monitoring posture' runs on a short cadence, writes a per-index monitoring record to the restricted audit_evidence index, and feeds the 'Continuous security monitoring' dashboard \u2014 the dated evidence a 3PAO (FedRAMP) or qualified assessor (GLBA) reads to confirm continuous monitoring operates without gaps.",
+  "grandmaExplanation": "We keep a master list of every system we're supposed to be watching and check every few minutes that each one is still sending us its security information \u2014 and we raise a flag the moment any of them goes quiet, which is exactly what an intruder would try to make happen.",
+  "owner": "CISO"
+ },
+ "provider_status": "active",
+ "quality_flags": [
+  "ai_reviewed",
+  "unbounded_index"
+ ],
+ "readiness": {
+  "_key": "fenre_UC-22.50.46",
+  "_user": "nobody",
+  "blockers": [],
+  "category_key": "fenre_cat-22",
+  "category_name": "Regulatory and Compliance Frameworks",
+  "content_id": "fenre:UC-22.50.46",
+  "counts": {
+   "met": 2,
+   "not_applicable": 3,
+   "not_met": 1,
+   "partial": 0,
+   "unknown": 0,
+   "unverified": 2
+  },
+  "coverage": 1,
+  "criticality": "critical",
+  "criticality_rank": 4,
+  "discovery_at": "2026-11-24T12:11:31Z",
+  "discovery_job_id": "684d6c9136c048d3af807687c471db98",
+  "doc_schema": 1,
+  "domains": [
+   "security",
+   "compliance"
+  ],
+  "engine_version": "ucm.readiness/3",
+  "evaluated_at": "2026-11-24T12:12:32Z",
+  "gaps": [],
+  "job_id": "226608f53ad94704bf0ed7b6bff82fe7",
+  "record_id": "22.50.46",
+  "requirement_count": 8,
+  "results": [
+   {
+    "code": "present",
+    "confidence": "low",
+    "detail": "Seen in _audit, _configtracker, _internal and 1 more; newest event 0 min old.",
+    "level": "required",
+    "observed": [
+     {
+      "age_seconds": 2,
+      "index": "_introspection",
+      "sourcetype": "kvstore",
+      "status": "active",
+      "window_count": 154
+     },
+     {
+      "age_seconds": 2,
+      "index": "_internal",
+      "sourcetype": "node:sidecar:cmp_orchestrator:stdout",
+      "status": "active",
+      "window_count": 61
+     },
+     {
+      "age_seconds": 2,
+      "index": "_internal",
+      "sourcetype": "splunkd",
+      "status": "active",
+      "window_count": 5679
+     },
+     {
+      "age_seconds": 2,
+      "index": "_internal",
+      "sourcetype": "node:sidecar:ipc_broker:stderr",
+      "status": "active",
+      "window_count": 639
+     },
+     {
+      "age_seconds": 2,
+      "index": "_internal",
+      "sourcetype": "node:sidecar:identity:stdout",
+      "status": "active",
+      "window_count": 32
+     }
+    ],
+    "req_id": "sourcetype:*",
+    "source": "derived_spl",
+    "status": "met",
+    "type": "sourcetype",
+    "value": "*",
+    "via_mapping": null
+   },
+   {
+    "code": "not_found",
+    "confidence": "low",
+    "detail": "Index is not defined on this deployment.",
+    "level": "informational",
+    "observed": [],
+    "req_id": "index:*",
+    "source": "derived_spl",
+    "status": "not_met",
+    "type": "index",
+    "value": "*",
+    "via_mapping": null
+   },
+   {
+    "code": "not_sampled",
+    "confidence": "high",
+    "detail": "Field has not been sampled. Run validation on this use case.",
+    "level": "informational",
+    "observed": [],
+    "req_id": "field:index",
+    "source": "provider_structured",
+    "status": "unverified",
+    "type": "field",
+    "value": "index",
+    "via_mapping": null
+   },
+   {
+    "code": "derived_in_spl",
+    "confidence": "medium",
+    "detail": "Produced by eval in the search; raw events are not expected to carry it.",
+    "level": "informational",
+    "observed": [],
+    "req_id": "field:monitor_status",
+    "source": "provider_structured",
+    "status": "not_applicable",
+    "type": "field",
+    "value": "monitor_status",
+    "via_mapping": null
+   },
+   {
+    "code": "derived_in_spl",
+    "confidence": "medium",
+    "detail": "Produced by stats in the search; raw events are not expected to carry it.",
+    "level": "informational",
+    "observed": [],
+    "req_id": "field:high_sev",
+    "source": "provider_structured",
+    "status": "not_applicable",
+    "type": "field",
+    "value": "high_sev",
+    "via_mapping": null
+   },
+   {
+    "code": "derived_in_spl",
+    "confidence": "medium",
+    "detail": "Produced by eval in the search; raw events are not expected to carry it.",
+    "level": "informational",
+    "observed": [],
+    "req_id": "field:reviewed_at",
+    "source": "provider_structured",
+    "status": "not_applicable",
+    "type": "field",
+    "value": "reviewed_at",
+    "via_mapping": null
+   },
+   {
+    "code": "version_supported",
+    "confidence": "high",
+    "detail": "Splunk 10.2.9 satisfies 9.2+.",
+    "level": "informational",
+    "observed": [],
+    "req_id": "version:splunk",
+    "source": "provider_structured",
+    "status": "met",
+    "type": "version",
+    "value": "9.2+,Cloud",
+    "via_mapping": null
+   },
+   {
+    "code": "not_parsed",
+    "confidence": "medium",
+    "detail": "Primary SPL has not been parsed with Splunk's search parser.",
+    "level": "required",
+    "observed": [],
+    "req_id": "spl_validity:primary",
+    "source": "derived_spl",
+    "status": "unverified",
+    "type": "spl_validity",
+    "value": "primary",
+    "via_mapping": null
+   }
+  ],
+  "score": 100,
+  "score_sort": 100,
+  "search_text": "22.50.46 fenre:uc-22.50.46 continuous security monitoring across the information system",
+  "source_hash": "c2e1245d8ad37152feddffb7c18b2bed3ff0c58c115a13da2974a9ea5b3bd083",
+  "stale": false,
+  "stale_reasons": [],
+  "state": "ready",
+  "title": "Continuous Security Monitoring Across the Information System",
+  "unverified": 2
+ },
+ "references": [
+  {
+   "repo_path": "",
+   "retrieved": "2026-04-25",
+   "title": "NIST SP 800-53 Rev. 5 \u2014 SI-4 System Monitoring (FedRAMP baseline)",
+   "url": "https://csrc.nist.gov/pubs/sp/800/53/r5/upd1/final"
+  },
+  {
+   "repo_path": "",
+   "retrieved": "2026-04-25",
+   "title": "GLBA Safeguards Rule \u2014 16 CFR Part 314 \u00a7314.4(d)(2)",
+   "url": "https://www.ecfr.gov/current/title-16/chapter-I/subchapter-C/part-314"
+  },
+  {
+   "repo_path": "",
+   "retrieved": "2026-04-25",
+   "title": "MITRE ATT&CK \u2014 T1562.008 Impair Defenses: Disable or Modify Cloud Logs",
+   "url": "https://attack.mitre.org/techniques/T1562/008/"
+  },
+  {
+   "repo_path": "",
+   "retrieved": "2026-04-25",
+   "title": "NIST Cybersecurity Framework",
+   "url": "https://www.nist.gov/cyberframework"
+  }
+ ],
+ "required_fields": [
+  "index",
+  "monitor_status",
+  "high_sev",
+  "reviewed_at"
+ ],
+ "requirement_summary": {
+  "assessment": "ready",
+  "by_level": {
+   "informational": 6,
+   "required": 1
+  },
+  "by_source": {
+   "derived_spl": 2,
+   "provider_structured": 5
+  },
+  "total": 7
+ },
+ "requirements": [
+  {
+   "attributes": {},
+   "confidence": "low",
+   "environment": {
+    "applicable": true,
+    "mapping": null,
+    "present": false,
+    "sources": []
+   },
+   "level": "required",
+   "notes": "extracted from SPL (wildcard)",
+   "req_id": "sourcetype:*",
+   "source": "derived_spl",
+   "type": "sourcetype",
+   "value": "*"
+  },
+  {
+   "attributes": {},
+   "confidence": "low",
+   "environment": {
+    "applicable": true,
+    "mapping": null,
+    "present": false,
+    "sources": []
+   },
+   "level": "informational",
+   "notes": "index in provider SPL is an example",
+   "req_id": "index:*",
+   "source": "derived_spl",
+   "type": "index",
+   "value": "*"
+  },
+  {
+   "attributes": {},
+   "confidence": "high",
+   "environment": {
+    "applicable": false
+   },
+   "level": "informational",
+   "notes": "",
+   "req_id": "field:index",
+   "source": "provider_structured",
+   "type": "field",
+   "value": "index"
+  },
+  {
+   "attributes": {
+    "derived_in_spl": "eval"
+   },
+   "confidence": "medium",
+   "environment": {
+    "applicable": false
+   },
+   "level": "informational",
+   "notes": "derived_in_spl: produced by eval",
+   "req_id": "field:monitor_status",
+   "source": "provider_structured",
+   "type": "field",
+   "value": "monitor_status"
+  },
+  {
+   "attributes": {
+    "derived_in_spl": "stats"
+   },
+   "confidence": "medium",
+   "environment": {
+    "applicable": false
+   },
+   "level": "informational",
+   "notes": "derived_in_spl: produced by stats",
+   "req_id": "field:high_sev",
+   "source": "provider_structured",
+   "type": "field",
+   "value": "high_sev"
+  },
+  {
+   "attributes": {
+    "derived_in_spl": "eval"
+   },
+   "confidence": "medium",
+   "environment": {
+    "applicable": false
+   },
+   "level": "informational",
+   "notes": "derived_in_spl: produced by eval",
+   "req_id": "field:reviewed_at",
+   "source": "provider_structured",
+   "type": "field",
+   "value": "reviewed_at"
+  },
+  {
+   "attributes": {},
+   "confidence": "high",
+   "environment": {
+    "applicable": false
+   },
+   "level": "informational",
+   "notes": "validated Splunk versions",
+   "req_id": "version:splunk",
+   "source": "provider_structured",
+   "type": "version",
+   "value": "9.2+,Cloud"
+  }
+ ],
+ "review_status": "verified",
+ "reviewer": "Maintainer (AI-assisted review) \u2014 see data/provenance/ai-review-log.json",
+ "schedule": null,
+ "schema_version": "ucm.usecase/1",
+ "script_example": "",
+ "selection": null,
+ "spl": "index=* sourcetype=* (severity=* OR signature=* OR action=*) earliest=-24h\n| eval sev=lower(coalesce(severity, \"informational\"))\n| stats count as events, count(eval(match(sev,\"(?i)crit|high|sev[12]|emergenc\"))) as high_sev, dc(host) as hosts, values(sourcetype) as sourcetypes, latest(_time) as last_event by index\n| eval gap_minutes=round((now()-last_event)/60, 1)\n| eval monitor_status=case(gap_minutes>120, \"STALE - monitored feed quiet >2h\", high_sev>0, \"high-severity events present\", true(), \"monitoring\")\n| eval reviewed_at=strftime(now(), \"%Y-%m-%dT%H:%M:%S\")\n| table reviewed_at, index, events, high_sev, hosts, sourcetypes, gap_minutes, monitor_status\n| sort monitor_status, - high_sev",
+ "spl_duplicates": [],
+ "spl_status": "",
+ "spl_variants": [],
+ "splunk_versions": [
+  "9.2+",
+  "Cloud"
+ ],
+ "stored_normalizer_version": "fenre-1.4.0",
+ "subcategory": "\u2014 Tier-2 framework clause coverage",
+ "tags": [
+  "Correlation"
+ ],
+ "title": "Continuous Security Monitoring Across the Information System",
+ "validation": null,
+ "validation_warning_count": 0,
+ "validation_warnings": [],
+ "visualization": "Table (index, owner, events, high_sev, gap_minutes, monitor_status) with STALE/high-severity rows highlighted; single-value '% of in-scope feeds live'; time chart of high-severity events per index. Key fields: `index`, `monitor_status`, `high_sev`.",
+ "wave": "crawl"
+}

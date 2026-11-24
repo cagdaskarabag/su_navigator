@@ -29,6 +29,7 @@ function FakeElement(tag) {
 }
 FakeElement.prototype = Object.create(FakeNode.prototype);
 FakeElement.prototype.setAttribute = function (k, v) { this.attrs[k] = String(v); if (k === "disabled") { this.disabled = true; } };
+FakeElement.prototype.removeAttribute = function (k) { delete this.attrs[k]; if (k === "disabled") { this.disabled = false; } };
 FakeElement.prototype.getAttribute = function (k) { return Object.prototype.hasOwnProperty.call(this.attrs, k) ? this.attrs[k] : null; };
 Object.defineProperty(FakeElement.prototype, "textContent", {
     get: function () {
@@ -114,11 +115,14 @@ function runView(file, rootId, routes, opts) {
         };
     }
     ucm.get = api("GET");
+    ucm.rawGet = function (p, params) { calls.push({ method: "RAW", path: p, params: params || {} }); return routes["RAW " + p] !== undefined ? resolved(routes["RAW " + p]) : rejected({ status: 404, message: "no raw route" }); };
     ucm.post = api("POST");
     var root = new FakeElement("div");
     global.document.getElementById = function (id) { return id === rootId ? root : null; };
     global.document.querySelectorAll = function () { return []; };
-    global.window = { location: { search: opts.search || "" } };
+    var windowListeners = {};
+    global.window = { location: { search: opts.search || "" },
+        addEventListener: function (t, f) { (windowListeners[t] = windowListeners[t] || []).push(f); } };
     var $ = Object.assign(function () { throw new Error("jQuery call not stubbed"); }, jq, {
         when: function () {
             var args = Array.prototype.slice.call(arguments);
@@ -130,9 +134,13 @@ function runView(file, rootId, routes, opts) {
     });
     var src = fs.readFileSync(path.join(__dirname, "..", "..", "sunavigator", "appserver", "static", file), "utf8");
     var captured;
-    var fakeRequire = function (deps, fn) { captured = fn; };
+    var fakeRequire = function (deps, fn, errFn) {
+        if (deps.length === 1 && opts.amd && opts.amd[deps[0]] !== undefined) { fn(opts.amd[deps[0]]); return; }
+        if (deps.length === 1 && opts.amd) { if (errFn) { errFn(new Error("no module " + deps[0])); } return; }
+        captured = fn;
+    };
     new Function("require", src + "\n;return ucmViewMain;")(fakeRequire)($, ucm);
-    return { root: root, ucm: ucm, calls: calls };
+    return { root: root, ucm: ucm, calls: calls, windowListeners: windowListeners };
 }
 
 module.exports = { loadAmd: loadAmd, FakeElement: FakeElement, jq: jq, runView: runView };

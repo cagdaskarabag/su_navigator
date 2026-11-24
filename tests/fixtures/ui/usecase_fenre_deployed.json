@@ -1,0 +1,763 @@
+{
+ "addons": [],
+ "addons_text": "`Splunk_TA_windows` \u2014 Splunk Add-on for Microsoft Windows (Splunkbase 742)",
+ "business_value": "Tracking `activity` via UC-9.1.1 on `WinEventLog:Security` feeds improves response to 'Brute-Force Login Detection' and reduces account takeover risk, help-desk load, and audit findings.",
+ "category_key": "fenre_cat-09",
+ "category_name": "Identity & Access Management",
+ "cim_models": [
+  "Authentication"
+ ],
+ "cim_spl": "| tstats `summariesonly` count\n  from datamodel=Authentication.Authentication\n  where Authentication.action=\"failure\"\n  by Authentication.user,Authentication.src span=1h\n| where count > 10",
+ "content_id": "fenre:UC-9.1.1",
+ "control_test": {
+  "negativeScenario": "UC-9.1.1 negative (Login Detection): ingest benign `wineventlog` / `WinEventLog:Security` events where `Account_Name`, `Source_Network_Address` stays below `count` > 10, or exclude the test entity via `iam_exception_register.csv`. Variant 12 confirms zero alert rows for 'Brute-Force Login Detection'.",
+  "positiveScenario": "UC-9.1.1 positive (Brute, Force, Login, Detection): ingest synthetic events into `index=wineventlog` sourcetype='WinEventLog:Security' EventCode=4625 where `count` grouped by `Account_Name`, `Source_Network_Address` satisfies `count` > 10 for 'Brute-Force Login Detection'.  Run the saved search and confirm at least one alertable row."
+ },
+ "criticality": "critical",
+ "data_sources_text": "Windows Security Event Log (Event ID 4625 \u2014 failed logon) Collected via Splunk Add-on for Microsoft Windows (Splunkbase 742) modular input or scripted poll into the index named in the SPL.",
+ "datamodel_acceleration_text": "Enable Data Model Acceleration for the CIM `Authentication.Authentication` dataset once identity and sign-in data are CIM-tagged; otherwise `cimSpl` tstats may return no rows.",
+ "deployment": {
+  "allowed_actions": [
+   "draft"
+  ],
+  "deployment": {
+   "_key": "dep_fenre_UC-9.1.1",
+   "_user": "nobody",
+   "catalog_key": "fenre_UC-9.1.1",
+   "content_changed": false,
+   "content_id": "fenre:UC-9.1.1",
+   "created_at": "2026-11-20T12:07:22Z",
+   "created_by": "ucmdev",
+   "criticality": "critical",
+   "deployed_revision": null,
+   "doc_schema": 1,
+   "history": [
+    {
+     "action": "draft",
+     "actor": "ucmdev",
+     "at": "2026-11-20T12:07:22Z",
+     "from": "draft",
+     "note": "",
+     "revision": 1,
+     "to": "draft"
+    },
+    {
+     "action": "submit",
+     "actor": "ucmdev",
+     "at": "2026-11-20T12:07:28Z",
+     "from": "draft",
+     "note": "",
+     "revision": 1,
+     "to": "pending_approval"
+    },
+    {
+     "action": "approve",
+     "actor": "approver",
+     "at": "2026-11-20T12:08:00Z",
+     "from": "pending_approval",
+     "note": "Reviewed SPL and schedule for lab deployment",
+     "revision": 1,
+     "to": "approved"
+    },
+    {
+     "action": "deploy",
+     "actor": "approver",
+     "at": "2026-11-20T12:08:06Z",
+     "from": "approved",
+     "note": "",
+     "revision": 1,
+     "to": "deployed"
+    },
+    {
+     "action": "draft",
+     "actor": "admin",
+     "at": "2026-11-24T08:42:27Z",
+     "from": "deployed",
+     "note": "",
+     "revision": 2,
+     "to": "draft"
+    },
+    {
+     "action": "submit",
+     "actor": "admin",
+     "at": "2026-11-24T08:42:27Z",
+     "from": "draft",
+     "note": "",
+     "revision": 2,
+     "to": "pending_approval"
+    },
+    {
+     "action": "approve",
+     "actor": "t02op",
+     "at": "2026-11-24T08:42:27Z",
+     "from": "pending_approval",
+     "note": "",
+     "revision": 2,
+     "to": "approved"
+    },
+    {
+     "action": "deploy",
+     "actor": "t02op",
+     "at": "2026-11-24T08:42:27Z",
+     "from": "approved",
+     "note": "",
+     "revision": 2,
+     "to": "deployed"
+    },
+    {
+     "action": "retire",
+     "actor": "admin",
+     "at": "2026-11-24T08:42:28Z",
+     "from": "deployed",
+     "note": "",
+     "revision": 2,
+     "to": "retired"
+    },
+    {
+     "action": "draft",
+     "actor": "sun_t11_op",
+     "at": "2026-11-24T09:31:51Z",
+     "from": "retired",
+     "note": "",
+     "revision": 3,
+     "to": "draft"
+    },
+    {
+     "action": "submit",
+     "actor": "sun_t11_op",
+     "at": "2026-11-24T09:31:52Z",
+     "from": "draft",
+     "note": "",
+     "revision": 3,
+     "to": "pending_approval"
+    },
+    {
+     "action": "approve",
+     "actor": "admin",
+     "at": "2026-11-24T09:31:57Z",
+     "from": "pending_approval",
+     "note": "reviewed in T-11 browser check",
+     "revision": 3,
+     "to": "approved"
+    },
+    {
+     "action": "retire",
+     "actor": "admin",
+     "at": "2026-11-24T09:32:00Z",
+     "from": "approved",
+     "note": "",
+     "revision": 3,
+     "to": "retired"
+    }
+   ],
+   "last_error": "",
+   "live": {
+    "drift": [],
+    "status": "absent",
+    "verified_at": "2026-11-24T09:32:00Z"
+   },
+   "live_status": "disabled",
+   "provider_status": "active",
+   "record_id": "9.1.1",
+   "revision": 3,
+   "revisions": [
+    {
+     "alert_mode": "track",
+     "approval": "approved",
+     "approved_at": "2026-11-20T12:08:00Z",
+     "approved_by": "approver",
+     "commands": [
+      "search",
+      "stats",
+      "where",
+      "sort"
+     ],
+     "content_source_hash": "10ac23bc59196eef5598a75a12f8cd7b8405c96c94228b695b8b67d8e7179cbb",
+     "created_at": "2026-11-20T12:07:22Z",
+     "created_by": "ucmdev",
+     "cron": "*/15 * * * *",
+     "deployed_at": "2026-11-20T12:08:06Z",
+     "deployed_by": "approver",
+     "earliest": "-15m",
+     "high_cost": [],
+     "latest": "now",
+     "notes": "",
+     "parse_error": "",
+     "parse_ok": true,
+     "readiness_score": 75,
+     "readiness_state": "partially_ready",
+     "rev": 1,
+     "severity": "critical",
+     "side_effects": [],
+     "spl": "index=wineventlog sourcetype=\"WinEventLog:Security\" EventCode=4625\n| stats count by Account_Name, Source_Network_Address\n| where count > 10\n| sort -count",
+     "spl_hash": "163eb186d2ee068644cf6090eb422694a9c499a4c6123782268e56dc952f1c51",
+     "spl_source": "primary",
+     "submitted_at": "2026-11-20T12:07:28Z",
+     "submitted_by": "ucmdev",
+     "threshold": 0
+    },
+    {
+     "acknowledged_by": "t02op",
+     "acknowledged_commands": [
+      "map"
+     ],
+     "alert_mode": "track",
+     "approval": "approved",
+     "approved_at": "2026-11-24T08:42:27Z",
+     "approved_by": "t02op",
+     "commands": [
+      "search",
+      "head",
+      "map"
+     ],
+     "content_source_hash": "10ac23bc59196eef5598a75a12f8cd7b8405c96c94228b695b8b67d8e7179cbb",
+     "created_at": "2026-11-24T08:42:27Z",
+     "created_by": "admin",
+     "cron": "*/15 * * * *",
+     "deployed_at": "2026-11-24T08:42:27Z",
+     "deployed_by": "t02op",
+     "earliest": "-15m",
+     "high_cost": [
+      "map"
+     ],
+     "indirect_commands": [
+      "map"
+     ],
+     "latest": "now",
+     "notes": "",
+     "parse_error": "",
+     "parse_ok": true,
+     "readiness_score": 38,
+     "readiness_state": "not_ready",
+     "rev": 2,
+     "review_commands": [
+      "map"
+     ],
+     "severity": "medium",
+     "side_effects": [],
+     "spl": "index=_internal | head 1 | map search=\"| makeresults\"",
+     "spl_hash": "dde9b8ee6dff7b08cc4e746fc03afebebbba44c5c4f071c8be89f41406810a94",
+     "spl_source": "custom",
+     "submitted_at": "2026-11-24T08:42:27Z",
+     "submitted_by": "admin",
+     "threshold": 0,
+     "unknown_commands": []
+    },
+    {
+     "alert_mode": "track",
+     "approval": "approved",
+     "approved_at": "2026-11-24T09:31:57Z",
+     "approved_by": "admin",
+     "commands": [
+      "search",
+      "stats",
+      "where",
+      "sort"
+     ],
+     "content_source_hash": "10ac23bc59196eef5598a75a12f8cd7b8405c96c94228b695b8b67d8e7179cbb",
+     "created_at": "2026-11-24T09:31:51Z",
+     "created_by": "sun_t11_op",
+     "cron": "*/15 * * * *",
+     "earliest": "-15m",
+     "high_cost": [],
+     "indirect_commands": [],
+     "latest": "now",
+     "notes": "",
+     "parse_error": "",
+     "parse_ok": true,
+     "readiness_score": 38,
+     "readiness_state": "not_ready",
+     "rev": 3,
+     "review_commands": [],
+     "severity": "medium",
+     "side_effects": [],
+     "spl": "index=wineventlog sourcetype=\"WinEventLog:Security\" EventCode=4625\n| stats count by Account_Name, Source_Network_Address\n| where count > 10\n| sort -count",
+     "spl_hash": "163eb186d2ee068644cf6090eb422694a9c499a4c6123782268e56dc952f1c51",
+     "spl_source": "primary",
+     "submitted_at": "2026-11-24T09:31:52Z",
+     "submitted_by": "sun_t11_op",
+     "threshold": 0,
+     "unknown_commands": []
+    }
+   ],
+   "saved_search": {
+    "app": "sunavigator",
+    "name": "SUN - 9.1.1 - Brute-Force Login Detection"
+   },
+   "state": "retired",
+   "title": "Brute-Force Login Detection",
+   "updated_at": "2026-11-24T09:32:00Z",
+   "updated_by": "admin",
+   "version": 24
+  },
+  "settings": {
+   "allow_self_approval": false,
+   "block_enable_states": [
+    "blocked"
+   ],
+   "defaults": {
+    "alert_mode": "track",
+    "cron": "*/15 * * * *",
+    "earliest": "-20m@m",
+    "latest": "-5m@m",
+    "schedule_window": "auto"
+   },
+   "require_approval": true
+  }
+ },
+ "description": "Identifies UC-9.1.1 \u2014 Brute, Force, Login, Detection \u2014 using `index=wineventlog` sourcetype `WinEventLog:Security`, grouped by `Account_Name`, `Source_Network_Address`. Outputs `count` each `the scheduled window`; alert when `count` > 10. Primary focus: Login Detection. Purpose-built for 'Brute-Force Login Detection' in IAM workflows.",
+ "detailed_instructions": "Prerequisites\n\u2022 Install and configure the required add-on or app: `Splunk_TA_windows`.\n\u2022 Ensure the following data sources are available: Windows Security Event Log (Event ID 4625 \u2014 failed logon).\n\u2022 For app installation, inputs.conf, and Splunk directory layout, see the Implementation guide: docs/implementation-guide.md\n\nStep 1 \u2014 Configure data collection\nDeploy the Universal Forwarder on all Domain Controllers with `[WinEventLog://Security]` enabled. Ensure the GPO enables Audit Logon Success and Failure. Alert with `stats count by Account_Name, src span=15m` when count exceeds 10. Suppress break-glass and service accounts via a `privileged_accounts` lookup to reduce false positives.\n\nStep 2 \u2014 Create the search and alert\nRun the following SPL in Search (then save as report or alert; adjust time range and threshold as needed):\n\n```spl\nindex=wineventlog sourcetype=\"WinEventLog:Security\" EventCode=4625\n| stats count by Account_Name, Source_Network_Address\n| where count > 10\n| sort -count\n```\n\nUnderstanding this SPL\n\n**Brute-Force Login Detection** \u2014 Brute-force attacks are a primary credential compromise vector. Early detection prevents account takeover.\n\nDocumented **Data sources**: Windows Security Event Log (Event ID 4625 \u2014 failed logon). **App/TA** (typical add-on context): `Splunk_TA_windows`. The SPL below should target the same indexes and sourcetypes you configured for that feed\u2014rename `index=` / `sourcetype=` if your deployment differs.\n\nThe first pipeline stage scopes events using **index**: wineventlog; **sourcetype**: WinEventLog:Security. If that sourcetype is not mentioned in Data sources, double-check parsing or update the documentation to match the feed you actually ingest.\n\n**Pipeline walkthrough**\n\n\u2022 Scopes the data: index=wineventlog, sourcetype=\"WinEventLog:Security\". Cross-check against **Data sources** above so indexes and sourcetypes match your ingestion.\n\u2022 `stats` rolls up events into metrics; results are split **by Account_Name, Source_Network_Address** so each row reflects one combination of those dimensions.\n\u2022 Filters the current rows with `where count > 10` \u2014 typically the threshold or rule expression for this monitoring goal.\n\u2022 Orders rows with `sort` \u2014 combine with `head`/`tail` for top-N patterns.\n\nOptional CIM / accelerated variant (same use case, normalized fields via Common Information Model):\n\n```spl\n| tstats `summariesonly` count\n  from datamodel=Authentication.Authentication\n  where Authentication.action=\"failure\"\n  by Authentication.user Authentication.src span=1h\n| where count > 10\n```\n\nUnderstanding this CIM / accelerated SPL\n\n**Brute-Force Login Detection** \u2014 Brute-force attacks are a primary credential compromise vector. Early detection prevents account takeover.\n\nDocumented **Data sources**: Windows Security Event Log (Event ID 4625 \u2014 failed logon). **App/TA** (typical add-on context): `Splunk_TA_windows`. The SPL below should target the same indexes and sourcetypes you configured for that feed\u2014rename `index=` / `sourcetype=` if your deployment differs.\n\nThis **CIM or accelerated** block uses normalized field names and/or `tstats` over data models. Enable **acceleration** on the referenced models (and correct CIM knowledge objects) or the search may return nothing.\n\n**Pipeline walkthrough**\n\n\u2022 Uses `tstats` against accelerated summaries for data model `Authentication.Authentication` \u2014 enable acceleration for that model.\n\u2022 Filters the current rows with `where count > 10` \u2014 typically the threshold or rule expression for this monitoring goal.\n\nEnable Data Model Acceleration (and metric indexes for `mstats`) for the models or datasets referenced above; otherwise `tstats`/`mstats` may return no results from summaries.\n\n\nStep 3 \u2014 Validate\nCompare with Event Viewer on domain controllers (or exported Security logs) and with Active Directory Users and Computers for the same objects and time window.\n\nStep 4 \u2014 Operationalize\nAdd the search to a dashboard or set up alert actions (email, webhook, PagerDuty, etc.) as required. Document the use case in your runbook and assign an owner. Consider visualizations: Table (accounts with failure counts), Line chart (failure rate over time), Geo map (source IPs).",
+ "difficulty": "intermediate",
+ "domains": [
+  "security",
+  "identity"
+ ],
+ "environment_summary": {
+  "note": "Presence is an inventory match, not a readiness assessment.",
+  "requirements_applicable": 3,
+  "requirements_present": 0
+ },
+ "equipment": [],
+ "exclusions": "Detects volume-based brute-force patterns on Windows Event ID 4625 only. Does not cover successful logons (4624), OAuth/Okta cloud IdP failures, or LDAP bind failures on non-Windows directories. Accounts in `iam_exception_register.csv` during approved pen tests are out of scope.",
+ "framework_mappings": [
+  {
+   "attributes": {},
+   "domain": "enterprise",
+   "framework": "mitre_attack",
+   "framework_version": null,
+   "object_id": "T1110",
+   "object_type": "technique"
+  },
+  {
+   "attributes": {},
+   "domain": "enterprise",
+   "framework": "mitre_attack",
+   "framework_version": null,
+   "object_id": "T1110.001",
+   "object_type": "sub-technique"
+  },
+  {
+   "attributes": {
+    "assurance": "partial",
+    "assurance_rationale": "HITRUST CSF v11 01.b User access management \u2014 detecting brute-force credential attacks evidences the authentication-control portion of user access management required for HITRUST certification.",
+    "clause_url": "https://hitrustalliance.net/csf-overview/",
+    "control_objective": "Detects violations of HITRUST 01.b (User access management) \u2014 Splunk UC-9.1.1: Brute-Force Login Detection.",
+    "evidence_artifact": "Saved search 'UC-9.1.1' running on Windows Security Event Log (Event ID 4625 \u2014 failed logon), archived to the restricted audit_evidence index (default 7-year retention). Auto-drafted \u2014 SME review required.",
+    "mode": "detects-violation-of",
+    "obligationRef": "hitrust@v11#01.b",
+    "regulation_label": "hitrust"
+   },
+   "domain": null,
+   "framework": "regulation:hitrust",
+   "framework_version": "v11",
+   "object_id": "01.b",
+   "object_type": "control"
+  },
+  {
+   "attributes": {
+    "assurance": "partial",
+    "assurance_rationale": "CJIS v5.9.4 5.5.1 Access control \u2014 identification \u2014 the UC fires on repeated authentication failures against CJI-access accounts, the detection signal CJIS relies on to flag credential compromise.",
+    "clause_url": "https://le.fbi.gov/cjis-division/cjis-security-policy-resource-center",
+    "control_objective": "Detects violations of CJIS 5.5.1 (Access control - identification) \u2014 Splunk UC-9.1.1: Brute-Force Login Detection.",
+    "evidence_artifact": "Saved search 'UC-9.1.1' running on Windows Security Event Log (Event ID 4625 \u2014 failed logon), archived to the restricted audit_evidence index (default 7-year retention). Auto-drafted \u2014 SME review required.",
+    "mode": "detects-violation-of",
+    "obligationRef": "cjis@v5.9.4#5.5.1",
+    "regulation_label": "cjis"
+   },
+   "domain": null,
+   "framework": "regulation:cjis",
+   "framework_version": "v5.9.4",
+   "object_id": "5.5.1",
+   "object_type": "control"
+  },
+  {
+   "attributes": {
+    "assurance": "partial",
+    "assurance_rationale": "UK Cyber Essentials Montpellier CE.SAU.1 Secure authentication & access \u2014 brute-force detection is the primary monitoring control listed under the authentication requirement.",
+    "clause_url": "https://www.ncsc.gov.uk/cyberessentials/overview",
+    "control_objective": "Detects violations of Cyber Essentials CE.SAU.1 (Secure authentication & access) \u2014 Splunk UC-9.1.1: Brute-Force Login Detection.",
+    "evidence_artifact": "Saved search 'UC-9.1.1' running on Windows Security Event Log (Event ID 4625 \u2014 failed logon), archived to the restricted audit_evidence index (default 7-year retention). Auto-drafted \u2014 SME review required.",
+    "mode": "detects-violation-of",
+    "obligationRef": "uk-cyber-essentials@Montpellier (2025)#CE.SAU.1",
+    "regulation_label": "uk-cyber-essentials"
+   },
+   "domain": null,
+   "framework": "regulation:uk-cyber-essentials",
+   "framework_version": "Montpellier (2025)",
+   "object_id": "CE.SAU.1",
+   "object_type": "control"
+  },
+  {
+   "attributes": {
+    "assurance": "contributing",
+    "assurance_rationale": "PSD2 Art.97 Strong customer authentication \u2014 brute-force failure rates are one of the transaction-risk signals used to back SCA-invocation decisions.",
+    "clause_url": "https://eur-lex.europa.eu/eli/dir/2015/2366/oj",
+    "control_objective": "Detects violations of PSD2 Art.97 (Strong customer authentication) \u2014 Splunk UC-9.1.1: Brute-Force Login Detection.",
+    "evidence_artifact": "Saved search 'UC-9.1.1' running on Windows Security Event Log (Event ID 4625 \u2014 failed logon), archived to the restricted audit_evidence index (default 7-year retention). Auto-drafted \u2014 SME review required.",
+    "mode": "detects-violation-of",
+    "obligationRef": "psd2@Directive (EU) 2015/2366#Art.97",
+    "regulation_label": "psd2"
+   },
+   "domain": null,
+   "framework": "regulation:psd2",
+   "framework_version": "Directive (EU) 2015/2366",
+   "object_id": "Art.97",
+   "object_type": "control"
+  }
+ ],
+ "framework_na_reasons": [],
+ "hardware": "",
+ "instructions": "Deploy the Universal Forwarder on all Domain Controllers with `[WinEventLog://Security]` enabled. Ensure the GPO enables Audit Logon Success and Failure. Alert with `stats count by Account_Name, src span=15m` when count exceeds 10. Suppress break-glass and service accounts via a `privileged_accounts` lookup to reduce false positives.",
+ "key": "fenre_UC-9.1.1",
+ "known_false_positives": "1. **Password spray below per-pair threshold** \u2014 Attacker rotates accounts; this UC thresholds on (`Account_Name`, `Source_Network_Address`). Escalate to spray analytics if distinct accounts spike.\n\n2. **Service account Kerberos failure after rotation** \u2014 Clustered 4625 from `index=wineventlog` `WinEventLog:Security` post-password change.\n\n3. **Break-glass testing** \u2014 Intentional failures from jump hosts during exercise.\n\n4. **Approved scanner netblock** \u2014 Qualys/Tenable credentialed scan from `approved_scanners.csv`.\n\n**Suppression mechanism:** Join `iam_exception_register.csv` before threshold filter.",
+ "last_reviewed": "",
+ "lookups": [],
+ "macros": [
+  "summariesonly"
+ ],
+ "monitoring_types": [
+  "Security"
+ ],
+ "normalized_with": "fenre-1.4.0",
+ "pillar": "Security",
+ "premium_apps": [],
+ "prerequisite_use_cases": [],
+ "products": [
+  "splunk-platform"
+ ],
+ "provenance": {
+  "imported_at": "2026-11-20T11:59:18Z",
+  "normalizer_version": "fenre-1.4.0",
+  "provider": "fenre",
+  "provider_record_id": "9.1.1",
+  "provider_version": "8.28.0",
+  "source_blob_sha": "f8c60dd8f610e799a88cae73717e4eae9915a11f",
+  "source_hash": "10ac23bc59196eef5598a75a12f8cd7b8405c96c94228b695b8b67d8e7179cbb",
+  "source_path": "content/cat-09-identity-access-management/UC-9.1.1.json",
+  "source_ref": "3b8024a8cf2e31c2fc02e16fd2fb39d43f931828",
+  "source_schema": "uc.schema.json@1.11.0",
+  "source_url": "https://raw.githubusercontent.com/fenre/splunk-monitoring-use-cases/3b8024a8cf2e31c2fc02e16fd2fb39d43f931828/content/cat-09-identity-access-management/UC-9.1.1.json"
+ },
+ "provider_extras": {
+  "evidence": "Saved search `iam_brute_force_4625_10plus` (UC-9.1.1), ES Notable or SOC dashboard panel \"IAM \u2014 Failed Logon Bursts\", and archived weekly CSV to `index=audit_evidence` sourcetype=csv:iam_controls.",
+  "grandmaExplanation": "We watch for many failed sign-in attempts from the same place or against the same account so we can stop password guessing before a takeover."
+ },
+ "provider_status": "active",
+ "quality_flags": [
+  "unreviewed"
+ ],
+ "readiness": {
+  "_key": "fenre_UC-9.1.1",
+  "_user": "nobody",
+  "blockers": [],
+  "category_key": "fenre_cat-09",
+  "category_name": "Identity & Access Management",
+  "content_id": "fenre:UC-9.1.1",
+  "counts": {
+   "met": 2,
+   "not_applicable": 0,
+   "not_met": 3,
+   "partial": 0,
+   "unknown": 0,
+   "unverified": 0
+  },
+  "coverage": 1,
+  "criticality": "critical",
+  "criticality_rank": 4,
+  "discovery_at": "2026-11-24T12:11:31Z",
+  "discovery_job_id": "684d6c9136c048d3af807687c471db98",
+  "doc_schema": 1,
+  "domains": [
+   "security",
+   "identity"
+  ],
+  "engine_version": "ucm.readiness/3",
+  "evaluated_at": "2026-11-24T12:12:32Z",
+  "gaps": [
+   {
+    "code": "no_longer_seen",
+    "level": "required",
+    "req_id": "sourcetype:WinEventLog:Security",
+    "type": "sourcetype",
+    "value": "WinEventLog:Security"
+   }
+  ],
+  "job_id": "226608f53ad94704bf0ed7b6bff82fe7",
+  "record_id": "9.1.1",
+  "requirement_count": 5,
+  "results": [
+   {
+    "code": "no_longer_seen",
+    "confidence": "medium",
+    "detail": "Seen in an earlier discovery run but not in the latest window.",
+    "level": "required",
+    "observed": [
+     {
+      "age_seconds": 332294,
+      "index": "main",
+      "sourcetype": "WinEventLog:Security",
+      "status": "missing",
+      "window_count": 60
+     },
+     {
+      "age_seconds": 267,
+      "index": "ucm_controltest",
+      "sourcetype": "WinEventLog:Security",
+      "status": "missing",
+      "window_count": 30
+     },
+     {
+      "age_seconds": 332294,
+      "index": "main",
+      "sourcetype": "WinEventLog:Security",
+      "status": "missing",
+      "window_count": 60
+     },
+     {
+      "age_seconds": 267,
+      "index": "ucm_controltest",
+      "sourcetype": "WinEventLog:Security",
+      "status": "missing",
+      "window_count": 30
+     }
+    ],
+    "req_id": "sourcetype:WinEventLog:Security",
+    "source": "derived_spl",
+    "status": "not_met",
+    "type": "sourcetype",
+    "value": "WinEventLog:Security",
+    "via_mapping": null
+   },
+   {
+    "code": "not_found",
+    "confidence": "low",
+    "detail": "Index is not defined on this deployment.",
+    "level": "informational",
+    "observed": [],
+    "req_id": "index:wineventlog",
+    "source": "derived_spl",
+    "status": "not_met",
+    "type": "index",
+    "value": "wineventlog",
+    "via_mapping": null
+   },
+   {
+    "code": "model_missing",
+    "confidence": "high",
+    "detail": "Data model is not installed (install the CIM add-on).",
+    "level": "recommended",
+    "observed": [],
+    "req_id": "cim_model:Authentication",
+    "source": "provider_structured",
+    "status": "not_met",
+    "type": "cim_model",
+    "value": "Authentication",
+    "via_mapping": null
+   },
+   {
+    "code": "version_supported",
+    "confidence": "high",
+    "detail": "Splunk 10.2.9 satisfies 9.2+.",
+    "level": "informational",
+    "observed": [],
+    "req_id": "version:splunk",
+    "source": "provider_structured",
+    "status": "met",
+    "type": "version",
+    "value": "9.2+,Cloud",
+    "via_mapping": null
+   },
+   {
+    "code": "parsed",
+    "confidence": "medium",
+    "detail": "Splunk parsed the primary search (search, stats, where, sort).",
+    "level": "required",
+    "observed": [
+     {
+      "commands": [
+       "search",
+       "stats",
+       "where",
+       "sort"
+      ],
+      "error": "",
+      "parse_ok": true,
+      "side_effects": []
+     }
+    ],
+    "req_id": "spl_validity:primary",
+    "source": "derived_spl",
+    "status": "met",
+    "type": "spl_validity",
+    "value": "primary",
+    "via_mapping": null
+   }
+  ],
+  "score": 38,
+  "score_sort": 38,
+  "search_text": "9.1.1 fenre:uc-9.1.1 brute-force login detection",
+  "source_hash": "10ac23bc59196eef5598a75a12f8cd7b8405c96c94228b695b8b67d8e7179cbb",
+  "stale": false,
+  "stale_reasons": [],
+  "state": "not_ready",
+  "title": "Brute-Force Login Detection",
+  "unverified": 0
+ },
+ "references": [
+  {
+   "repo_path": "",
+   "retrieved": "2026-04-25",
+   "title": "Splunk_TA_windows",
+   "url": "https://splunkbase.splunk.com/app/742"
+  },
+  {
+   "repo_path": "",
+   "retrieved": "2026-04-25",
+   "title": "CIM: Authentication",
+   "url": "https://docs.splunk.com/Documentation/CIM/latest/User/Authentication"
+  },
+  {
+   "repo_path": "",
+   "retrieved": "2026-04-25",
+   "title": "Splunk Enterprise Documentation",
+   "url": "https://docs.splunk.com/Documentation/Splunk"
+  },
+  {
+   "repo_path": "",
+   "retrieved": "2026-04-25",
+   "title": "Splunk Search Reference",
+   "url": "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/What'sInThisManual"
+  }
+ ],
+ "required_fields": [],
+ "requirement_summary": {
+  "assessment": "not_ready",
+  "by_level": {
+   "informational": 2,
+   "recommended": 1,
+   "required": 1
+  },
+  "by_source": {
+   "derived_spl": 2,
+   "provider_structured": 2
+  },
+  "total": 4
+ },
+ "requirements": [
+  {
+   "attributes": {},
+   "confidence": "medium",
+   "environment": {
+    "applicable": true,
+    "mapping": {
+     "canonical_value": "WinEventLog:Security",
+     "confidence": "medium",
+     "origin": "auto_exact"
+    },
+    "present": false,
+    "sources": []
+   },
+   "level": "required",
+   "notes": "extracted from SPL",
+   "req_id": "sourcetype:WinEventLog:Security",
+   "source": "derived_spl",
+   "type": "sourcetype",
+   "value": "WinEventLog:Security"
+  },
+  {
+   "attributes": {},
+   "confidence": "low",
+   "environment": {
+    "applicable": true,
+    "mapping": null,
+    "present": false,
+    "sources": []
+   },
+   "level": "informational",
+   "notes": "index in provider SPL is an example",
+   "req_id": "index:wineventlog",
+   "source": "derived_spl",
+   "type": "index",
+   "value": "wineventlog"
+  },
+  {
+   "attributes": {},
+   "confidence": "high",
+   "environment": {
+    "applicable": true,
+    "mapping": null,
+    "present": false,
+    "sources": []
+   },
+   "level": "recommended",
+   "notes": "used by the CIM variant (cimSpl)",
+   "req_id": "cim_model:Authentication",
+   "source": "provider_structured",
+   "type": "cim_model",
+   "value": "Authentication"
+  },
+  {
+   "attributes": {},
+   "confidence": "high",
+   "environment": {
+    "applicable": false
+   },
+   "level": "informational",
+   "notes": "validated Splunk versions",
+   "req_id": "version:splunk",
+   "source": "provider_structured",
+   "type": "version",
+   "value": "9.2+,Cloud"
+  }
+ ],
+ "review_status": "unknown",
+ "reviewer": "",
+ "schedule": null,
+ "schema_version": "ucm.usecase/1",
+ "script_example": "",
+ "selection": null,
+ "spl": "index=wineventlog sourcetype=\"WinEventLog:Security\" EventCode=4625\n| stats count by Account_Name, Source_Network_Address\n| where count > 10\n| sort -count",
+ "spl_duplicates": [],
+ "spl_status": "",
+ "spl_variants": [],
+ "splunk_versions": [
+  "9.2+",
+  "Cloud"
+ ],
+ "stored_normalizer_version": "fenre-1.1.0",
+ "subcategory": "Active Directory / Entra ID",
+ "tags": [],
+ "title": "Brute-Force Login Detection",
+ "validation": {
+  "_key": "fenre_UC-9.1.1",
+  "_user": "nobody",
+  "cim_parse_error": "Error in 'SearchParser': The search specifies a macro 'summariesonly' that cannot be found. Reasons include: the macro name is misspelled, you do not have \"read\" permission for the macro, or the macro has not been shared with this application. Click Settings, Advanced search, Search Macros to view macro information.",
+  "cim_parse_ok": false,
+  "commands": [
+   "search",
+   "stats",
+   "where",
+   "sort"
+  ],
+  "content_id": "fenre:UC-9.1.1",
+  "doc_schema": 1,
+  "field_samples": [],
+  "high_cost": [],
+  "indirect_commands": [],
+  "normalized": "search index=wineventlog sourcetype=\"WinEventLog:Security\" EventCode=4625\n| stats count by Account_Name, Source_Network_Address\n| where count > 10\n| sort -count",
+  "parse_error": "",
+  "parse_ok": true,
+  "parsed_at": "2026-11-24T12:11:46Z",
+  "preview": null,
+  "review_commands": [],
+  "sampled_at": "2026-11-20T12:06:44Z",
+  "side_effects": [],
+  "source_hash": "10ac23bc59196eef5598a75a12f8cd7b8405c96c94228b695b8b67d8e7179cbb",
+  "unknown_commands": [],
+  "warnings": []
+ },
+ "validation_warning_count": 0,
+ "validation_warnings": [],
+ "visualization": "Table (accounts with failure counts), Line chart (failure rate over time), Geo map (source IPs).",
+ "wave": "crawl"
+}

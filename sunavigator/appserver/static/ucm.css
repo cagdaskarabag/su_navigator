@@ -102,3 +102,12 @@ textarea.ucm-modal-input { min-height: 72px; resize: vertical; }
 .ucm-home-count { display: inline-block; margin-right: 12px; color: inherit; }
 .ucm-domain-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; }
 .ucm-domain { padding: 10px 12px; }
+
+.ucm-flow { display: flex; flex-wrap: wrap; align-items: stretch; gap: 8px; margin: 10px 0 14px; }
+.ucm-flow .ucm-tile { flex: 1 1 200px; }
+.ucm-arrow { align-self: center; color: #5c6773; font-size: 18px; }
+.ucm-jump a { margin-right: 10px; }
+.ucm-group { margin: 14px 0 4px; font-size: 13px; text-transform: capitalize; color: #2b3033; }
+.ucm-scroll { overflow-x: auto; max-height: 420px; overflow-y: auto; }
+.ucm-search { margin-top: 14px; }
+.ucm-unavailable { margin-top: 8px; }

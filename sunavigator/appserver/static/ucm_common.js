@@ -364,13 +364,133 @@ define(["jquery", "splunk.util"], function ($, splunkUtil) {
         });
     }
 
+    /*
+     * Client-side guard for the interactive search (D-058). It mirrors splunk_ucm.spl: the lists equal
+     * analysis.SIDE_EFFECT_COMMANDS and policy.INDIRECT_COMMANDS, and the segmentation equals
+     * analysis._split_pipeline (both checked by unit tests, including a parity run over the fixtures).
+     * It is a convenience guard for the user's own search, not a security boundary: Splunk enforces
+     * the user's permissions, and macros are only checked through the stored server-side parse.
+     */
+    var SIDE_EFFECT_COMMANDS = ["outputlookup", "outputcsv", "collect", "mcollect", "meventcollect", "tscollect",
+        "sendemail", "sendalert", "delete", "script", "run", "sendresults", "summaryindex",
+        "dbxoutput", "runshellscript", "deletemodel", "dump", "crawl", "outputtelemetry"];
+    var INDIRECT_COMMANDS = ["map", "savedsearch", "loadjob", "rest", "dbxquery", "dbxlookup", "dbxinputs"];
+    var FIT_INTO = /(?:^|[|\[])\s*fit\b[^|\]]*?\binto\b/i;
+    var SAVEDSEARCH_DATASET = /(?:^|[^\w.:])savedsearch:/i;
+    var MACRO = /`\s*([A-Za-z0-9_\-.:]+)\s*(\(([^`]*)\))?\s*`/;
+
+    function maskQuotes(spl) {
+        return spl.replace(/"(?:[^"\\]|\\.)*"/g, function (m) { return '"' + new Array(m.length - 1).join("\u0001") + '"'; });
+    }
+
+    /* Commands in pipeline order, found the way analysis.analyze finds them. */
+    function splCommands(spl) {
+        var masked = maskQuotes(spl || "");
+        var segments = [];
+        var starts = [[0, "level"]];
+        var inMacro = false;
+        var i, ch, top;
+        for (i = 0; i < masked.length; i++) {
+            ch = masked.charAt(i);
+            if (ch === "`") {
+                inMacro = !inMacro;
+            } else if (inMacro) {
+                continue;
+            } else if (ch === "[") {
+                top = starts[starts.length - 1];
+                segments.push([top[0], i, top[1]]);
+                starts[starts.length - 1] = [i, "cont"];
+                starts.push([i + 1, "level"]);
+            } else if (ch === "]" && starts.length > 1) {
+                top = starts.pop();
+                segments.push([top[0], i, top[1]]);
+                starts[starts.length - 1] = [i + 1, "cont"];
+            } else if (ch === "|") {
+                top = starts[starts.length - 1];
+                segments.push([top[0], i, top[1]]);
+                starts[starts.length - 1] = [i + 1, "pipe"];
+            }
+        }
+        top = starts[starts.length - 1];
+        segments.push([top[0], masked.length, top[1]]);
+        var commands = [];
+        segments.forEach(function (seg) {
+            var text = masked.substring(seg[0], seg[1]);
+            if (!text.trim() || seg[2] === "cont") { return; }
+            if (seg[2] === "level") { commands.push("search"); return; }
+            var word = /^\s*([A-Za-z_][A-Za-z0-9_]*)/.exec(text);
+            if (word) { commands.push(word[1].toLowerCase()); }
+        });
+        return commands;
+    }
+
+    function splPolicy(spl) {
+        var masked = maskQuotes(spl || "");
+        var commands = splCommands(spl);
+        function uniq(list) { return list.filter(function (c, i) { return list.indexOf(c) === i; }); }
+        var side = uniq(commands.filter(function (c) { return SIDE_EFFECT_COMMANDS.indexOf(c) >= 0; }));
+        var indirect = uniq(commands.filter(function (c) { return INDIRECT_COMMANDS.indexOf(c) >= 0; }));
+        if (FIT_INTO.test(masked)) { side.push("fit into"); }
+        if (SAVEDSEARCH_DATASET.test(masked)) { indirect.push("savedsearch: dataset"); }
+        return { commands: commands, sideEffects: side, indirect: indirect, hasMacros: MACRO.test(masked) };
+    }
+
+    /* The form Splunk's parser needs: a leading search term needs the search command. */
+    function searchableSpl(spl) {
+        var text = (spl || "").trim();
+        var lowered = text.toLowerCase();
+        if (!text || lowered.charAt(0) === "|" || lowered.indexOf("search ") === 0 || lowered.indexOf("search\n") === 0) { return text; }
+        return "search " + text;
+    }
+
+    /*
+     * Decide whether the interactive search may be offered for this SPL. `validation` is the stored
+     * server-side parse; it only describes the primary search of the current content version.
+     */
+    function searchGuard(spl, validation, sourceHash, isPrimary) {
+        if (!spl || !spl.trim()) { return { ok: false, reason: "This use case has no SPL to run.", warnings: [] }; }
+        var p = splPolicy(spl);
+        var v = isPrimary && validation && validation.source_hash === sourceHash ? validation : null;
+        var side = p.sideEffects.slice();
+        if (v) { (v.side_effects || []).forEach(function (c) { if (side.indexOf(c) < 0) { side.push(c); } }); }
+        if (side.length) {
+            return { ok: false, warnings: [], reason: "Not offered: the search contains side-effect commands (" + side.join(", ") +
+                "). These write or send data and are refused here as they are in the preview." };
+        }
+        if (p.hasMacros && !(v && v.parse_ok)) {
+            return { ok: false, warnings: [], reason: isPrimary
+                ? "Not offered yet: the search uses macros, and macros could hide side-effect commands. Use \"Parse and sample fields\" so Splunk expands them and the result can be checked."
+                : "Not offered: the search uses macros, and the macro check is only available for the primary search." };
+        }
+        var warnings = [];
+        var indirect = p.indirect.slice();
+        if (v) { (v.indirect_commands || []).concat(v.unknown_commands || []).forEach(function (c) { if (indirect.indexOf(c) < 0) { indirect.push(c); } }); }
+        if (indirect.length) {
+            warnings.push("The search uses commands that can run other searches or reach data this text does not show (" +
+                indirect.join(", ") + "). They run with your permissions.");
+        }
+        return { ok: true, reason: "", warnings: warnings };
+    }
+
+    /* GET against a native splunkd endpoint through Splunk Web (the user's own session). */
+    function rawGet(path, params) {
+        var deferred = $.Deferred();
+        $.ajax({ url: splunkUtil.make_url("/splunkd/__raw/" + path), type: "GET", data: $.extend({ output_mode: "json" }, params || {}),
+            dataType: "json", headers: { "X-Requested-With": "XMLHttpRequest" } })
+            .done(function (data) { deferred.resolve(data); })
+            .fail(function (xhr) { deferred.reject({ status: xhr.status, message: errorMessage(xhr) }); });
+        return deferred.promise();
+    }
+
     return {
         modal: modal, qualityBadges: qualityBadges, QUALITY_FLAGS: QUALITY_FLAGS, notify: notify, confirmAction: confirmAction, askText: askText,
         get: get, post: post, postRaw: postRaw, el: el, clear: clear, badge: badge,
         criticalityBadge: criticalityBadge, chips: chips, stateBox: stateBox, queryParams: queryParams,
         setQueryParams: setQueryParams, pager: pager, debounce: debounce, shortSha: shortSha,
         readinessBadge: readinessBadge, statusBadge: statusBadge, helpHeader: helpHeader, legend: legend,
-        selectAll: selectAll, READINESS_HELP: READINESS_HELP, STATUS_HELP: STATUS_HELP,
+        selectAll: selectAll, rawGet: rawGet, splCommands: splCommands, splPolicy: splPolicy,
+        searchableSpl: searchableSpl, searchGuard: searchGuard, SIDE_EFFECT_COMMANDS: SIDE_EFFECT_COMMANDS,
+        INDIRECT_COMMANDS: INDIRECT_COMMANDS, READINESS_HELP: READINESS_HELP, STATUS_HELP: STATUS_HELP,
         STATUSES: ["met", "partial", "not_met", "unknown", "unverified", "not_applicable"],
         READINESS_STATES: ["ready", "partially_ready", "not_ready", "blocked", "insufficient_evidence"],
         DOMAINS: ["security", "infrastructure", "network", "application", "database", "cloud", "endpoint",
