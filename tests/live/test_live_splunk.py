@@ -100,6 +100,24 @@ class LiveOneshotContractTest(unittest.TestCase):
         cut = client.oneshot("| makeresults count=250", max_count=100)
         self.assertEqual((len(cut.rows), cut.truncated), (100, True))
 
+    def test_app_scoped_macro_resolves_in_parse_and_preview(self):
+        from splunk_ucm.platform.search import SearchClient
+        t = transport()
+        name = "sun_live_macro_" + uuid.uuid4().hex[:6]
+        base = "/servicesNS/nobody/sunavigator/admin/macros"
+        status, _ = t.request("POST", base, None, None, form={"name": name, "definition": "makeresults count=3"})
+        self.assertIn(status, (200, 201))
+        try:
+            t.request("POST", base + "/" + name + "/acl", None, None, form={"sharing": "app", "owner": "nobody"})
+            client = SearchClient(t)
+            q = "| `%s` | stats count" % name
+            self.assertFalse(client.parse(q).ok)
+            self.assertTrue(client.parse(q, app="sunavigator").ok)
+            rows = client.preview(q, app="sunavigator").rows
+            self.assertEqual(rows[0]["count"], "3")
+        finally:
+            t.request("DELETE", base + "/" + name)
+
     def test_event_search_truncation(self):
         from splunk_ucm.platform.search import SearchClient
         cut = SearchClient(transport()).preview("search index=_internal", max_count=5, earliest="-24h")

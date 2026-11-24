@@ -40,8 +40,9 @@ class FakeParser:
             return ParseResult(False, [], [{"type": "FATAL", "text": self.error}])
         return ParseResult(True, list(self.commands), [])
 
-    def preview(self, search, timeout=30, max_count=50, earliest="-15m", latest="now"):
+    def preview(self, search, timeout=30, max_count=50, earliest="-15m", latest="now", app=""):
         self.preview_calls.append(search)
+        self.preview_apps = getattr(self, "preview_apps", []) + [app]
         return SearchResult(list(self.preview_rows), [], False)
 
     field_truncated = False
@@ -110,6 +111,11 @@ class ValidationServiceTest(unittest.TestCase):
             self.svc.preview("fenre:UC-9.1.1", "alice")
         self.assertIn("side-effect", str(ctx.exception).lower())
         self.assertEqual(self.search.preview_calls, [])
+
+    def test_parse_and_preview_use_the_deploy_namespace(self):
+        self.svc.preview("fenre:UC-9.1.1", "alice")
+        self.assertEqual(set(self.search.parse_apps), {"sunavigator"})
+        self.assertEqual(self.search.preview_apps, ["sunavigator"])
 
     def test_parse_failure_refuses_preview(self):
         self.search.ok = False

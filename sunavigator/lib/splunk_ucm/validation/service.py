@@ -10,6 +10,7 @@ import json
 import re
 from typing import Any, Dict, List, Optional, Tuple
 
+from .. import APP_NAME
 from ..audit import AuditService
 from ..catalog.detail import key_from_id
 from ..content.reindex import StoredNormalizer
@@ -91,7 +92,7 @@ class ValidationService:
         try:
             result = self.search.preview(
                 to_run, timeout=float(self.settings.preview_timeout),
-                max_count=self.settings.preview_max, earliest=earliest, latest=latest)
+                max_count=self.settings.preview_max, earliest=earliest, latest=latest, app=APP_NAME)
         except UnsupportedOperation as exc:
             doc["preview"] = {
                 "ran_at": utc_now_iso(), "ok": False, "event_count": 0, "truncated": False,
@@ -147,7 +148,7 @@ class ValidationService:
         static = analyze(uc.spl)
         doc["warnings"] = list(static.warnings)
         try:
-            parsed = parse(self.search, uc.spl)
+            parsed = parse(self.search, uc.spl, app=APP_NAME)
         except (UnsupportedOperation, ValidationError) as exc:
             doc["parse_error"] = str(exc)
             return doc
@@ -161,7 +162,7 @@ class ValidationService:
             doc["parse_error"] = (parsed.errors[0] if parsed.errors else "parse failed")[:500]
         if uc.cim_spl:
             try:
-                cim = parse(self.search, uc.cim_spl)
+                cim = parse(self.search, uc.cim_spl, app=APP_NAME)
                 doc["cim_parse_ok"] = cim.ok
                 if not cim.ok:
                     doc["cim_parse_error"] = (cim.errors[0] if cim.errors else "parse failed")[:500]

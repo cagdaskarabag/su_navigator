@@ -48,12 +48,17 @@ class SearchClient:
         return self._oneshot(search, timeout, max_count, earliest, latest)
 
     def preview(self, search: str, timeout: float = 30.0, max_count: int = 100,
-                earliest: str = "-15m", latest: str = "now") -> SearchResult:
-        """Dispatch a *user-approved* bounded search. Caller must have gated side effects."""
+                earliest: str = "-15m", latest: str = "now", app: str = "") -> SearchResult:
+        """Dispatch a *user-approved* bounded search. Caller must have gated side effects.
+
+        With ``app`` the search runs in that app's namespace (macros, lookups,
+        eventtypes), as a saved search in that app would; it still runs as the caller.
+        """
         text = (search or "").strip()
         if not text:
             raise ValidationError("empty search")
-        return self._oneshot(text, timeout, max_count, earliest, latest)
+        path = "/servicesNS/nobody/%s/search/jobs" % quote(app, safe="") if app else "/services/search/jobs"
+        return self._oneshot(text, timeout, max_count, earliest, latest, path)
 
     def parse(self, q: str, app: str = "") -> ParseResult:
         """POST search/parser with parse_only. 400 is a parse failure, not a transport error.
@@ -87,7 +92,7 @@ class SearchClient:
         return parsed
 
     def _oneshot(self, search: str, timeout: float, max_count: int,
-                 earliest: str, latest: str) -> SearchResult:
+                 earliest: str, latest: str, path: str = "/services/search/jobs") -> SearchResult:
         """Return at most ``max_count`` rows; ``truncated`` is True only if more existed.
 
         A oneshot returns ``count`` rows (splunkd default 100) whatever ``max_count``
@@ -108,7 +113,7 @@ class SearchClient:
         if latest:
             form["latest_time"] = latest
         try:
-            data = self.t.json("POST", "/services/search/jobs", form=form, timeout=timeout + 15.0)
+            data = self.t.json("POST", path, form=form, timeout=timeout + 15.0)
         except StorageError as exc:
             if exc.status in (403, 402, 409):
                 raise UnsupportedOperation("ad-hoc search is not available",

@@ -15,9 +15,11 @@ class SplunkdOneshot:
         self.rows = rows or []
         self.messages = messages or []
         self.forms = []
+        self.paths = []
 
     def json(self, method, path, query=None, json_body=None, form=None, timeout=60.0):
         self.forms.append(dict(form or {}))
+        self.paths.append(path)
         count = int((form or {}).get("count", 100))
         limit = min(count or ONESHOT_ROW_CEILING, ONESHOT_ROW_CEILING)
         return {"results": [dict(r) for r in self.rows[:limit]], "messages": list(self.messages)}
@@ -73,6 +75,14 @@ class OneshotContractTest(unittest.TestCase):
         self.assertEqual(len(result.rows), 50)
         self.assertTrue(result.truncated)
         self.assertEqual(t.forms[0]["earliest_time"], "-15m")
+
+    def test_preview_runs_in_the_app_namespace(self):
+        t = SplunkdOneshot(rows(1))
+        SearchClient(t).preview("search index=main", app="sunavigator")
+        SearchClient(t).preview("search index=main")
+        SearchClient(t).oneshot("| makeresults")
+        self.assertEqual(t.paths, ["/servicesNS/nobody/sunavigator/search/jobs", "/services/search/jobs",
+                                   "/services/search/jobs"])
 
     def test_only_generating_searches(self):
         with self.assertRaises(ValidationError):

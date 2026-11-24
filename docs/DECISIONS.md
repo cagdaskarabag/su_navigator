@@ -241,7 +241,13 @@ Imported SPL is dispatched only by **preview**, and only after:
 * the parser accepted it, and
 * neither the parser command list nor the static analyser reports
   side-effect commands (`delete`, `outputlookup`, `collect`, `script`, …).
-Preview forces `earliest_time`/`latest_time`, `max_count` and a timeout.
+Preview forces `earliest_time`/`latest_time`, a row limit (D-037) and a timeout.
+*Amended in 0.7.2:* validation parses (primary and CIM SPL) with
+`app=sunavigator` and preview dispatches through
+`/servicesNS/nobody/sunavigator/search/jobs`, the namespace deployment parses
+in and the saved search runs in. Before, an app-scoped macro failed to parse
+in validation yet parsed at deploy (verified on 10.2.9). The search still runs
+as the caller.
 Event payloads are not stored; only counts, field names and messages.
 A runtime error (missing lookup) is recorded on the validation document
 (`preview.ok=false`), not raised as a 5xx.
