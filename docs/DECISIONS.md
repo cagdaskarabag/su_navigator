@@ -1611,3 +1611,123 @@ as drift.
   dependency or collection. The lint only adds findings; the policy still refuses what it
   refused. `docs/SECURITY.md` is not changed. The build number is 11 because the JS and
   CSS changed. Python 3.9 compatible, stdlib only.
+
+## D-066 Provider-aware navigation, twin lineage, quality-aware discovery and the Plan deployment step
+*0.9.0 (B-11, B-12, B-13, B-18; assessment W4 and W10).*
+* Context: the catalogue holds two providers. ESCU is 2,214 detections; 1,121 of them (51 percent)
+  sit in the fixed category "Unassigned" and are therefore hard to find by category. Fenre
+  category 10 repeats ESCU searches verbatim: on Fenre `0e21f019` and ESCU 6.11.1, 1,778
+  primary-SPL hashes occur in both providers (1,780 Fenre records, 1,778 ESCU records), so a
+  user can deploy the same search twice. The use-case page also put the deployment form
+  first, before the content a reader needs to judge the use case.
+* **B-11 provider-aware navigation.**
+  * Provider badge (`Fenre`, `ESCU`) on catalogue rows, the use-case header and the recommended-next
+    cards. Provider facet, multi-select, counts from the facets document.
+  * Category labels carry the provider (`Fenre · 9. Identity & Access Management`, `ESCU · Endpoint`)
+    only when more than one provider is in the catalogue; with one provider the labels are as
+    before. ESCU ids are not shown as numbers (they are a fixed list, not a Fenre-style index).
+    Category **ids** and the `category` URL parameter are unchanged, so every bookmarked URL works.
+  * `analytic_stories` and `data_sources` are new summary fields filled from the ESCU annotation
+    (normalizer `escu-1.1.0`). They are facets (top 30 stored per record, top 600 values
+    stored per facet; the page shows a find box above 12 values) and filters (`story`,
+    `data_source`). They are how ESCU use cases in Unassigned are found: all 1,121 of them carry a
+    story. Unassigned records stay visible and filterable (category `escu_cat-unassigned` still
+    exists and is listed). A name containing a comma has the comma replaced by a space, because
+    `Request.args()` splits a parameter at commas; no name in ESCU 6.11.1 contains one.
+  * Facet counts are still computed in the post-pass (`catalog/derived.py`, `FACETS_VERSION 3`) and
+    read from `uc_sync_state`; no list query computes a facet. Facets also carry
+    `summary: {version, outdated}`.
+* **B-12 lineage.** A *twin* is a use case from another provider with the same `spl_hash`
+  (SHA-256 of the whitespace-normalised primary SPL, an existing field). The post-pass sets a new
+  derived quality flag `provider_twin` next to `duplicate_spl` (both are derived; summary
+  rebuilds clear both and the post-pass sets them again). The flag makes "has a twin" a filter
+  (`quality=provider_twin`) and a count at no extra cost. The use-case page shows `spl_twins`
+  (up to 20, active only, found by an indexed `spl_hash` query) as
+  "Same detection in ESCU: <id>" with the title and a deploy-once note ("deploying both creates two
+  saved searches"). Links work in both directions and the record is not required to have been
+  summarised by 0.9.0: the lookup reads the hash that 0.8.x already stored.
+  * **Authority.** `catalog/lineage.py` holds one table: ESCU = "Detection content source",
+    Fenre = "Compliance and mapping context". It is a statement about what each provider is
+    for, taken from the provider roles, **not** from comparing the two records. The page says that
+    the twin test is only that the primary SPL is identical after whitespace is normalised, and that
+    title, schedule, severity and compliance mappings can still differ. It does not claim copying,
+    origin or equivalence of the whole record. `spl_duplicates` (same provider) keeps its old meaning
+    and its own warning.
+  * Not done: no merge of twin records, no hiding of a twin, no "deploy once" enforcement. Deploying
+    both stays allowed and only warned about. That would be a workflow change.
+* **B-13 quality-aware discovery.**
+  * `wave` (crawl, walk, run) is a summary field, a facet and a filter. It is Fenre's rollout order;
+    ESCU has none, so an ESCU record never matches a wave filter.
+  * Quality flags are facets and filters as before. New: `exclude_quality` (hide records that carry a
+    flag; nothing is hidden by default) as a "Hide quality flag" facet, and the same option on
+    Recommended next (`GET readiness/recommendations?exclude_quality=ai_reviewed,unreviewed`), a
+    checkbox that is off by default. Without the parameter the response and the list are as before;
+    with it the response adds `exclude_quality` and an `excluded.quality_flagged` count, and a
+    list with nothing left is the existing "none eligible" state.
+  * `exclude_quality` is a conjunction of `{quality_flags: {$ne: flag}}`, because `$nin` and `$nor`
+    are invalid on the KV Store ("The provided query was invalid"; checked on Splunk 10.2.9).
+    `$ne` matches an array field that does not contain the value and a document without the field.
+  * **Migration (no automatic summary rewrite).** `SUMMARY_VERSION` is 6. Migration 0001 used to
+    embed the version in its id, so a bump rebuilt every summary on the first start after an upgrade.
+    Its id is now pinned to `0001_catalog_summary_v5`; a 0.9.0 start therefore does **not** rewrite
+    the catalogue. The new migration `0004_catalog_facets_v3` writes only the facets document
+    (cheap, no catalogue write), which carries `summary.outdated`. The operator presses **Reindex**
+    (Content Administration → Catalogue summaries, or `POST catalog/reindex`), which re-derives
+    summaries from the stored raw records, with no download.
+  * **Degradation before Reindex.** A document summarised before 0.9.0 has no `wave`,
+    `analytic_stories` or `data_sources`, so those three filters skip it and never error. The
+    catalogue, Overview and Administration show an amber hint ("Reindex needed ...", N of M) while
+    `outdated > 0`, and an empty result under a wave/story/data-source filter says why. The provider filter,
+    `exclude_quality`, `provider_twin` and the twin links work without Reindex because `provider`,
+    `quality_flags` and `spl_hash` exist in the version 5 summary. Existing filter URLs are
+    untouched: every parameter that existed keeps its meaning.
+  * Invalid input is refused as before (`invalid wave`, `invalid quality flag`, tokens with control
+    characters), never a server error.
+* **D-059 parity.** Every new filter is part of `build_query` and therefore of both the join
+  path (`_key $in`) and the scan path; the parity tests now run the join and scan paths with
+  provider, wave, story, data source, `exclude_quality` and `provider_twin`, for every sort and a
+  page that is not the first (`tests/unit/test_provider_navigation.py`). The row-limit and
+  join-bound behaviour of D-059 and D-065 is unchanged.
+* **B-18 Plan deployment.** The selection box, review state and deployment form are still the same
+  code with the same permissions, guards and requests; they now sit in one panel after the content
+  sections (after References, before Provenance), collapsed by default. A status row above the
+  button shows selection, readiness, deployment state, live saved-search state, drift and
+  "provider content changed" without expanding, together with the actions the user can take now.
+  The button is a real `<button type="button">` with `aria-expanded` and `aria-controls`; the "Your
+  selection" and "Plan deployment" jump links and the `#ucm-sec-selection` / `#ucm-sec-deployment`
+  hash open it. Nothing about the deployment workflow, allowed actions or REST routes changed.
+* **Latency, before (0.8.9) and after (0.9.0).**
+  * Lab REST, 270 active use cases (141 Fenre, 129 ESCU), 2,359 documents, median of 9 runs:
+    first page 20 ms before and 19 ms after; `domain=security` sorted by criticality 20 and 19;
+    `quality=duplicate_spl` 20 and 18; `availability=ready` 27 and 27; `q=powershell` 20 and 20;
+    status any, offset 2000: 28 and 28; `catalog/facets` 11 and 11. New filters after, median
+    ms: `provider=escu` 20, `wave=crawl` 20, `story` 18, `data_source` 18, `exclude_quality` 20.
+  * Synthetic corpus (`tools/perf_catalog.py --escu`, real KV Store, lab documents plus 20,000 and
+    47,000 copies, so 22,359 and 49,359 documents, hashes salted so no copy twins a real record),
+    median ms before → after, 5 runs. 22,359 documents: first page 89 → 85, `domain` sorted by
+    criticality 78 → 78, `mitre` 64 → 64, sourcetype 62 → 63, offset 15,000 100 → 110, page
+    without total 34 → 34. 49,359 documents: first page 204 → 177, domain sort 211 → 157,
+    mitre 171 → 116, sourcetype 163 → 113, offset 15,000 237 → 198, page without total 92 → 64 (the
+    0.8.9 figures were measured with the tool run from a second checkout; the difference at
+    49,359 is noise between runs, not an improvement the change should be credited with). New
+    filters at 49,359 documents: provider 113, provider plus domain 155, wave 179, story 106, data
+    source 114, `exclude_quality` 163, provider plus availability 24.
+  * Facets: reading the stored document 8 ms. Recomputing them (one fields scan of the catalogue,
+    which now also reads provider, wave, stories and data sources) costs more: 375 → 514 ms at
+    22,359 documents and 917 → 1,092 ms at 49,359. The post-pass (derived flags and facets) is
+    1,092 → 1,125 ms and 3,006 → 2,303 ms (the larger corpus' 0.8.9 run had one slow write
+    batch, max 5,076 ms). The post-pass runs on every sync, import and reindex, never on a list request.
+  * Reindex on the lab: 12 s for 2,359 documents (5 ms per document); it is synchronous.
+* **Migration verified on the lab.** 0.8.9 with 2,359 documents (270 active) upgraded to 0.9.0:
+  the worker applied `0004_catalog_facets_v3` only, all summaries stayed at version 5,
+  `summary.outdated` was 270, `wave`, `story` and `data_source` returned 0 results without error,
+  `provider`, `exclude_quality` and `quality` filters returned results. After Reindex: all 2,359 at
+  version 6, `outdated` 0, waves crawl 130, walk 10, run 1, 52 stories, 79 data sources, and a second
+  Reindex left the catalogue identical.
+* Risks and limits, stated: twin detection needs the same SPL after whitespace normalisation; a
+  rewritten search with the same meaning is not a twin. Authority is a provider-level statement.
+  Reindex is synchronous (about 5 ms per use case, about 4 minutes at 49,000) and blocks one REST
+  call. Facet values are capped (top 600 stored, 30 per record), and names with a comma lose it.
+* Security picture: unchanged. No new route, capability, setting, dependency or collection; no SPL
+  refusal, approval control, capability check or ACL was relaxed. All new text is built with
+  `ucm.el` and text nodes. Python 3.9 compatible, stdlib only. The build number is 12.

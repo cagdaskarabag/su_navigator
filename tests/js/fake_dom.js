@@ -125,7 +125,7 @@ function runView(file, rootId, routes, opts) {
     global.document.querySelectorAll = function () { return []; };
     var windowListeners = {};
     var urls = [];
-    global.window = { location: { search: opts.search || "", pathname: "/view" },
+    global.window = { location: { search: opts.search || "", hash: opts.hash || "", pathname: "/view" },
         history: { replaceState: function (a, b, url) { urls.push(url); } }, scrollTo: function () {},
         addEventListener: function (t, f) { (windowListeners[t] = windowListeners[t] || []).push(f); } };
     var $ = Object.assign(opts.jquery || function () { throw new Error("jQuery call not stubbed"); }, jq, {

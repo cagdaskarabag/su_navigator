@@ -105,6 +105,23 @@ var tests = {
         assert.ok(/Recommendations are not available/.test(rec.textContent) && /nope/.test(rec.textContent));
         assert.ok(/268/.test(texts(v.root)), "the rest of the page still renders");
     },
+    "the quality exclusion is off by default and sends the option only when ticked": function () {
+        var v = runView("ucm_home.js", "ucm-home", routes());
+        var asks = function () { return v.calls.filter(function (c) { return c.path === "readiness/recommendations"; }); };
+        assert.deepStrictEqual(asks().map(function (c) { return c.params; }), [{}], "default request is unchanged");
+        var box = v.root.find(function (n) { return n.tagName === "INPUT" && n.getAttribute("name") === "exclude_quality"; })[0];
+        assert.strictEqual(box.checked, false);
+        box.checked = true; box.dispatch("change");
+        assert.strictEqual(asks().length, 2);
+        assert.strictEqual(asks()[1].params.exclude_quality, "ai_reviewed,unreviewed");
+        box.checked = false; box.dispatch("change");
+        assert.deepStrictEqual(asks()[2].params, {});
+    },
+    "an exclusion that removed candidates says so": function () {
+        var rec = Object.assign({}, REC, { exclude_quality: ["ai_reviewed", "unreviewed"], excluded: { quality_flagged: 5 } });
+        var v = runView("ucm_home.js", "ucm-home", routes({ "readiness/recommendations": rec }));
+        assert.ok(/5 otherwise eligible/.test(texts(v.root)), texts(v.root));
+    },
     "static sections exist and Overview stays linked": function () {
         var v = runView("ucm_home.js", "ucm-home", routes());
         assert.ok(/The user guide is in development/.test(texts(v.root)));

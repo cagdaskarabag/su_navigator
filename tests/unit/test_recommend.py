@@ -4,6 +4,7 @@ import unittest
 
 import helpers  # noqa: F401  (sets sys.path)
 
+from splunk_ucm.errors import ValidationError
 from splunk_ucm.frameworks.coverage import CoverageService
 from splunk_ucm.readiness.recommend import (EMPTY_NO_ASSESSMENT, EMPTY_NO_CATALOGUE, EMPTY_NO_DISCOVERY,
                                             EMPTY_NONE_ELIGIBLE, MAX_ITEMS, WEIGHTS, RecommendationService,
@@ -311,6 +312,53 @@ class EmptyStateTest(unittest.TestCase):
         store = InMemoryStore()
         uc(store, 1)
         self.assertEqual(ids(RecommendationService(store).recommend("u", None)), ["fenre:UC-1"])
+
+
+class ExcludeQualityTest(unittest.TestCase):
+    def setUp(self):
+        self.store = InMemoryStore()
+        self.k1, _ = uc(self.store, 1)
+        self.k2, _ = uc(self.store, 2, crit="low")
+        self.k3, _ = uc(self.store, 3, crit="medium")
+        self.store.upsert(C.CATALOG, dict(self.store.get(C.CATALOG, self.k1), quality_flags=["unreviewed"]))
+        self.store.upsert(C.CATALOG, dict(self.store.get(C.CATALOG, self.k2), quality_flags=["ai_reviewed", "duplicate_spl"]))
+        self.svc = RecommendationService(self.store)
+
+    def test_default_is_unchanged_and_flags_do_not_matter(self):
+        out = self.svc.recommend("alice", DISCOVERY)
+        self.assertEqual(sorted(ids(out)), ["fenre:UC-1", "fenre:UC-2", "fenre:UC-3"])
+        self.assertEqual(out["exclude_quality"], [])
+        self.assertNotIn("quality_flagged", out["excluded"])
+        self.assertEqual(out, self.svc.recommend("alice", DISCOVERY, exclude_quality=()))
+
+    def test_excluding_leaves_out_flagged_use_cases_and_counts_them(self):
+        out = self.svc.recommend("alice", DISCOVERY, exclude_quality=["ai_reviewed", "unreviewed"])
+        self.assertEqual(ids(out), ["fenre:UC-3"])
+        self.assertEqual(out["excluded"]["quality_flagged"], 2)
+        self.assertEqual(out["eligible_total"], 1)
+        self.assertEqual(out["exclude_quality"], ["ai_reviewed", "unreviewed"])
+
+    def test_one_flag_only_removes_what_carries_it(self):
+        out = self.svc.recommend("alice", DISCOVERY, exclude_quality=["unreviewed"])
+        self.assertEqual(sorted(ids(out)), ["fenre:UC-2", "fenre:UC-3"])
+
+    def test_everything_flagged_is_the_none_eligible_state(self):
+        self.store.upsert(C.CATALOG, dict(self.store.get(C.CATALOG, self.k3), quality_flags=["unreviewed"]))
+        out = self.svc.recommend("alice", DISCOVERY, exclude_quality=["unreviewed", "ai_reviewed"])
+        self.assertEqual((out["items"], out["empty"]), ([], EMPTY_NONE_ELIGIBLE))
+
+    def test_unknown_flag_is_refused(self):
+        with self.assertRaises(ValidationError):
+            self.svc.recommend("alice", DISCOVERY, exclude_quality=["nonsense"])
+
+    def test_route_passes_the_option_and_rejects_bad_values(self):
+        ctx = make_ctx(self.store, [], user="alice")
+        status, body = call(ctx, "GET", "readiness/recommendations", query={"exclude_quality": "ai_reviewed,unreviewed"})
+        self.assertEqual((status, ids(body)), (200, ["fenre:UC-3"]))
+        status, _ = call(ctx, "GET", "readiness/recommendations", query={"exclude_quality": "bogus"})
+        self.assertEqual(status, 400)
+        status, body = call(ctx, "GET", "readiness/recommendations")
+        self.assertEqual(len(ids(body)), 3)
 
 
 class ApiTest(unittest.TestCase):

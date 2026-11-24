@@ -955,6 +955,167 @@ class LiveFrameworksDashboardsTest(unittest.TestCase):
 
 
 @unittest.skipUnless(LIVE, "set UCM_LIVE_SPLUNK=1 to run against a real Splunk instance")
+class LiveProviderNavigationTest(unittest.TestCase):
+    """D-066: provider, wave, story and data-source facets, quality exclusion, twin links and Reindex."""
+
+    RECORD = "9.99.902"
+    UC = "fenre:UC-9.99.902"
+    KEY = "fenre_UC-9.99.902"
+
+    @classmethod
+    def setUpClass(cls):
+        cls.admin = transport()
+        cls.kv = KVStore(cls.admin)
+        status, body = api(cls.admin, "POST", "catalog/reindex", body={})
+        assert status == 200, body
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.remove_twin()
+
+    @classmethod
+    def remove_twin(cls):
+        for coll in (C.VALIDATION, C.READINESS, C.CATALOG, C.CONTENT):
+            cls.kv.delete_query(coll, {"_key": cls.KEY})
+        api(cls.admin, "POST", "catalog/reindex", body={})
+
+    def catalog(self, **query):
+        query.setdefault("count", "1")
+        status, body = api(self.admin, "GET", "catalog", query)
+        self.assertEqual(status, 200, body)
+        return body
+
+    def facets(self):
+        status, body = api(self.admin, "GET", "catalog/facets")
+        self.assertEqual(status, 200, body)
+        return body
+
+    def test_facets_after_reindex_say_the_summaries_are_current(self):
+        from splunk_ucm.catalog.summary import SUMMARY_VERSION
+        facets = self.facets()
+        self.assertEqual(facets["summary"], {"version": SUMMARY_VERSION, "outdated": 0}, facets["summary"])
+        self.assertEqual(sum(facets["providers"].values()), facets["active"])
+
+    def test_provider_facet_counts_equal_filter_totals(self):
+        facets = self.facets()
+        self.assertTrue(facets["providers"], facets)
+        for provider, count in facets["providers"].items():
+            self.assertEqual(self.catalog(provider=provider)["total"], count, provider)
+        both = ",".join(sorted(facets["providers"]))
+        self.assertEqual(self.catalog(provider=both)["total"], facets["active"])
+        self.assertEqual(self.catalog(provider="nothing")["total"], 0)
+
+    def test_wave_story_and_data_source_facets_equal_filter_totals(self):
+        facets = self.facets()
+        for wave, count in facets["waves"].items():
+            self.assertEqual(self.catalog(wave=wave)["total"], count, wave)
+        for key, param in (("analytic_stories", "story"), ("data_sources", "data_source")):
+            for item in facets[key][:5]:
+                self.assertEqual(self.catalog(**{param: item["id"]})["total"], item["count"], (param, item))
+        status, body = api(self.admin, "GET", "catalog", {"wave": "bogus"})
+        self.assertEqual((status, body["error"]["message"]), (400, "invalid wave"))
+
+    def test_unassigned_escu_use_cases_stay_listed_and_are_found_by_story(self):
+        facets = self.facets()
+        if not facets["providers"].get("escu"):
+            self.skipTest("no ESCU content on this instance")
+        unassigned = self.catalog(category="escu_cat-unassigned", count="50")
+        self.assertEqual(unassigned["total"], facets["categories"].get("escu_cat-unassigned", 0))
+        stories = [i for i in facets["analytic_stories"]]
+        self.assertTrue(stories, "ESCU content without any analytic story facet")
+        story = self.catalog(story=stories[0]["id"], provider="escu", count="50")
+        self.assertTrue(all(i["provider"] == "escu" for i in story["items"]))
+
+    def test_filters_combine_and_old_urls_keep_their_meaning(self):
+        facets = self.facets()
+        domain = sorted(facets["domains"])[0]
+        every = self.catalog(domain=domain)["total"]
+        split = sum(self.catalog(domain=domain, provider=p)["total"] for p in facets["providers"])
+        self.assertEqual(split, every)
+        self.assertEqual(self.catalog(category=sorted(facets["categories"])[0])["total"],
+                         facets["categories"][sorted(facets["categories"])[0]])
+
+    def test_exclude_quality_removes_exactly_the_flagged_use_cases(self):
+        total = self.catalog()["total"]
+        for flag in ("unreviewed", "ai_reviewed", "duplicate_spl"):
+            flagged = self.catalog(quality=flag)["total"]
+            self.assertEqual(self.catalog(exclude_quality=flag)["total"], total - flagged, flag)
+        both = self.catalog(quality="unreviewed,ai_reviewed")["total"]
+        self.assertEqual(self.catalog(exclude_quality="unreviewed,ai_reviewed")["total"], total - both)
+        status, body = api(self.admin, "GET", "catalog", {"exclude_quality": "bogus"})
+        self.assertEqual((status, body["error"]["message"]), (400, "invalid quality flag"))
+
+    def test_recommendations_exclusion_is_opt_in(self):
+        status, default = api(self.admin, "GET", "readiness/recommendations")
+        self.assertEqual(status, 200, default)
+        self.assertEqual(default["exclude_quality"], [])
+        status, strict = api(self.admin, "GET", "readiness/recommendations", {"exclude_quality": "ai_reviewed,unreviewed"})
+        self.assertEqual(status, 200, strict)
+        self.assertEqual(strict["exclude_quality"], ["ai_reviewed", "unreviewed"])
+        self.assertLessEqual(strict["eligible_total"], default["eligible_total"])
+        flagged = {i["content_id"] for i in default["items"]} - {i["content_id"] for i in strict["items"]}
+        for content_id in flagged:
+            status, detail = api(self.admin, "GET", "usecase", {"id": content_id})
+            self.assertTrue({"ai_reviewed", "unreviewed"} & set(detail["quality_flags"]), content_id)
+
+    def test_twin_links_both_ways_with_and_without_the_twin(self):
+        from splunk_ucm.util import git_blob_sha
+        status, escu = api(self.admin, "GET", "catalog", {"provider": "escu", "count": "1", "sort": "id"})
+        if not escu["items"]:
+            self.skipTest("no ESCU content on this instance")
+        escu_id, escu_key = escu["items"][0]["content_id"], escu["items"][0]["_key"]
+        status, escu_detail = api(self.admin, "GET", "usecase", {"id": escu_id})
+        self.assertEqual((status, escu_detail["spl_twins"]), (200, []), "no twin before the Fenre record exists")
+        bundle = helpers.fixture_bundle(record_ids=["9.1.1"])
+        record = bundle["records"][0]
+        content = json.loads(record["content"])
+        content.update({"id": self.RECORD, "title": "Twin probe %s" % uuid.uuid4().hex[:8], "spl": escu_detail["spl"], "cimSpl": ""})
+        text = json.dumps(content, indent=2) + "\n"
+        record.update({"record_id": self.RECORD, "content": text, "blob_sha": git_blob_sha(text.encode("utf-8")),
+                       "path": record["path"].replace("UC-9.1.1.json", "UC-%s.json" % self.RECORD)})
+        status, body = api(self.admin, "POST", "import", raw=json.dumps(bundle).encode("utf-8"))
+        self.assertEqual((status, body["job"]["totals"]["invalid"]), (200, 0), body)
+        try:
+            status, fen = api(self.admin, "GET", "usecase", {"id": self.UC})
+            self.assertEqual(status, 200, fen)
+            self.assertEqual([(t["content_id"], t["provider"]) for t in fen["spl_twins"]], [(escu_id, "escu")])
+            self.assertEqual(fen["spl_twins"][0]["authority"]["role"], "detection")
+            self.assertEqual(fen["authority"]["role"], "compliance")
+            self.assertIn("provider_twin", fen["quality_flags"])
+            status, escu_detail = api(self.admin, "GET", "usecase", {"id": escu_id})
+            self.assertEqual([(t["content_id"], t["provider"]) for t in escu_detail["spl_twins"]], [(self.UC, "fenre")])
+            self.assertEqual(escu_detail["authority"]["role"], "detection")
+            self.assertIn("provider_twin", escu_detail["quality_flags"])
+            twins = self.catalog(quality="provider_twin", count="50")
+            self.assertTrue({self.UC, escu_id} <= {i["content_id"] for i in twins["items"]}, twins["total"])
+            facets = self.facets()
+            self.assertEqual({q["id"]: q["count"] for q in facets["quality_flags"]}["provider_twin"], twins["total"])
+        finally:
+            self.remove_twin()
+        status, escu_detail = api(self.admin, "GET", "usecase", {"id": escu_id})
+        self.assertEqual(escu_detail["spl_twins"], [], "the link disappears with the twin")
+        self.assertNotIn("provider_twin", escu_detail["quality_flags"])
+        self.assertEqual(self.catalog(quality="provider_twin")["total"], 0)
+
+    def test_reindex_is_idempotent(self):
+        def snapshot():
+            rows = self.kv.query(C.CATALOG, {}, fields=None)
+            return {r["_key"]: {k: v for k, v in r.items() if not k.startswith("_user")} for r in rows}
+        status, first = api(self.admin, "POST", "catalog/reindex", body={})
+        self.assertEqual(status, 200, first)
+        before = snapshot()
+        facets_before = self.facets()
+        status, second = api(self.admin, "POST", "catalog/reindex", body={})
+        self.assertEqual(status, 200, second)
+        self.assertEqual((second["reindexed"], second["twin_groups"], second["duplicate_groups"]),
+                         (first["reindexed"], first["twin_groups"], first["duplicate_groups"]))
+        self.assertEqual(snapshot(), before)
+        after = self.facets()
+        for key in ("providers", "waves", "analytic_stories", "data_sources", "summary", "active"):
+            self.assertEqual(after[key], facets_before[key], key)
+
+
+@unittest.skipUnless(LIVE, "set UCM_LIVE_SPLUNK=1 to run against a real Splunk instance")
 class LiveMaintenanceTest(unittest.TestCase):
     """WP7: the worker has applied every migration and recorded the installed version."""
 
@@ -973,8 +1134,11 @@ class LiveMaintenanceTest(unittest.TestCase):
         self.assertEqual(state.get("app_version"), __version__, "worker did not record the version in time")
         missing = [m[0] for m in MIGRATIONS if m[0] not in (state.get("applied") or [])]
         self.assertEqual(missing, [], state.get("applied"))
-        total = kv.count(C.CATALOG)
-        self.assertEqual(kv.count(C.CATALOG, {"summary_version": {"$gte": SUMMARY_VERSION}}), total)
+        # D-066: a new summary version is not applied by an upgrade. The facets document says how many
+        # active summaries are older, and that number is the real count.
+        facets = kv.get(C.SYNC_STATE, "catalog::facets") or {}
+        stale = kv.count(C.CATALOG, {"$and": [{"provider_status": "active"}, {"summary_version": {"$lt": SUMMARY_VERSION}}]})
+        self.assertEqual(facets.get("summary"), {"version": SUMMARY_VERSION, "outdated": stale}, facets.get("summary"))
 
 
 def oneshot(t, spl, earliest="-15m", latest="now"):

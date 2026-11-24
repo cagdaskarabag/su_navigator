@@ -1,10 +1,10 @@
-# SUNavigator 0.8.9 — operator guide
+# SUNavigator 0.9.0 — operator guide
 
 **SUNavigator** (short for **Splunk use case navigator**) discovers, assesses,
 selects, validates and deploys monitoring use cases in Splunk.
 
 This is the install, usage and troubleshooting guide for **SUNavigator
-0.8.9**. It is written for a single Splunk Enterprise instance
+0.9.0**. It is written for a single Splunk Enterprise instance
 (search head + indexer on one host), including a local macOS install. Search
 head clusters and Splunk Cloud are **not** validated in this version.
 
@@ -19,6 +19,59 @@ Related documents (design, not how-to):
 | [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md) | Work packages and validation status |
 
 ---
+
+## What changed in 0.9.x
+
+### 0.9.0
+
+0.9.0 makes the catalogue easier to navigate now that it holds two providers (D-066). It
+adds no collection and no setting. **After an upgrade, press Reindex once** (below).
+
+- **Provider facet and badge.** Every catalogue row, use-case page and recommended card
+  shows where the use case comes from (Fenre or ESCU). *Provider* is a facet like the
+  others. When both providers are present, category names carry the provider
+  (`ESCU · Endpoint`, `Fenre · 9. Identity & Access Management`); the category ids and the
+  `?category=` links you may have saved are unchanged.
+- **Find ESCU detections in Unassigned.** About half of ESCU is in the category
+  *Unassigned*, which is a fixed ESCU list and says little. The new **Analytic story** and
+  **Data source** facets (ESCU annotations) find them. Unassigned use cases stay listed.
+- **Same detection in another provider.** When a Fenre and an ESCU use case have the same
+  primary SPL (whitespace ignored), each page links the other ("Same detection in ESCU: ...")
+  and says to deploy it once. A *twin* badge and the quality filter *twin in other
+  provider* list them all. This only says the SPL text is identical; titles, schedules,
+  severity and compliance mappings can differ.
+- **Maturity wave and quality filters.** Filter by Fenre's rollout wave (crawl, walk, run).
+  *Hide quality flag* leaves out use cases with a flag (for example *unreviewed* or *AI
+  reviewer*) and is off by default. **Recommended next** has the same choice, a check box
+  that is off by default.
+- **Plan deployment.** On the use-case page the selection and deployment controls are one
+  panel after the content sections, closed until you press **Plan deployment**. The
+  selection, readiness and deployment state stay visible above the button. Nothing about
+  who can do what changed.
+- **Reindex button.** Content Administration → *Catalogue summaries* runs the reindex.
+
+**Upgrading from 0.8.x.** The upgrade does not rewrite the catalogue by itself. Until you
+reindex, the catalogue still works, the provider filter, *Hide quality flag*, the twin links
+and every older filter are unaffected, but use cases summarised by an earlier version have
+no wave, analytic story or data source: those three filters skip them, and an amber note on
+the catalogue, Overview and Administration says "Reindex needed ... N of M". To fill them:
+open **Content Administration**, press **Reindex catalogue summaries** (needs the
+`ucm_content_manager` role), or run `POST /services/ucm/catalog/reindex`. It re-reads the
+stored records without a download and changes no selection, readiness result or
+deployment. It is synchronous and takes about 5 ms per use case (12 s for 2,359 documents;
+about 4 minutes at 49,000). Running it twice gives the same result. The build number is 12.
+
+**Navigation guide.**
+
+| To find | Use |
+| --- | --- |
+| Everything from one source | *Provider* |
+| ESCU detections for a threat or technique | *Analytic story*; type in the box above the list to narrow it |
+| ESCU detections for a log source | *Data source* |
+| Fenre content to roll out first | *Maturity wave* = crawl |
+| Searches that exist in both providers | *Quality flag* = twin in other provider |
+| Only reviewed content | *Hide quality flag* = unreviewed (and AI reviewer) |
+| Use cases in the ESCU category *Unassigned* | *Category* (ESCU · Unassigned), or an analytic story |
 
 ## What changed in 0.8.x
 
@@ -330,7 +383,7 @@ commands (`delete`, `outputlookup`, `collect`, script, and similar). Deployed
 searches have **no email, webhook or script alert actions**; the default
 alert mode only writes to Splunk's Triggered Alerts.
 
-**Not in 0.8.9:** PDF export of coverage, a bundled regulation-control
+**Not in 0.9.0:** PDF export of coverage, a bundled regulation-control
 catalogue, SHC validation with a deployer and indexer peers, Splunk Cloud vetting submission.
 
 ---
@@ -342,7 +395,7 @@ catalogue, SHC validation with a deployer and indexer peers, Splunk Cloud vettin
 | Splunk | Enterprise 10.x (validated on 10.2.9 in development; tested by operators on 10.4.3 Darwin arm64). Python 3.9 or 3.13 in Splunk. |
 | KV Store | Must reach `status: ready`. The app stores catalogue, inventory, readiness, selections, deployments and audit in KV collections. |
 | Role | First-time setup needs `admin` (or `sc_admin` on Cloud). |
-| Disk | The 0.8.9 package is a few megabytes. Category 9 of Fenre is about 120 records; the full Fenre corpus is tens of thousands of records. |
+| Disk | The 0.9.0 package is a few megabytes. Category 9 of Fenre is about 120 records; the full Fenre corpus is tens of thousands of records. |
 | Network | Optional. Remote sync needs HTTPS to `api.github.com` and `raw.githubusercontent.com`. Offline import needs none. |
 | Browser | Splunk Web. The app is a set of Simple XML views plus JavaScript under `/en-US/app/sunavigator/`. |
 
@@ -359,7 +412,7 @@ Placeholders used below:
 
 ```bash
 ./tools/package.sh
-# writes dist/sunavigator-0.8.9.tar.gz
+# writes dist/sunavigator-0.9.0.tar.gz
 ```
 
 The tarball has a single top-level folder `sunavigator/`
@@ -377,11 +430,11 @@ then fails in the UI with `500 Internal Server Error` even though splunkd is
 still unpacking. Use the CLI:
 
 ```bash
-$SPLUNK_HOME/bin/splunk install app /path/to/sunavigator-0.8.9.tar.gz \
+$SPLUNK_HOME/bin/splunk install app /path/to/sunavigator-0.9.0.tar.gz \
   -auth "$SPLUNK_USER:$SPLUNK_PASSWORD"
 # first install: omit -update
 # upgrade of an existing copy:
-$SPLUNK_HOME/bin/splunk install app /path/to/sunavigator-0.8.9.tar.gz \
+$SPLUNK_HOME/bin/splunk install app /path/to/sunavigator-0.9.0.tar.gz \
   -update 1 -auth "$SPLUNK_USER:$SPLUNK_PASSWORD"
 
 $SPLUNK_HOME/bin/splunk restart
@@ -797,11 +850,15 @@ default max 100 rows).
 | --- | --- |
 | Search | Case-insensitive substring on a precomputed field: id, title, sourcetypes, tags, MITRE ids and the first 1,500 characters of the description. All terms must match. |
 | Domain, category, criticality, difficulty | Exact facets from the canonical model. Tick several values per facet: a use case matches when it has **any** of the ticked values of that facet, and all facets must match (AND between facets, OR within one). Categories are listed under their first domain. |
+| Provider (0.9.0) | `fenre` or `escu`. A badge in the first column shows the provider of each row. When both providers are present the category names carry the provider; the ids are unchanged. |
+| Maturity wave (0.9.0) | Fenre's rollout order: crawl, walk, run. ESCU use cases have no wave and never match. Needs Reindex after an upgrade from 0.8.x. |
+| Analytic story, Data source (0.9.0) | ESCU annotations; use any of the ticked values. They are the way to find ESCU use cases in *Unassigned*. Lists with more than 12 values have a find box that only hides rows. Needs Reindex after an upgrade from 0.8.x. |
 | Sourcetype (exact) | Exact sourcetype string. |
 | MITRE ATT&CK ID | Technique id such as `T1110`. |
 | Review status | Provider review status (for example `verified`, `draft`). |
 | Regulation | Use cases mapped to any of the ticked regulations (for example FedRAMP). |
 | Quality flag | Use cases carrying any of the ticked quality flags (below). |
+| Hide quality flag (0.9.0) | The opposite: leaves out use cases that carry any of the ticked flags. Nothing is hidden unless you tick one. |
 | Availability | Readiness state from the last assessment: *ready*, *partially ready*, *not ready*, *blocked*, *insufficient evidence*, or *not assessed* (no readiness result is stored for the use case). This is evidence from the data inventory, not proof that the data is populated (§6.4). |
 | Only my bookmarks | Use cases you bookmarked. The server reads your own selections only; it never takes a user name from the page. A bookmark is one of your four selection intents (bookmark, select, defer, reject), and each use case has one intent per user, so **Select** on a bookmarked row replaces the bookmark. |
 
@@ -822,7 +879,10 @@ max_rows_per_query`). A total that reaches it is printed as "50000 or more" with
 that it is a lower bound, and Administration shows a warning once the catalogue holds
 90 percent of it (§12, issue #14).
 
-Your filters are in the page URL (`?domain=security,identity&availability=ready`).
+Your filters are in the page URL (`?domain=security,identity&availability=ready`). The 0.9.0
+parameters are `provider`, `wave`, `story`, `data_source` and `exclude_quality`; every
+older URL keeps its meaning. A name that contains a comma has the comma shown as a space in the
+story and data-source lists (a comma separates values in the URL).
 Selected filters appear as removable chips above the table, with **Clear all
 filters**.
 
@@ -838,6 +898,7 @@ catalogue and on the use-case page (D-046):
 | index=* | The primary SPL searches `index=*` or has no index constraint. |
 | needs ES | Splunk Enterprise Security is listed as a premium app and not marked optional. |
 | duplicate SPL | Another active use case has the same primary SPL (whitespace ignored). The use-case page lists them. |
+| twin in other provider (0.9.0, blue) | An active use case from the other provider has the same primary SPL (whitespace ignored). The use-case page links it. |
 
 Click a title (or open `/app/sunavigator/ucm_usecase?id=fenre:UC-9.1.1`)
 for the use-case page (§6.2a): requirements, SPL (labelled untrusted),
@@ -867,6 +928,18 @@ Deployment tile states which readiness states block enabling.
   that are not requirements of the use case, for example whether the SPL has
   been parsed; they appear in the table as additional checks so that the
   counts in the summary add up.
+- **Plan deployment (0.9.0).** The selection, review and deployment controls are in one
+  panel after References, closed until you press **Plan deployment** (or follow the *Your
+  selection* or *Plan deployment* jump link; a link ending in `#ucm-sec-deployment` opens it too). The status
+  row above the button shows your selection, the readiness state, the deployment state,
+  the live saved-search state, drift and "provider content changed" without opening it. The
+  panel holds the same controls with the same permissions as before; it is a
+  button with `aria-expanded`, reachable and operable from the keyboard.
+- **Same detection in another provider (0.9.0).** When another provider has a use case with
+  the same primary SPL, a box lists it ("Same detection in ESCU: <id>") with a link. It states
+  the provider roles (ESCU: detection content source; Fenre: compliance and mapping context),
+  that only the primary SPL is known to be identical, and that deploying both creates two
+  saved searches. SPL identical inside the same provider keeps its own warning.
 - **Deployment.** The buttons you can use are shown as before. A collapsed
   list, "Actions not available to you right now", gives the reason for each
   action that is not offered (for example "Needs an approved revision"). The
@@ -1247,7 +1320,7 @@ Most non-admin roles cannot. The UI then reports run status **not
 available**, not “no runs”. Tick **Include run status** only if your role
 can search `_internal`.
 
-Regulation controls have no bundled catalogue in 0.8.9; only controls that
+Regulation controls have no bundled catalogue in 0.9.0; only controls that
 appear on imported use cases are listed.
 
 **Export ATT&CK Navigator layer** (next to the legend) downloads the matrix
@@ -1374,7 +1447,7 @@ app. Do the steps in this order:
    $SPLUNK_HOME/bin/splunk restart
    ```
 
-4. **Install SUNavigator 0.8.9** as in §3.2. The first install omits
+4. **Install SUNavigator 0.9.0** as in §3.2. The first install omits
    `-update`, because `sunavigator` is a new app ID.
 5. **Re-create the GitHub token** if you use one (§3.6). It must be stored in
    realm `sunavigator`. The 0.7.0 token in realm `splunk_use_case_manager` is
@@ -1395,8 +1468,10 @@ $SPLUNK_HOME/bin/splunk restart
 ```
 
 `local/` is kept. Within one worker interval the maintenance worker applies
-pending migrations (for example re-deriving catalogue summaries) and records
-the version in KV (`uc_sync_state` key `app::state`).
+pending migrations and records the version in KV (`uc_sync_state` key `app::state`).
+Since 0.9.0 a new catalogue summary version is **not** applied by an upgrade; the
+catalogue shows a "Reindex needed" note until you press **Reindex catalogue summaries**
+in Content Administration (see *What changed in 0.9.x*).
 
 **Downgrades are not supported.** Splunk drops KV collection data for
 fields the older `collections.conf` does not define.
@@ -1711,6 +1786,11 @@ Examples:
 curl -k -u "$SPLUNK_USER:$SPLUNK_PASSWORD" \
   "https://127.0.0.1:8089/services/ucm/catalog?category=9&count=25"
 
+# ESCU use cases of one analytic story, leaving out the unreviewed ones
+# (the new filters combine like the others)
+curl -k -u "$SPLUNK_USER:$SPLUNK_PASSWORD" \
+  "https://127.0.0.1:8089/services/ucm/catalog?provider=escu&story=Data%20Exfiltration&exclude_quality=unreviewed"
+
 # Queue discovery
 curl -k -u "$SPLUNK_USER:$SPLUNK_PASSWORD" \
   -H "Content-Type: application/json" \
@@ -1746,7 +1826,7 @@ Full table: [ARCHITECTURE.md §6](ARCHITECTURE.md).
 
 ---
 
-## 12. Known limitations (0.8.9)
+## 12. Known limitations (0.9.0)
 
 Each item says where to read more. Items with an issue number are tracked there.
 
@@ -1771,6 +1851,10 @@ Each item says where to read more. Items with an issue number are tracked there.
 - Catalogue facet counts are global, not recalculated for the other active filters
   (D-059). The bookmark, availability and regulation filters join by `_key` up to
   `[catalog] max_join_keys` (2000) and otherwise scan up to 49,999 rows.
+- Twin links compare the primary SPL after whitespace is normalised, so a search rewritten
+  with the same meaning is not linked, and a link does not prove the records are otherwise
+  equal (D-066). Wave, analytic-story and data-source filters need Reindex after an upgrade
+  from 0.8.x; Reindex is synchronous (about 5 ms per use case).
 - Free-text search is a substring match over a precomputed field (no ranking, only
   the first 1,500 characters of the description). Coverage is computed on read (about
   0.5 s at 20,000 use cases).
@@ -1845,7 +1929,7 @@ Each item says where to read more. Items with an issue number are tracked there.
 
 ## 13. Quick start checklist
 
-1. `splunk install app sunavigator-0.8.9.tar.gz` then `splunk restart`.
+1. `splunk install app sunavigator-0.9.0.tar.gz` then `splunk restart`.
 2. `splunk show kvstore-status` → `ready` (macOS: §9.2 if stuck on `starting`).
 3. Open **SUNavigator → Administration**; all platform pills green.
 4. **Check provider for categories** → tick **9** → **Synchronize**, **or**
