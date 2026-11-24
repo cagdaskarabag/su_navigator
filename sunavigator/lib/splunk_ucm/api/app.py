@@ -539,6 +539,10 @@ def get_deployments(ctx: Context, req: Request) -> Response:
     return Response(200, out)
 
 
+def get_deployments_export(ctx: Context, req: Request) -> Response:
+    return Response(200, ctx.deployment_service().export(ctx.user))
+
+
 def get_deployment(ctx: Context, req: Request) -> Response:
     svc = ctx.deployment_service()
     return Response(200, _deployment_view(ctx, svc, svc.get(req.arg("id"))))
@@ -754,6 +758,7 @@ def build_router() -> Router:
     router.add("POST", "validate", post_validate)
     router.add("POST", "preview", post_preview)
     router.add("GET", "deployments", get_deployments)
+    router.add("GET", "deployments/export", get_deployments_export)
     router.add("GET", "deployment", get_deployment)
     for action in DEPLOYMENT_ACTIONS:
         router.add("POST", "deployment/" + action, _deployment_action(action))

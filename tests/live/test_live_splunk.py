@@ -18,8 +18,11 @@ import unittest
 import uuid
 
 import helpers
+from splunk_ucm import conf
+from splunk_ucm.deployment.export import conf_search
 from splunk_ucm.storage import collections as C
 from splunk_ucm.storage.kvstore import KVStore
+from splunk_ucm.util import sha256_text
 from splunkd_http import HttpTransport
 
 LIVE = os.environ.get("UCM_LIVE_SPLUNK") == "1"
@@ -616,6 +619,18 @@ class LiveDeploymentTest(unittest.TestCase):
         self.assertEqual(status, 200, body)
         self.assertEqual(body["deployment"]["deployed_revision"], 1)
         self.assertEqual(self.saved(name)["cron_schedule"], "*/30 * * * *")
+        status, bundle = api(self.operator, "GET", "deployments/export")
+        self.assertEqual(status, 200, bundle)
+        again = api(self.operator, "GET", "deployments/export")[1]
+        self.assertEqual(again["sha256"], bundle["sha256"])
+        self.assertEqual(again["content"], bundle["content"])
+        stanzas = dict(conf.parse(bundle["content"]))
+        self.assertEqual(stanzas[name]["cron_schedule"], "*/30 * * * *")
+        self.assertEqual(stanzas[name]["disabled"], "1")
+        self.assertEqual(stanzas[name]["alert.suppress.period"], "1h")
+        entry = [e for e in bundle["manifest"]["entries"] if e["saved_search"] == name][0]
+        self.assertEqual((entry["revision"], entry["approved_by"]), (1, os.environ.get("UCM_SPLUNK_USER", "admin")))
+        self.assertEqual(entry["conf_search_sha256"], sha256_text(conf_search(stanzas[name]["search"])))
         status, body = self.act(self.operator, "retire")
         self.assertEqual((status, body["deployment"]["state"]), (200, "retired"))
         self.assertIsNone(self.saved(name))

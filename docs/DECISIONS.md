@@ -799,3 +799,27 @@ as drift.
   Splunk), and the scheduler account's index access is whatever its role
   grants. Removing the scheduler account orphans its searches; `verify`
   reports the owner.
+
+## D-052 Deterministic export of deployed revisions
+*0.7.3+ (T-25).*
+* Output: `savedsearches.conf` text plus a JSON manifest, built from the
+  deployed revision of each deployment (approved by a reviewer, deployed at
+  least once). Each stanza uses the same settings as the deploy path, with
+  `disabled = 1` and the app's managed-search description. Stanzas sort by name;
+  no export time is recorded; the same records always give the same bytes
+  (unit-tested for order independence and live-state independence; live test
+  checks the same bytes on two fetches).
+* Why this shape: git-based review and diff without giving the export a second
+  deployment path. The user commits the file; the app remains the only writer
+  to Splunk. A zip or a Splunk package was not chosen because a zip needs a
+  binary transport for one text file and the package would imply an owner the
+  file cannot carry.
+* `ucm.conf` writer and reader (`splunk_ucm/conf.py`) are stdlib. The writer
+  refuses values that would not read back unchanged (a line ending in a
+  backslash, a carriage return, leading or trailing whitespace on a line),
+  so such use cases are listed as skipped instead of being written wrongly.
+  Whitespace per SPL line is normalised; the manifest flags it.
+* Audit: each export writes `deployment.export` with the count, skipped list and
+  SHA-256 of the file.
+* Web exposure: `default/web.conf` exposes `ucm/deployments/export` explicitly
+  (the `ucm/deployment/*` pattern does not cover it).

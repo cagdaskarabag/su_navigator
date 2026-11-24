@@ -627,6 +627,26 @@ The **Settings → Searches, reports, and alerts** page did not list these
 searches in the lab, even for their owner. Use the REST search as the
 reliable check (see §9.14).
 
+**Export approved content (D-052).** The **Export deployed revisions** button on
+the Deployments page downloads two files: `savedsearches.conf` (one disabled
+stanza per use case that has a deployed revision) and
+`savedsearches.manifest.json` (per entry: revision, approver and time, SHA-256
+of the SPL, and the stanza hash; plus a `skipped` list with reasons). The same
+stored records always produce the same bytes, so you can commit them to your
+own repository and diff them in review. Retired, unapproved and never-deployed
+use cases are not exported. Live state (enabled, drift) is not in the file.
+
+Limits to know before you rely on the file:
+
+- The file does not name an owner. Deployment through the app sets the owner to
+  `scheduled_owner`; a search loaded from this file in a package is owned by
+  `nobody` until someone reassigns it. Treat the file as the reviewed record, and
+  keep deploying through the app.
+- A SPL line that ends in a backslash cannot be written to a `.conf` file. Such
+  a use case appears in `skipped`. Leading and trailing spaces on each SPL line
+  are removed in the file (`whitespace_normalized` in the manifest says which
+  entries changed); the SHA-256 in the manifest is of the exact stored SPL.
+
 ### 6.7 Coverage
 
 View `ucm_coverage`. Bundled frameworks: MITRE ATT&CK **Enterprise 20.1**

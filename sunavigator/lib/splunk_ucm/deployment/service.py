@@ -32,6 +32,7 @@ from ..storage.kvstore import DocumentStore
 from ..storage.repositories import CategoryRepository, ContentRepository
 from ..util import safe_key, utc_now_iso
 from .savedsearch import SavedSearchClient
+from .export import build_bundle
 from .spec import drift, is_managed_by_us, normalize_spec, saved_search_name, settings_for, spl_hash
 
 DRAFT, PENDING, APPROVED, REJECTED, DEPLOYED, FAILED, RETIRED = (
@@ -122,6 +123,13 @@ class DeploymentService:
         for r in self.store.query(C.DEPLOYMENTS, {"live_drift": True}, fields=["_key"]):
             drifted += 1
         return {"total": len(rows), "by_state": by_state, "by_live": by_live, "drifted": drifted}
+
+    def export(self, actor: str) -> Dict[str, Any]:
+        bundle = build_bundle(self.store.query(C.DEPLOYMENTS, None))
+        self.audit.record(actor, "deployment.export", "deployment", "*",
+                          details={"count": bundle["count"], "skipped": bundle["skipped"],
+                                   "sha256": bundle["sha256"]})
+        return bundle
 
     def allowed_actions(self, doc: Optional[Dict[str, Any]], user: str, caps: Sequence[str]) -> List[str]:
         can_deploy = "ucm_deploy" in caps

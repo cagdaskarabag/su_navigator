@@ -39,11 +39,39 @@ require([
         });
     }
 
+    function download(filename, text, mime) {
+        var url = URL.createObjectURL(new Blob([text], { type: mime }));
+        var a = el("a", { href: url, text: filename });
+        a.setAttribute("download", filename);
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
+    }
+
+    function exportBox() {
+        var status = el("div", { "class": "ucm-sub" });
+        var button = el("button", { "class": "btn", text: "Export deployed revisions", onclick: function () {
+            button.disabled = true;
+            ucm.get("deployments/export").done(function (bundle) {
+                download("savedsearches.conf", bundle.content, "text/plain");
+                download("savedsearches.manifest.json", JSON.stringify(bundle.manifest, null, 2) + "\n", "application/json");
+                status.textContent = "Exported " + bundle.count + " deployed revision(s)" +
+                    (bundle.skipped ? ", " + bundle.skipped + " skipped (see manifest)" : "") +
+                    ". savedsearches.conf SHA-256 " + bundle.sha256 + ". Same records always give the same file.";
+            }).fail(function (err) {
+                status.textContent = "Export failed: " + (err && err.message ? err.message : "unknown error");
+            }).always(function () { button.disabled = false; });
+        } });
+        return el("div", { "class": "ucm-toolbar" }, button, status);
+    }
+
     function render(data) {
         var s = data.summary || { by_state: {}, by_live: {}, total: 0, drifted: 0 };
         ucm.clear(root);
         root.appendChild(el("div", { "class": "ucm-header" }, el("h2", { text: "Deployments" }),
             el("div", { "class": "ucm-sub", text: "Searches are written disabled. Enable them from the use case page after review. Drift is checked by the background worker and on demand." })));
+        root.appendChild(exportBox());
         root.appendChild(el("div", { "class": "ucm-cards" },
             card("All deployments", s.total, !state.state && !state.live && !state.drift, function () { state = { state: "", live: "", drift: "", offset: 0 }; load(); }),
             card("Pending approval", s.by_state.pending_approval || 0, state.state === "pending_approval", function () { state = { state: "pending_approval", live: "", drift: "", offset: 0 }; load(); }),
