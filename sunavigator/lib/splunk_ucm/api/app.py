@@ -612,6 +612,16 @@ def get_framework_matrix(ctx: Context, req: Request) -> Response:
     return Response(200, out)
 
 
+def get_framework_navigator(ctx: Context, req: Request) -> Response:
+    registry = FrameworkRegistry(ctx.records())
+    definition = registry.get(req.arg("framework_id", "mitre_attack_enterprise"), req.arg("version"))
+    levels, health = _levels(ctx, req)
+    cov = CoverageService(ctx.store)
+    layer = cov.navigator_layer(cov.attack_matrix(definition, levels), bool(health and health["available"]))
+    return Response(200, {"layer": layer, "filename": "attack-layer-%s-%s.json" % (
+        definition["framework_id"], definition["version"])})
+
+
 def get_framework_technique(ctx: Context, req: Request) -> Response:
     registry = FrameworkRegistry(ctx.records())
     definition = registry.get(req.arg("framework_id", "mitre_attack_enterprise"), req.arg("version"))
@@ -748,6 +758,7 @@ def build_router() -> Router:
     router.add("GET", "frameworks", get_frameworks)
     router.add("GET", "frameworks/matrix", get_framework_matrix)
     router.add("GET", "frameworks/technique", get_framework_technique)
+    router.add("GET", "frameworks/navigator", get_framework_navigator)
     router.add("GET", "frameworks/controls", get_framework_controls)
     router.add("GET", "frameworks/clause", get_framework_clause)
     router.add("GET", "frameworks/evidence", get_framework_evidence)

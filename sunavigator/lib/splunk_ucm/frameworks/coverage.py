@@ -25,6 +25,10 @@ from ..util import dedupe
 LEVELS = ("catalogue", "ready", "deployed", "enabled", "operational")
 _RANK = {name: i for i, name in enumerate(LEVELS)}
 PAGE = 5000
+LEVEL_LABELS = {"catalogue": "In catalogue", "ready": "Data ready", "deployed": "Deployed", "enabled": "Enabled",
+                "operational": "Running successfully"}
+NAVIGATOR_COLORS = {"catalogue": "#dbe9f6", "ready": "#a8d5a2", "deployed": "#5fb760", "enabled": "#1e7b34",
+                    "operational": "#0b4d1f"}
 
 
 def _iter(store: DocumentStore, collection: str, query: Optional[Dict[str, Any]],
@@ -155,6 +159,47 @@ class CoverageService:
             "unresolved": [{"id": a, "reason": r, "use_cases": sorted(v)[:50], "count": len(v)}
                            for (a, r), v in sorted(unresolved.items())],
             "levels": list(LEVELS),
+        }
+
+    @staticmethod
+    def navigator_layer(matrix: Dict[str, Any], operational: bool = False) -> Dict[str, Any]:
+        """ATT&CK Navigator layer (format 4.5); score is the level rank, 1 = in catalogue."""
+        levels = list(LEVELS) if operational else list(LEVELS[:-1])
+        techniques: Dict[str, Dict[str, Any]] = {}
+
+        def add(cell: Dict[str, Any]) -> None:
+            if not cell["level"]:
+                return
+            c = cell["counts"]
+            techniques.setdefault(cell["id"], {
+                "techniqueID": cell["id"], "score": _RANK[cell["level"]] + 1,
+                "color": NAVIGATOR_COLORS[cell["level"]], "enabled": True, "showSubtechniques": False,
+                "comment": "%s: %d use case(s) in catalogue, %d ready, %d deployed, %d enabled" % (
+                    LEVEL_LABELS[cell["level"]], c["catalogue"], c["ready"], c["deployed"], c["enabled"])
+                + (", %d running successfully" % c["operational"] if operational else ""),
+                "metadata": [{"name": "level", "value": cell["level"]},
+                             {"name": "use_cases", "value": str(c["catalogue"])}],
+            })
+
+        for tac in matrix["tactics"]:
+            for t in tac["techniques"]:
+                add(t)
+                for s in t["subs"]:
+                    add(s)
+                    if s["level"]:
+                        techniques[t["id"]]["showSubtechniques"] = True
+        domain = "ics-attack" if matrix["domain"] == "ics" else "enterprise-attack"
+        return {
+            "name": "SUNavigator coverage", "domain": domain,
+            "versions": {"attack": matrix["version"].split(".")[0], "navigator": "5.1.0", "layer": "4.5"},
+            "description": "Furthest level reached per technique in %s %s: %s." % (
+                matrix["name"], matrix["version"], ", ".join("%d = %s" % (i + 1, LEVEL_LABELS[n])
+                                                            for i, n in enumerate(levels))),
+            "sorting": 0, "hideDisabled": False,
+            "layout": {"layout": "side", "showID": True, "showName": True},
+            "gradient": {"colors": ["#ffffff", NAVIGATOR_COLORS[levels[-1]]], "minValue": 0, "maxValue": len(levels)},
+            "legendItems": [{"label": LEVEL_LABELS[n], "color": NAVIGATOR_COLORS[n]} for n in levels],
+            "techniques": [techniques[k] for k in sorted(techniques)],
         }
 
     @staticmethod

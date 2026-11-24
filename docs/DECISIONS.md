@@ -754,3 +754,17 @@ as drift.
   export per clause.
 * Not covered: clauses that no imported use case maps to (no bundled clause
   catalogue), and attestation or sign-off workflow.
+
+## D-050 ATT&CK Navigator layer export
+*0.7.3+ (T-24).*
+* `GET frameworks/navigator` turns the coverage matrix into a Navigator layer
+  (format 4.5, Navigator 5.1.0, `versions.attack` = the major version of the
+  selected definition, `enterprise-attack` or `ics-attack`). Only techniques
+  with a level are listed, sorted by id; score = level rank (1 = in
+  catalogue), colour = the coverage page colour, comment = counts per level.
+  Techniques are listed without a tactic, so a technique in several tactics
+  is coloured in each.
+* "Running successfully" is a level (and legend entry) only when run status
+  is requested and available.
+* Verified: the lab layer (41 techniques) loads in the public ATT&CK
+  Navigator with no console errors and the expected colours.

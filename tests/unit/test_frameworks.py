@@ -146,6 +146,22 @@ class CoverageTest(unittest.TestCase):
         ics = self.cov.attack_matrix(reg.get("mitre_attack_ics"), self.cov.use_case_levels())
         self.assertEqual(ics["totals"]["covered"]["catalogue"], 0)
 
+    def test_navigator_layer(self):
+        self.store.upsert(C.READINESS, {"_key": "fenre_UC-9.1.2", "state": "ready"})
+        matrix = self.cov.attack_matrix(validate_definition(TINY), self.cov.use_case_levels())
+        layer = self.cov.navigator_layer(matrix)
+        self.assertEqual((layer["domain"], layer["versions"]["attack"], layer["versions"]["layer"]),
+                         ("enterprise-attack", "99", "4.5"))
+        by_id = {t["techniqueID"]: t for t in layer["techniques"]}
+        self.assertEqual((by_id["T1110"]["score"], by_id["T1110"]["showSubtechniques"]), (2, True))
+        self.assertEqual(by_id["T1110.001"]["score"], 1)
+        self.assertEqual([t["techniqueID"] for t in layer["techniques"]], sorted(by_id))
+        self.assertEqual(len(layer["legendItems"]), 4)
+        self.assertEqual(layer["gradient"]["maxValue"], 4)
+        self.assertEqual(len(self.cov.navigator_layer(matrix, operational=True)["legendItems"]), 5)
+        self.assertEqual(layer, self.cov.navigator_layer(self.cov.attack_matrix(validate_definition(TINY),
+                                                                                 self.cov.use_case_levels())))
+
     def test_generic_frameworks_and_controls(self):
         summary = {f["framework"]: f for f in self.cov.frameworks_summary(self.cov.use_case_levels())}
         self.assertEqual(summary["mitre_attack"]["counts"]["catalogue"], 3)
@@ -292,6 +308,9 @@ class FrameworkApiTest(unittest.TestCase):
         self.assertEqual(call(viewer, "GET", "frameworks/technique",
                               {"framework_id": "mitre_attack_enterprise", "id": "T1110"})[0], 200)
         self.assertEqual(call(viewer, "GET", "frameworks/controls", {"framework": "regulation:gdpr"})[0], 200)
+        status, body = call(viewer, "GET", "frameworks/navigator", {"framework_id": "mitre_attack_ics"})
+        self.assertEqual((status, body["layer"]["domain"]), (200, "ics-attack"))
+        self.assertEqual(body["filename"], "attack-layer-mitre_attack_ics-20.1.json")
         self.assertEqual(call(viewer, "GET", "frameworks", {"domain": "bogus"})[0], 400)
         self.assertEqual(call(viewer, "POST", "frameworks/import", body=TINY)[0], 403)
         self.assertEqual(call(viewer, "POST", "frameworks/activate", body={})[0], 403)

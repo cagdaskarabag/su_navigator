@@ -649,6 +649,10 @@ class LiveFrameworksDashboardsTest(unittest.TestCase):
         self.assertEqual(status, 200, body)
         self.assertEqual(len(body["tactics"]), 15)
         self.assertGreater(body["totals"]["techniques"], 150)
+        covered = {t["id"] for tac in body["tactics"] for t in tac["techniques"] if t["level"]}
+        status, nav = api(self.viewer, "GET", "frameworks/navigator", {"framework_id": "mitre_attack_enterprise"})
+        self.assertEqual((status, nav["layer"]["versions"]["attack"]), (200, "20"))
+        self.assertTrue(covered <= {t["techniqueID"] for t in nav["layer"]["techniques"]})
         self.assertEqual(api(self.viewer, "POST", "frameworks/import", raw=b"{}")[0], 403)
 
     def test_run_status_degrades_without_internal_access(self):

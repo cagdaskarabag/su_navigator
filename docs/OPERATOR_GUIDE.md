@@ -638,6 +638,14 @@ can search `_internal`.
 Regulation controls have no bundled catalogue in 0.7.3; only controls that
 appear on imported use cases are listed.
 
+**Export ATT&CK Navigator layer** (next to the legend) downloads the matrix
+as a Navigator layer (format 4.5) for the selected framework version and
+domain filter. Each covered technique's score is its level (1 = in
+catalogue … 4 = enabled, 5 = running successfully when run status is
+included), with the same colours and a per-technique count comment. Open it
+in [ATT&CK Navigator](https://mitre-attack.github.io/attack-navigator/)
+with "Open existing layer" (D-050).
+
 **Clauses and evidence (D-049).** Click a regulation under "Other frameworks
 and regulations" to list its clauses in natural order (`A.5.9` before
 `A.5.10`). A clause is marked **gap** when no mapped use case is data ready,

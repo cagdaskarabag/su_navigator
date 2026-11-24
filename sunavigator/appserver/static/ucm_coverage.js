@@ -83,7 +83,12 @@ require([
             target.appendChild(ucm.stateBox("info", "Run status is not available.", m.operational.reason ||
                 "Your role cannot search the scheduler logs in index=_internal, so the Running successfully level is not shown."));
         }
-        target.appendChild(legend(m.levels || []));
+        target.appendChild(el("div", { "class": "ucm-toolbar" }, legend(m.levels || []),
+            el("button", { "class": "btn", text: "Export ATT&CK Navigator layer", onclick: function () {
+                ucm.get("frameworks/navigator", query({ framework_id: state.framework_id, version: state.version })).done(function (data) {
+                    download(data.filename, JSON.stringify(data.layer, null, 2), "application/json");
+                }).fail(function (err) { ucm.notify(err.message, "Could not build the layer"); });
+            } })));
         target.appendChild(el("div", { "class": "ucm-matrix" }, (m.tactics || []).map(function (tac) {
             return el("div", { "class": "ucm-matrix-col" },
                 el("h4", { title: tac.id, text: tac.name }),
