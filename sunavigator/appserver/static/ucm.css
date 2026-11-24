@@ -129,3 +129,6 @@ textarea.ucm-modal-input { min-height: 72px; resize: vertical; }
 .ucm-recommendation { min-width: 300px; max-width: 460px; }
 .ucm-recommendation .ucm-actions { margin: 4px 0; }
 .ucm-results-badges { display: inline-flex; flex-wrap: wrap; max-width: 260px; }
+.ucm-lint-list { margin: 8px 0 0 0; padding: 0; list-style: none; }
+.ucm-lint-item { padding: 6px 0; border-top: 1px solid rgba(92, 68, 0, 0.2); }
+.ucm-lint-dismiss { padding: 0; margin-top: 2px; }

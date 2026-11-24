@@ -42,6 +42,8 @@ DEFAULT_MAX_JOIN_KEYS = 2000
 # Most catalogue keys the scan path reads. One below the KV Store ``max_rows_per_query`` default of
 # 50000, because the scan asks for one extra row to notice that the limit was exceeded.
 DEFAULT_MAX_SCAN = 49999
+# ``limits.conf [kvstore] max_rows_per_query``. A count or scan that returns this many rows may have been cut off.
+DEFAULT_KV_ROW_LIMIT = 50000
 
 
 @dataclasses.dataclass
@@ -124,12 +126,14 @@ def build_query(f: CatalogFilter) -> Dict[str, Any]:
 
 class CatalogQueryService:
     def __init__(self, store: DocumentStore, max_page_size: int = 100, max_offset: int = 50000,
-                 max_join_keys: int = DEFAULT_MAX_JOIN_KEYS, max_scan: int = DEFAULT_MAX_SCAN):
+                 max_join_keys: int = DEFAULT_MAX_JOIN_KEYS, max_scan: int = DEFAULT_MAX_SCAN,
+                 kv_row_limit: int = DEFAULT_KV_ROW_LIMIT):
         self.store = store
         self.max_page_size = max_page_size
         self.max_offset = max_offset
         self.max_join_keys = max_join_keys
         self.max_scan = max_scan
+        self.kv_row_limit = kv_row_limit
 
     def search(self, f: CatalogFilter, user: str = "") -> Dict[str, Any]:
         if f.sort not in SORTS:
@@ -151,12 +155,16 @@ class CatalogQueryService:
         total: Optional[int] = None
         if f.with_total:
             total = self.store.count(C.CATALOG, query or None)
-        return self._page(rows, f, count, total)
+        return self._page(rows, f, count, total, total is not None and total >= self.kv_row_limit)
 
     @staticmethod
-    def _page(rows: List[Dict[str, Any]], f: CatalogFilter, count: int, total: Optional[int]) -> Dict[str, Any]:
+    def _page(rows: List[Dict[str, Any]], f: CatalogFilter, count: int, total: Optional[int],
+              capped: bool = False) -> Dict[str, Any]:
+        """``total_capped``: the KV Store returns at most ``max_rows_per_query`` rows, so a total at that
+        number is a lower bound, not a count."""
         return {"items": rows[:count], "offset": f.offset, "count": count, "has_more": len(rows) > count,
-                "total": total if f.with_total else None, "sort": f.sort}
+                "total": total if f.with_total else None, "total_capped": bool(capped and f.with_total),
+                "sort": f.sort}
 
     def _allowed_keys(self, f: CatalogFilter, user: str, base_query: Dict[str, Any]) -> Optional[Set[str]]:
         """Catalogue keys the readiness and bookmark filters allow, or None when neither is set.
@@ -170,20 +178,25 @@ class CatalogQueryService:
         if f.bookmarked:
             if not user:
                 raise ValidationError("bookmarks need a signed-in user")
-            rows = self.store.query(C.SELECTIONS, {"$and": [{"user": user}, {"intent": "bookmark"}]},
-                                    fields=["catalog_key"], limit=self.max_scan)
+            rows = self._bounded(C.SELECTIONS, {"$and": [{"user": user}, {"intent": "bookmark"}]}, ["catalog_key"])
             marked = {r["catalog_key"] for r in rows if r.get("catalog_key")}
             allowed = marked if allowed is None else allowed & marked
         return allowed
+
+    def _bounded(self, collection: str, query: Optional[Dict[str, Any]], fields: Sequence[str]) -> List[Dict[str, Any]]:
+        rows = self.store.query(collection, query, fields=list(fields), limit=self.max_scan + 1)
+        if len(rows) > self.max_scan:
+            raise ValidationError("too many rows for this filter; narrow the other filters first",
+                                  {"limit": self.max_scan})
+        return rows
 
     def _availability_keys(self, values: Sequence[str], base_query: Dict[str, Any]) -> Set[str]:
         states = [v for v in values if v != NOT_ASSESSED]
         keys: Set[str] = set()
         if states:
-            rows = self.store.query(C.READINESS, {"state": {"$in": states}}, fields=["_key"], limit=self.max_scan)
-            keys.update(r["_key"] for r in rows)
+            keys.update(r["_key"] for r in self._bounded(C.READINESS, {"state": {"$in": states}}, ["_key"]))
         if NOT_ASSESSED in values:
-            assessed = {r["_key"] for r in self.store.query(C.READINESS, None, fields=["_key"], limit=self.max_scan)}
+            assessed = {r["_key"] for r in self._bounded(C.READINESS, None, ["_key"])}
             # Only the use cases the other filters already select (by default the active ones): withdrawn
             # entries have no readiness result and would otherwise all count as not assessed.
             every = self.store.query(C.CATALOG, base_query or None, fields=["_key"], limit=self.max_scan + 1)

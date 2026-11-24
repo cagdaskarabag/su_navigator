@@ -251,6 +251,8 @@ function ucmViewMain($, ucm) {
             el("div", { "class": "ucm-readiness-head" }, el("strong", { text: "SPL validation" }),
                 v ? (v.parse_ok ? ucm.badge("parsed", "ok") : ucm.badge("parse failed", "error")) : ucm.badge("not validated", "neutral")),
             el("div", { "class": "ucm-sub", text: parseLine }),
+            v && v.lint === undefined ? el("div", { "class": "ucm-sub", text: "SPL lint has not run for this validation; run Parse and sample fields again to check." }) : null,
+            v ? ucm.lintBox(v.lint) : null,
             el("div", { "class": "ucm-sub", text: previewLine }),
             el("div", { "class": "ucm-actions" },
                 el("button", { "class": "btn btn-primary", type: "button", text: "Parse and sample fields",
@@ -460,6 +462,9 @@ function ucmViewMain($, ucm) {
                 "The search sets earliest/latest itself, which overrides the schedule's " + latest.earliest + " → " +
                 latest.latest + " range. Remove it from the SPL unless the override is intended."));
         }
+        var lintNote = ucm.lintBox(latest.lint, "Advisory: submitting is not blocked, and these do not change approval. " +
+            "Dismiss hides a finding until the page is reloaded.");
+        if (lintNote) { card.appendChild(lintNote); }
         var accessNote = ucm.accessBox(view.scheduler_access);
         if (accessNote) { card.appendChild(accessNote); }
         if (dep.last_error) { card.appendChild(ucm.stateBox("error", "Last error", dep.last_error)); }

@@ -24,7 +24,7 @@ issue can be written from it.
 | F-04 | UC-9.1.2, UC-4.1.2 | Manifest asserts a field the final `table` drops | manifest vs SPL |
 | F-05 | UC-4.1.1 | SPL filters a value AWS does not emit; manifest disagrees | SPL |
 | F-06 | UC-1.2.29 | Eval string `"\\"` is not a valid regex; Splunk rejects the search | SPL |
-| F-07 | UC-2.6.44, UC-2.6.45 | `match()` called with three arguments | SPL |
+| F-07 | UC-2.6.44 | `match()` called with three arguments | SPL |
 | F-08 | UC-3.2.1 | `earliest=-6h@5m` is not a valid time modifier | SPL |
 | F-09 | UC-2.6.58, 62, 66, 68 | `timechart` with two split-by fields; Splunk rejects the search | SPL |
 | F-10 | 64 fixtures in 13 groups | One generic event template reused for unrelated use cases | fixtures |
@@ -112,18 +112,21 @@ issue can be written from it.
 
 * Symptom: Splunk refuses the search: `Error in 'EvalCommand': Regex: \ at end of pattern`.
 * Evidence: the SPL has `replace(TargetObject,"^.*\\","")`. In an eval string `\\` is one
-  backslash, so the regex ends in a lone backslash. The same applies to
-  `replace(TargetObject,"\\[^\\]+$","")`. SUNavigator cannot deploy the search.
-* Suggested fix: `"^.*\\\\"` and `"\\\\[^\\\\]+$"` (a regex backslash needs four in an
-  eval string). The search also filters on `source=`, which the control test cannot scope
+  backslash, so the regex ends in a lone backslash. SUNavigator cannot deploy the search.
+  *Correction (0.8.9):* the second call in the same search, `replace(TargetObject,"\\[^\\]+$","")`,
+  was listed here as having the same defect. It does not: it unescapes to `\[^\]+$`, which is
+  a valid regex, and Splunk accepts it (lab, 10.2.9). Only the `"^.*\\"` argument is wrong.
+* Suggested fix: `"^.*\\\\"` (a regex backslash needs four in an eval string). The search also filters on `source=`, which the control test cannot scope
   (see the last section).
 
 ## F-07 `match()` with three arguments (UC-2.6.44, UC-2.6.45)
 
 * UC-2.6.44: `| where match(VolumeName, "Cache|WCD|MCS|WriteCache|PVS|Differencing", "i")
   OR 1=1`. Splunk: "The arguments to the 'match' function are invalid."; the search cannot
-  be deployed. UC-2.6.45 has `match(_raw, "(power.?on|start|registration|boot)", "i")`
-  (and also F-03).
+  be deployed. UC-2.6.45 has `match(_raw, "(power.?on|start|registration|boot)", "i")` too,
+  but in a search clause (see F-03). *Correction (0.8.9):* Splunk **accepts** that search and
+  never evaluates the call, so UC-2.6.45 is an F-03 case only, not an F-07 case; the lab
+  parser rejects the three-argument call in `where` and `eval` only.
 * Suggested fix: `match(x, "(?i)...")`. In UC-2.6.44 the `OR 1=1` makes the `where` keep
   everything; drop it or the `match`.
 
@@ -206,3 +209,14 @@ A second campaign run with `KV_MODE = json` on 38 sourcetypes gave the same verd
 every fixture as the run without it: Splunk 10.2.9 extracts JSON events automatically
 (`AUTO_KV_JSON`). The missing add-on matters only for key=value and CSV sourcetypes
 (UC-1.1.1, UC-5.2.3, UC-9.1.2 columns), not for the JSON fixtures.
+
+
+## SPL lint over the whole corpus (0.8.9)
+
+SUNavigator 0.8.9 flags F-03, F-06, F-07, F-08 and F-09 (and the same patterns anywhere else)
+with a lint that runs over the SPL of each use case. Run over the full Fenre `0e21f019` corpus
+(16,689 records, 19,771 searches) it finds more than the control-test campaign listed: F-03
+in 80 searches (61 with `match`), F-09 in 56, F-06 in 3 (UC-1.2.29, UC-1.2.66, UC-1.2.119), F-07
+in 1, F-08 in 1. All 61 searches flagged for F-06 to F-09 are rejected by Splunk's own parser on
+the lab. The ESCU corpus (2,214 detections) has none. The per-rule lists and the difference from
+the earlier hand counts are in [SPL_LINT_CORPUS.md](SPL_LINT_CORPUS.md).

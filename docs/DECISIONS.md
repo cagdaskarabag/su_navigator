@@ -1494,3 +1494,120 @@ as drift.
 * Consequences: no schema change, no migration, no new capability, route or setting, no
   new dependency; `docs/SECURITY.md` is unchanged because the picture is: new paths only
   add refusals. The build number changed to 10. Python 3.9 compatible, stdlib only.
+
+## D-065 Advisory SPL lint, bounded-total warning and the 0.8.9 documentation pass
+*0.8.9 (B-09, B-07 leftovers; issues #8, #13, #14).*
+* Context: Splunk accepts SPL that never does what its author meant (an eval function
+  in a search clause) and rejects SPL only when it is parsed. The control-test
+  campaign (D-064) found both kinds in the Fenre content. The assessment counted 51 and
+  54 cases with a text heuristic. A lint that reads the SPL structurally can say so at
+  validation time, before a use case reaches the approval step.
+* **Advisory only.** The lint adds findings to the validation result and the
+  deployment revision. It changes no readiness score, no approval, no deployment gate,
+  no SPL refusal and no capability. It never raises: a failure inside it gives an empty
+  list. Findings carry `rule`, `severity` (always `warning`), `segment` (the n-th
+  command of the top-level pipeline, from 1), `command`, the text found, a message, a
+  rewrite and a count. A `map search="..."` string is read as SPL and its findings are
+  marked `in_map`.
+* **Method.** `spl/lint.py` (stdlib, Python 3.9) uses the quote masking and pipeline
+  splitting that the SPL policy uses (`_mask_quotes`, `_split_pipeline`, the `map` string
+  extraction). Pieces are command-sized at every bracket level; a piece after a `]`
+  keeps the command that owns the subsearch; the first piece of a level is an implicit
+  `search` unless its first word is a known command. Quoted text is never inspected, so
+  `where match(...)`, `eval x=match(...)` and `if(match(...), ...)` raise nothing (unit
+  tests, positive and negative for each rule).
+* **Rules, each shown on the lab (Splunk Enterprise 10.2.9, app namespace, with
+  `/services/search/parser` and with real searches over two test events):**
+  * `L001` an eval function in a search clause. 25 functions were probed (`match`,
+    `like`, `cidrmatch`, `isnull`, `isnotnull`, `isnum`, `isint`, `isstr`, `isbool`, `len`,
+    `lower`, `upper`, `mvcount`, `mvindex`, `mvfind`, `mvfilter`, `searchmatch`,
+    `tonumber`, `tostring`, `substr`, `replace`, `trim`, `ltrim`, `rtrim`, `coalesce`), both as a
+    base-search term and after `| search`: each returned 0 rows where the same call in
+    `where` returned the matching row, with no error. Under `NOT` four of them
+    (`isnum`, `isint`, `isbool`, `searchmatch`) returned every row, so the wrong answer
+    can go either way. In `(a=1 OR fn(...))` the call removes the rest of its group
+    (F-03, UC-2.6.34). Not flagged: a call after `=`, `<`, `>`, `!` or inside a word
+    (`user=*match(x)`), a call in `where`, `eval`, `fields`, `stats`, `if(` and the like,
+    and functions outside the 25 (`strftime` was probed in `where` only and is not listed).
+  * `L002` `timechart` or `sitimechart` with more than one `by` field. Comma and space
+    separated forms, and three fields, were rejected ("The argument ... is invalid");
+    one field with options, `where` or `eval` was accepted.
+  * `L003` `match`/`like` with 1, 3 or 4 arguments and `cidrmatch` with 1, rejected in
+    `where` and `eval` ("The arguments to the function are invalid"); 2 arguments
+    accepted. The same call in a search clause is **accepted and never evaluated** (UC-2.6.45),
+    so there only `L001` applies (the earlier F-07 wording was wrong, see below).
+  * `L004` a regex string for `match` or `replace` that ends in one backslash after
+    eval unescaping: an odd number of backslash pairs halves to a lone backslash. 2 and 6
+    raw backslashes were rejected ("Regex: \ at end of pattern"), 4 and 8 accepted.
+  * `L005` a snap modifier with a count (`-6h@5m`) or `@w8`/`@w9`: `tstats` rejects it
+    ("Invalid value ... for time term"), and a plain search selects nothing.
+  Rules that were considered and not shipped: anything that needs the data (field
+  existence), anything about add-on specific fields, and functions that were not probed on the lab.
+* **Corpus measurement** (`tools/spl_lint_corpus.py`, Fenre `0e21f019`: 16,689 records
+  with SPL, 19,771 searches counting CIM variants; ESCU 6.11.1: 2,214): 141 Fenre searches
+  have findings. `L001` 80 (`match` 61, `like` 12, `lower` 5, `isnotnull` 4, `cidrmatch` 2,
+  `isnull` 2, `upper` 1), `L002` 56, `L003` 1 (UC-2.6.44), `L004` 3 searches with 7
+  calls (UC-1.2.29, 1.2.66, 1.2.119), `L005` 1 (UC-3.2.1). ESCU: 0. All 61 searches
+  flagged by `L002` to `L005` were sent to Splunk's own parser in the app namespace:
+  all 61 were rejected, so those four rules had no false positive on this corpus.
+  Lists: `docs/upstream/SPL_LINT_CORPUS.md`.
+* **Difference from 51 and 54.** The assessment's heuristic reproduces 51 and 54 on
+  this commit. The lint finds 61 searches with `match` as a search term (10 more: the call
+  sits in a subsearch of `multisearch`, `append` or `join`) and 56 with two split-by
+  fields (2 more: UC-15.4.4 and UC-15.5.8 separate the fields with a space). It also
+  finds the other eval functions (19 more searches, 80 in all), which the heuristic did
+  not look for. Its false-positive rate on `L002` to `L005` is 0 of 61 against Splunk's
+  parser; for `L001` the evidence is the probes above, because Splunk gives no error.
+* **Where it shows.** The validation result and `GET validation` carry `lint`
+  (`validate` also lints the CIM variant, tagged `cim`). The use-case validation card
+  lists the findings with a **Dismiss** button that hides one until the page is reloaded
+  and stores nothing. The deployment card shows a non-blocking note from the revision's
+  `lint`. Both are built with `ucm.el`/text nodes. A validation stored before 0.8.9 has
+  no `lint`: the card says "lint has not run" and **Validate** again fills it. No
+  migration; the field is optional.
+* **Issue #14 (silent 50,000-row bound): implemented as surfacing, not as a limit
+  change.** `DocumentStore.count` is a keys-only query, so totals stop at the KV
+  Store's `max_rows_per_query`. The catalogue now returns `total_capped`; the page shows
+  "50000 or more" and a note. Joined filters that must scan more than the bound refuse
+  ("narrow the other filters first") instead of returning a partial set. Administration
+  warns from 90 percent of the bound. `[catalog] kv_row_limit` (default 50000, 1000 to
+  10,000,000) tells the app the platform value; it does not change the platform. Not done:
+  readiness, inventory and coverage counts are not marked at the bound, and the
+  join scan is not paged, so the issue stays open for those.
+* **Issue #13 (CIM model met without a populated check): not done, plan recorded.**
+  Not small: it needs one `tstats` per model through the system-dispatch discovery
+  path (`datamodel=X where earliest=-24h`), and for a model that is not accelerated that
+  search runs the model's whole constraint search, which can be slow on a large estate; it
+  needs a bound and a per-search timeout in the discovery worker, a new additive field on
+  the discovery data model document (`populated`: `yes`, `no`, `unverified`), a change in
+  `eval_cim_model` and in `recommend.py` (which keys on the code `model_present`), and a
+  decision on scoring. Plan: run the check inside the discovery job, cache the answer with
+  the discovery data, mark `unverified` (never `no`) when it cannot run, and never block
+  on it. Decision needed from the product owner: whether a model that is installed but
+  not checked becomes `unverified` (excluded from the score, which moves existing
+  readiness scores up or down) or stays `met` with the current wording
+  "populated data is not verified". Until then the wording is the only guard.
+* **B-07 leftovers.** Already done in 0.8.6 to 0.8.8: the corrections to D-039 and
+  D-053 (written in D-062 and in the text of D-039), the README and `app.manifest` Cloud
+  wording, the `map` refusal hint, the owner note for D-051. Done here: the operator note that
+  `admin`, `sc_admin` and `ucm_admin` can edit deployed searches and that the edit
+  shows as drift (D-051), a bundle-split guide for the 50 MB cap (below), the §11 wording
+  (the owner is the scheduler account, not the operator who clicked Deploy), a version
+  and test-count consistency unit test, and a rewrite of §12 so each item is current,
+  appears once and points to its issue (#8).
+* **Bundle splitting.** The Fenre `content/` tree is about 193 MiB as bundle JSON.
+  Category 25 alone is about 65 MB (6,431 records), category 10 is 31 MB, category 22 is
+  26 MB, so the default cap refuses the full corpus and category 25. `build-bundle
+  --categories` takes whole categories (four groups of 21 to 40 MiB cover 1 to 24).
+  `ucm_cli` cannot cut one category, but `--records` can: three id chunks of 2,200 give
+  22 to 23 MB each. Records bundles are partial (`manifest.partial`), so they never withdraw. In a test run, importing the three chunks
+  gave 6,431 records and 0 withdrawn. The alternative is `[import] max_bundle_mb` up to 500.
+* **Corrections to the Sprint 9 upstream report** (`docs/upstream/FENRE_FINDINGS.md`):
+  F-06 said `replace(TargetObject,"\\[^\\]+$","")` has the same defect as
+  `"^.*\\"`; on the lab it is valid, only the first is invalid. F-07 listed UC-2.6.45 with
+  UC-2.6.44; UC-2.6.45's three-argument `match` is in a search clause, which Splunk
+  accepts and never evaluates, so it is an F-03 case only. Nothing was filed upstream.
+* Security picture: unchanged. No new route, capability, setting that relaxes anything,
+  dependency or collection. The lint only adds findings; the policy still refuses what it
+  refused. `docs/SECURITY.md` is not changed. The build number is 11 because the JS and
+  CSS changed. Python 3.9 compatible, stdlib only.

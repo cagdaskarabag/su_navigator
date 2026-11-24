@@ -15,7 +15,7 @@ from .. import APP_NAME
 from ..audit import AuditService
 from ..catalog.derived import get_facets
 from ..catalog.detail import UseCaseDetailService
-from ..catalog.query import DEFAULT_MAX_JOIN_KEYS, CatalogFilter, CatalogQueryService
+from ..catalog.query import DEFAULT_KV_ROW_LIMIT, DEFAULT_MAX_JOIN_KEYS, CatalogFilter, CatalogQueryService
 from ..config import AppConfig, load_config
 from ..content.importer import BundleImportService
 from ..content.fenre.provider import check_ref_name, parse_allowed_refs
@@ -250,7 +250,13 @@ def get_catalog(ctx: Context, req: Request) -> Response:
         with_total=req.arg("total", "1") != "0")
     max_page = ctx.config.get_int("catalog", "max_page_size", 100, 10, 500)
     join_keys = ctx.config.get_int("catalog", "max_join_keys", DEFAULT_MAX_JOIN_KEYS, 1, 5000)
-    return Response(200, CatalogQueryService(ctx.store, max_page, max_join_keys=join_keys).search(f, ctx.user))
+    row_limit = _kv_row_limit(ctx)
+    return Response(200, CatalogQueryService(ctx.store, max_page, max_join_keys=join_keys, max_scan=row_limit - 1,
+                                             kv_row_limit=row_limit).search(f, ctx.user))
+
+
+def _kv_row_limit(ctx: Context) -> int:
+    return ctx.config.get_int("catalog", "kv_row_limit", DEFAULT_KV_ROW_LIMIT, 1000, 10000000)
 
 
 def get_catalog_facets(ctx: Context, req: Request) -> Response:
@@ -284,6 +290,7 @@ def get_sync(ctx: Context, req: Request) -> Response:
         "remote_sync_enabled": ctx.config.get_bool("provider:" + provider, "remote_sync_enabled", True),
         "configured_ref": ctx.config.get("provider:" + provider, "ref", "main"),
         "allowed_refs": list(_allowed_refs(ctx)),
+        "kv_row_limit": _kv_row_limit(ctx),
     })
 
 
