@@ -38,13 +38,15 @@ class ModelSearch:
         self.rows = rows
         self.model_calls = []
         self.kwargs = []
+        self.apps = []
 
-    def oneshot(self, search, timeout=120.0, max_count=5000, earliest="", latest="", max_time=0):
+    def oneshot(self, search, timeout=120.0, max_count=5000, earliest="", latest="", max_time=0, app=""):
         if "from datamodel=" not in search:
             return SearchResult([dict(r) for r in ROWS], [], False)
         name = search.split("datamodel=")[1].split(" ")[0]
         self.model_calls.append(search)
         self.kwargs.append({"timeout": timeout, "max_count": max_count, "max_time": max_time})
+        self.apps.append(app)
         if name in self.errors:
             raise self.errors[name]
         if self.rows is not None:
@@ -71,6 +73,16 @@ class SearchConstructionTest(unittest.TestCase):
         for bad in ("", "a b", "x; | delete", "a|b", "../x", "A" * 81, None):
             with self.assertRaises(ValidationError):
                 P.populated_search(bad)
+
+    def test_search_runs_in_the_apps_namespace_of_the_model(self):
+        s = ModelSearch({"Authentication": 1, "Mine": 1})
+        P.check_models(s, [model("Authentication"), model("Mine", app="other_app")], ["Mine"], P.PopulatedSettings(), Clock())
+        self.assertEqual(s.apps, ["other_app", "Splunk_SA_CIM"])
+
+    def test_namespace_is_sent_to_splunkd(self):
+        t = SplunkdOneshot([{"count": "1"}])
+        SearchClient(t).oneshot("| tstats count from datamodel=A where earliest=-24h", app="my app")
+        self.assertEqual(t.paths[0], "/servicesNS/nobody/my%20app/search/jobs")
 
     def test_max_time_reaches_splunkd(self):
         t = SplunkdOneshot([{"count": "1"}])

@@ -131,9 +131,10 @@ class LiveOneshotContractTest(unittest.TestCase):
         from splunk_ucm.spl.policy import classify, command_exists
         t = transport()
         name = "sun_live_se_" + uuid.uuid4().hex[:6]
+        lookup = "sun_live_probe_%s.csv" % uuid.uuid4().hex[:6]
         base = "/servicesNS/nobody/sunavigator/admin/macros"
         status, _ = t.request("POST", base, None, None,
-                              form={"name": name, "definition": "| makeresults | outputlookup sun_live_probe.csv"})
+                              form={"name": name, "definition": "| makeresults | outputlookup %s" % lookup})
         self.assertIn(status, (200, 201))
         try:
             t.request("POST", base + "/" + name + "/acl", None, None, form={"sharing": "app", "owner": "nobody"})
@@ -149,6 +150,9 @@ class LiveOneshotContractTest(unittest.TestCase):
             self.assertTrue(command_exists(client, "stats", "sunavigator"))
         finally:
             t.request("DELETE", base + "/" + name)
+            t.request("DELETE", "/servicesNS/nobody/sunavigator/data/lookup-table-files/" + lookup)
+            status, _ = t.request("GET", "/servicesNS/nobody/sunavigator/data/lookup-table-files/" + lookup, None, None)
+            self.assertEqual(status, 404, "the probe lookup must not be left behind")
 
     def test_map_probe_is_refused_and_writes_nothing(self):
         import json as _json

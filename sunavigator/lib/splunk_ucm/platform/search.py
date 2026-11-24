@@ -46,11 +46,13 @@ class SearchClient:
         self.t = transport
 
     def oneshot(self, search: str, timeout: float = 120.0, max_count: int = 5000,
-                earliest: str = "", latest: str = "", max_time: int = 0) -> SearchResult:
-        """``max_time`` (seconds, 0 = none) makes splunkd finalize the job and return what it has."""
+                earliest: str = "", latest: str = "", max_time: int = 0, app: str = "") -> SearchResult:
+        """``max_time`` (seconds, 0 = none) makes splunkd finalize the job and return what it has.
+        With ``app`` the search runs in that app's namespace, so an app-scoped data model is visible."""
         if not search.startswith("|"):
             raise ValidationError("only generating searches are permitted")
-        return self._oneshot(search, timeout, max_count, earliest, latest, max_time=max_time)
+        path = "/servicesNS/nobody/%s/search/jobs" % quote(app, safe="") if app else "/services/search/jobs"
+        return self._oneshot(search, timeout, max_count, earliest, latest, path, max_time=max_time)
 
     def preview(self, search: str, timeout: float = 30.0, max_count: int = 100,
                 earliest: str = "-15m", latest: str = "now", app: str = "",

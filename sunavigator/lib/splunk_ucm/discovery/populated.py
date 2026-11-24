@@ -25,6 +25,7 @@ log = get_logger(__name__)
 YES, NO, UNVERIFIED = "yes", "no", "unverified"
 WINDOW = "-24h"
 CIM_APP = "Splunk_SA_CIM"
+_APP = re.compile(r"^[A-Za-z0-9_][A-Za-z0-9_.-]{0,99}$")
 MODEL_NAME = re.compile(r"^[A-Za-z0-9_][A-Za-z0-9_.-]{0,79}$")
 MAX_CONSECUTIVE_FAILURES = 3
 
@@ -116,6 +117,7 @@ def check_models(search: Any, models: Sequence[Dict[str, Any]], referenced: Iter
     for name in live:
         if name not in chosen_set:
             out[name] = _outcome(UNVERIFIED, REASON_NOT_SELECTED)
+    apps = {m["name"]: str(m.get("app") or "") for m in models if m.get("name")}
     started = clock()
     failures = 0
     for position, name in enumerate(chosen):
@@ -126,20 +128,20 @@ def check_models(search: Any, models: Sequence[Dict[str, Any]], referenced: Iter
         elif clock() - started > settings.budget_seconds:
             out[name] = _outcome(UNVERIFIED, REASON_BUDGET)
         else:
-            out[name] = _check_one(search, name, settings)
+            out[name] = _check_one(search, name, apps.get(name, ""), settings)
             failures = failures + 1 if out[name]["reason"] in (REASON_FAILED, REASON_TIMEOUT,
                                                                 REASON_UNAVAILABLE) else 0
     return out
 
 
-def _check_one(search: Any, name: str, settings: PopulatedSettings) -> Dict[str, Any]:
+def _check_one(search: Any, name: str, app: str, settings: PopulatedSettings) -> Dict[str, Any]:
     try:
         spl = populated_search(name)
     except ValidationError:
         return _outcome(UNVERIFIED, REASON_BAD_NAME)
     try:
         result = search.oneshot(spl, timeout=float(settings.timeout_seconds), max_count=1,
-                                max_time=int(settings.timeout_seconds))
+                                max_time=int(settings.timeout_seconds), app=app if _APP.match(app) else "")
     except UnsupportedOperation:
         return _outcome(UNVERIFIED, REASON_UNAVAILABLE)
     except Exception as exc:
