@@ -713,8 +713,46 @@ define(["jquery", "splunk.util"], function ($, splunkUtil) {
         return card;
     }
 
+    /* The KV Store returns at most max_rows_per_query rows per query (issue #14); a total near it is shown, not hidden. */
+    function rowBoundNote(rows, limit) {
+        limit = limit || 50000;
+        if (!rows || rows < Math.floor(limit * 0.9)) { return null; }
+        return stateBox("warn", rows >= limit ? "The catalogue reached the KV Store row bound" : "The catalogue is close to the KV Store row bound",
+            "The catalogue holds " + rows + " active use cases and the KV Store returns at most " + limit +
+            " rows per query (limits.conf [kvstore] max_rows_per_query). Totals at that number are lower bounds, and filters " +
+            "that join readiness or bookmarks refuse above it. Raise the platform setting and set [catalog] kv_row_limit to " +
+            "the same value (operator guide, section 12).");
+    }
+
+    /* Advisory lint findings (spl/lint.py). Dismissing only hides an item until the page is rendered again; nothing is stored. */
+    function lintBox(findings, intro) {
+        var items = (findings || []).filter(function (f) { return f && f.rule && f.message; });
+        if (!items.length) { return null; }
+        var list = el("ul", { "class": "ucm-lint-list" });
+        var box = stateBox("warn", "SPL lint (advisory): " + items.length + (items.length === 1 ? " finding" : " findings"),
+            intro || "These do not change readiness, approval or deployment. Dismiss hides a finding until the page is reloaded.");
+        function dismiss(item) {
+            list.removeChild(item);
+            if (!list.childNodes.length && box.parentNode) { box.parentNode.removeChild(box); }
+        }
+        items.forEach(function (f) {
+            var where = "segment " + f.segment + " (" + f.command + ")" +
+                (f.in_map ? ", inside a map search" : "") + (f.search === "cim" ? ", CIM search" : "") +
+                (f.count > 1 ? ", " + f.count + " times" : "");
+            var item = el("li", { "class": "ucm-lint-item" },
+                badge(f.rule, "warn"), " ", el("span", { text: f.message }),
+                el("div", { "class": "ucm-sub" }, where + ": ", el("span", { "class": "ucm-mono", text: f.call || "" })),
+                f.suggestion ? el("div", { "class": "ucm-sub", text: "Suggested rewrite: " + f.suggestion }) : null);
+            item.appendChild(el("button", { "class": "btn btn-link ucm-lint-dismiss", type: "button", text: "Dismiss",
+                onclick: function () { dismiss(item); } }));
+            list.appendChild(item);
+        });
+        box.appendChild(list);
+        return box;
+    }
+
     return {
-        accessBadge: accessBadge, accessBox: accessBox, jobErrors: jobErrors, jobFailureBox: jobFailureBox, schedulerCard: schedulerCard,
+        accessBadge: accessBadge, accessBox: accessBox, lintBox: lintBox, rowBoundNote: rowBoundNote, jobErrors: jobErrors, jobFailureBox: jobFailureBox, schedulerCard: schedulerCard,
         modal: modal, qualityBadges: qualityBadges, QUALITY_FLAGS: QUALITY_FLAGS, notify: notify, confirmAction: confirmAction, askText: askText,
         get: get, post: post, postRaw: postRaw, el: el, clear: clear, badge: badge,
         criticalityBadge: criticalityBadge, chips: chips, stateBox: stateBox, queryParams: queryParams,

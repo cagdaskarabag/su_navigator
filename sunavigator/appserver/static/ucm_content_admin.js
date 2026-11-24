@@ -20,6 +20,7 @@ function ucmViewMain($, ucm) {
     var providerBox = el("div", {});
     var importBox = el("div", {});
     var jobsBox = el("div", {});
+    var boundBox = el("div", {});
     var auditBox = el("div", {});
     var refreshTimer = null;
     var localCategories = {};
@@ -83,6 +84,10 @@ function ucmViewMain($, ucm) {
             localCategories = {};
             (cats.categories || []).forEach(function (c) { localCategories[c.category_id] = c; });
             renderState(sync);
+            var rows = (cats.categories || []).reduce(function (n, c) { return n + (c.imported_count || 0); }, 0);
+            var bound = ucm.rowBoundNote(rows, sync.kv_row_limit);
+            ucm.clear(boundBox);
+            if (bound) { boundBox.appendChild(bound); }
             if (renderJobs(sync.jobs || [])) { refreshTimer = setTimeout(refresh, 5000); }
         }).fail(function (err) {
             ucm.clear(stateCard).appendChild(ucm.stateBox("error", "Synchronization state unavailable.", err.message));
@@ -221,6 +226,7 @@ function ucmViewMain($, ucm) {
 
     ucm.clear(root);
     root.appendChild(el("div", { "class": "ucm-cards" }, stateCard, platformCard));
+    root.appendChild(boundBox);
     root.appendChild(providerSection());
     root.appendChild(importSection());
     root.appendChild(jobsBox);

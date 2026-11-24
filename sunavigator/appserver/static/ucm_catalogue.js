@@ -290,8 +290,13 @@ function ucmViewMain($, ucm) {
                     el("a", { href: "ucm_content_admin", "class": "btn btn-primary", text: "Open Content Administration" })));
             return;
         }
-        var total = data.total === null ? "" : data.total + " use cases";
+        var total = data.total === null ? "" : data.total + (data.total_capped ? " or more" : "") + " use cases";
         results.appendChild(el("div", { "class": "ucm-summary-line", text: total }));
+        if (data.total_capped) {
+            results.appendChild(ucm.stateBox("warn", "This total is a lower bound",
+                "The KV Store returns at most " + data.total + " rows per query, so the catalogue may hold more " +
+                "use cases than are counted. See Administration and the operator guide, section 12."));
+        }
         var head = el("tr", {});
         ["ID", "Use case", "Domains", "Category", "Criticality", "Difficulty", "Sourcetypes (from SPL)", "MITRE", "Review and quality", "Your selection"]
             .forEach(function (h) { head.appendChild(el("th", { text: h })); });
