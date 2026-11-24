@@ -5,7 +5,7 @@ import hashlib
 import json
 import os
 import sys
-from typing import Dict, Optional
+from typing import Dict, List, Optional
 from urllib.parse import unquote, urlparse
 
 os.environ.setdefault("UCM_LOG_LEVEL", "CRITICAL")
@@ -78,6 +78,8 @@ class FakeGitHub:
         self._trees: Dict[str, list] = {}
         self._commit = ""
         self._root = ""
+        self.history: List[str] = []
+        self.diverged = set()
 
     # -- repository mutation ----------------------------------------------
     def put(self, path: str, data) -> None:
@@ -111,6 +113,8 @@ class FakeGitHub:
 
         self._root = build_dir("")
         self._commit = _sha1("commit:" + self._root)
+        if self._commit not in self.history:
+            self.history.append(self._commit)
 
     @property
     def commit(self) -> str:
@@ -128,6 +132,13 @@ class FakeGitHub:
             prefix = "/repos/%s/%s/" % (OWNER, REPO)
             assert path.startswith(prefix), path
             rest = path[len(prefix):]
+            if rest.startswith("compare/"):
+                base, head = rest[len("compare/"):].split("...", 1)
+                if base != "main" or (head not in self.history and head not in self.diverged):
+                    raise ProviderError("HTTP 404 from provider", {"url": url, "status": 404})
+                status = ("identical" if head == self._commit else
+                          "diverged" if head in self.diverged else "behind")
+                return self._json({"status": status, "ahead_by": 0, "commits": [], "files": []})
             if rest.startswith("commits/"):
                 return self._json({"sha": self._commit, "commit": {"tree": {"sha": self._root}}})
             if rest.startswith("git/trees/"):

@@ -5,7 +5,7 @@ from typing import Any, Callable, Dict
 from ..errors import ValidationError
 from .bundle import OfflineBundleProvider
 from .fenre.normalizer import FenreNormalizer, fenre_validation_policy
-from .fenre.provider import FenreConfig, FenreJsonProvider, load_bundled_schema
+from .fenre.provider import FenreConfig, FenreJsonProvider, load_bundled_schema, parse_allowed_refs
 from .http import HttpConfig
 from .provider import ContentProvider, Normalizer, ProviderManifest
 from .validation import RecordValidator
@@ -50,7 +50,8 @@ def remote_provider(provider_id: str, settings: Dict[str, Any], token: str = "",
         content_root=settings.get("content_root", "content"),
         schema_path=settings.get("schema_path", "schemas/uc.schema.json"),
         version_path=settings.get("version_path", "VERSION"),
-        fetch_concurrency=int(settings.get("fetch_concurrency", 4)), token=token)
+        fetch_concurrency=int(settings.get("fetch_concurrency", 4)), token=token,
+        allowed_refs=parse_allowed_refs(settings.get("allowed_refs", "main"), settings.get("ref", "main")))
     from urllib.parse import urlparse
     hosts = [urlparse(cfg.api_base).hostname or "", urlparse(cfg.raw_base).hostname or ""]
     extra = [h.strip() for h in str(settings.get("allowed_hosts", "")).split(",") if h.strip()]

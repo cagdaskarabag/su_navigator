@@ -16,6 +16,7 @@ from ..catalog.detail import UseCaseDetailService
 from ..catalog.query import CatalogFilter, CatalogQueryService
 from ..config import AppConfig, load_config
 from ..content.importer import BundleImportService
+from ..content.fenre.provider import check_ref_name, parse_allowed_refs
 from ..content.registry import remote_provider
 from ..content.reindex import ReindexService
 from ..content.sync import SyncService, SyncSettings, new_job
@@ -259,7 +260,13 @@ def get_sync(ctx: Context, req: Request) -> Response:
         "jobs": repo.jobs(limit=_int(req.arg("limit"), 20, "limit")),
         "remote_sync_enabled": ctx.config.get_bool("provider:" + provider, "remote_sync_enabled", True),
         "configured_ref": ctx.config.get("provider:" + provider, "ref", "main"),
+        "allowed_refs": list(_allowed_refs(ctx)),
     })
+
+
+def _allowed_refs(ctx: Context):
+    return parse_allowed_refs(ctx.config.get("provider:fenre", "allowed_refs", "main"),
+                              ctx.config.get("provider:fenre", "ref", "main"))
 
 
 def _provider_token(ctx: Context) -> str:
@@ -282,6 +289,8 @@ def post_sync(ctx: Context, req: Request) -> Response:
     ref = str(body.get("ref") or "")
     if ref and (len(ref) > 200 or not all(ch.isalnum() or ch in "._/-" for ch in ref)):
         raise ValidationError("invalid ref")
+    if ref:
+        check_ref_name(ref, _allowed_refs(ctx))
     job = new_job(ctx.user, provider, [str(c) for c in cats], ref=ref, source="manual",
                   allow_schema_change=_bool(body.get("allow_schema_change")), force=_bool(body.get("force")))
     ctx.sync_service().enqueue(job)
@@ -292,6 +301,8 @@ def get_manifest(ctx: Context, req: Request) -> Response:
     ctx.require(CAP_MANAGE_CONTENT)
     if not ctx.config.get_bool("provider:fenre", "remote_sync_enabled", True):
         raise UnsupportedOperation("remote synchronization is disabled; use offline import")
+    if req.arg("ref"):
+        check_ref_name(req.arg("ref"), _allowed_refs(ctx))
     provider = ctx.provider_factory("fenre", ctx.config.provider_settings("fenre"), _provider_token(ctx),
                                     req.arg("ref"))
     manifest = provider.get_manifest()

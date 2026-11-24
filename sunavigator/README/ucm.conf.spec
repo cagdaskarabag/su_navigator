@@ -7,6 +7,13 @@ owner = <string>
 repo = <string>
 ref = <string>
 * Branch, tag or 40-character commit SHA to synchronize. Pin a tag or SHA for reproducible content.
+allowed_refs = <comma-separated list>
+* Branch and tag names a sync or manifest request may use. "*" is a wildcard
+* (for example release/*, v*). The configured ref is always allowed when it is a
+* name; an empty list means the configured ref only. A 40-character commit SHA
+* is accepted only if the GitHub compare API shows it is reachable from one of
+* the listed names without a wildcard; otherwise it is rejected before any
+* content is fetched. Default main.
 api_base = <url>
 raw_base = <url>
 content_root = <relative path>

@@ -11,6 +11,7 @@ commit, and verify each blob's git SHA locally.
 """
 
 import dataclasses
+import fnmatch
 import json
 import os
 import re
@@ -18,7 +19,7 @@ from concurrent.futures import ThreadPoolExecutor
 from typing import Any, Dict, List, Optional, Tuple
 from urllib.parse import quote, urlparse
 
-from ...errors import IntegrityError, NotFoundError, ProviderError
+from ...errors import IntegrityError, NotFoundError, ProviderError, RateLimitedError, ValidationError
 from ...log import get_logger
 from ...util import git_blob_sha, utc_now_iso
 from ..http import HttpConfig, HttpFetcher
@@ -32,6 +33,7 @@ log = get_logger(__name__)
 PROVIDER_ID = "fenre"
 _SHA_RE = re.compile(r"^[0-9a-f]{40}$")
 _REF_RE = re.compile(r"^[A-Za-z0-9._/\-]{1,200}$")
+_REF_PATTERN_RE = re.compile(r"^[A-Za-z0-9._/\-*]{1,200}$")
 _CATEGORY_DIR = re.compile(r"^cat-(\d{1,3})-[a-z0-9-]+$")
 _RECORD_FILE = re.compile(r"^UC-(\d+\.\d+\.\d+)\.json$")
 _VERSION_RE = re.compile(r"^\d+\.\d+\.\d+([.-][0-9A-Za-z.-]+)?$")
@@ -54,6 +56,7 @@ class FenreConfig:
     max_tree_bytes: int = 16 * 1024 * 1024
     fetch_concurrency: int = 4
     token: str = ""
+    allowed_refs: Tuple[str, ...] = ("main",)
 
     def validate(self) -> None:
         for name in ("owner", "repo"):
@@ -61,12 +64,43 @@ class FenreConfig:
                 raise ProviderError("invalid %s" % name)
         if not _REF_RE.match(self.ref) or ".." in self.ref:
             raise ProviderError("invalid ref")
+        for pattern in self.allowed_refs:
+            if not _REF_PATTERN_RE.match(pattern) or ".." in pattern:
+                raise ProviderError("invalid allowed_refs entry", {"entry": pattern[:200]})
         for name in ("content_root", "schema_path", "version_path", "category_file"):
             value = getattr(self, name)
             if not value or value.startswith("/") or ".." in value.split("/"):
                 raise ProviderError("invalid path setting %s" % name)
         if not 1 <= self.fetch_concurrency <= 16:
             raise ProviderError("fetch_concurrency must be 1..16")
+
+
+def is_commit_sha(ref: str) -> bool:
+    return bool(_SHA_RE.match(ref or ""))
+
+
+def parse_allowed_refs(value: str, configured_ref: str = "") -> Tuple[str, ...]:
+    """Branch and tag names (``*`` wildcards allowed) a sync may use.
+
+    The configured ref is always allowed when it is a name. An empty list
+    therefore means "the configured ref only".
+    """
+    out = [v.strip() for v in str(value or "").split(",") if v.strip()]
+    if configured_ref and not is_commit_sha(configured_ref) and configured_ref not in out:
+        out.append(configured_ref)
+    return tuple(out)
+
+
+def check_ref_name(ref: str, allowed_refs: Tuple[str, ...]) -> None:
+    """Reject a branch or tag outside ``allowed_refs`` without any network access.
+
+    Commit SHAs pass here; :meth:`FenreJsonProvider.verify_ref` checks that
+    they are reachable from an allowed ref.
+    """
+    if is_commit_sha(ref):
+        return
+    if not any(fnmatch.fnmatchcase(ref, pattern) for pattern in allowed_refs):
+        raise ValidationError("ref is not in allowed_refs", {"ref": ref[:200], "allowed_refs": list(allowed_refs)})
 
 
 def load_bundled_schema() -> Dict[str, Any]:
@@ -120,8 +154,36 @@ class FenreJsonProvider(ContentProvider):
             raise ProviderError("tree listing truncated by provider", {"sha": sha})
         return data["tree"]
 
+    def verify_ref(self) -> Optional[str]:
+        """Apply the ref policy before any content is fetched.
+
+        Returns the allowed ref a pinned commit was found on, or None for a
+        branch or tag name.
+        """
+        ref = self.config.ref
+        check_ref_name(ref, self.config.allowed_refs)
+        if not is_commit_sha(ref):
+            return None
+        for base in self.config.allowed_refs:
+            if "*" in base or not _REF_RE.match(base):
+                continue
+            try:
+                data = self._api_json("compare/%s...%s?per_page=1" % (quote(base, safe=""), ref), 8 * 1024 * 1024)
+            except RateLimitedError:
+                raise
+            except ProviderError:
+                continue
+            # "behind": the pinned commit is an ancestor of the allowed ref.
+            if isinstance(data, dict) and data.get("status") in ("identical", "behind"):
+                return base
+        raise ValidationError("commit is not reachable from an allowed ref",
+                              {"ref": ref, "allowed_refs": list(self.config.allowed_refs)})
+
     def resolve_commit(self) -> Tuple[str, str]:
         """Return ``(commit_sha, root_tree_sha)`` for the configured ref."""
+        reachable_from = self.verify_ref()
+        if reachable_from:
+            log.info("pinned commit verified", extra={"ref": self.config.ref, "reachable_from": reachable_from})
         data = self._api_json("commits/" + quote(self.config.ref, safe=""), 4 * 1024 * 1024)
         sha = data.get("sha") if isinstance(data, dict) else None
         tree = ((data.get("commit") or {}).get("tree") or {}).get("sha") if isinstance(data, dict) else None

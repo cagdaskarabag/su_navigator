@@ -303,7 +303,11 @@ deployment verify, maintenance). After you queue a job, wait up to a minute.
 ### 5.1 Remote sync from GitHub (needs outbound HTTPS)
 
 1. Under **Remote synchronization**, leave **Version pin** empty to use
-   `main`, or enter a tag / 40-character commit.
+   `main`, or enter a branch or tag listed in `[provider:fenre]
+   allowed_refs` (default `main` only), or a 40-character commit. A commit
+   is accepted only if GitHub's compare API shows it is on an allowed
+   branch or tag; anything else is refused before content is fetched
+   (D-043).
 2. Click **Check provider for categories**.
 3. Tick the categories you want. **9** (Identity / Access) is a good first
    load (~120 use cases).
@@ -366,7 +370,8 @@ PYTHONPATH="$PWD/sunavigator/lib" \
 Default `[sync] schedule_interval_hours = 0` (off). To poll Fenre on a
 timer, set the interval in `$SPLUNK_HOME/etc/apps/sunavigator/local/ucm.conf`
 and restart, or reload the `ucm` stanza. Pin `ref` to a tag or SHA for
-reproducible content; `main` moves.
+reproducible content; `main` moves. A pinned SHA must be reachable from a
+name in `allowed_refs`; a pinned tag must itself be listed there.
 
 ---
 
@@ -639,6 +644,7 @@ Common stanzas:
 | Stanza / key | Default | When to change |
 | --- | --- | --- |
 | `[provider:fenre] ref` | `main` | Pin a tag or commit for reproducible sync. |
+| `[provider:fenre] allowed_refs` | `main` | Branches and tags (`*` wildcard) a sync may use; commits must be reachable from a listed name. |
 | `[provider:fenre] remote_sync_enabled` | `true` | `false` on air-gapped stacks; offline import still works. |
 | `[provider:fenre] proxy_url` / `ca_bundle` | empty | Corporate HTTPS proxy or custom CA. |
 | `[sync] schedule_interval_hours` | `0` | Periodic Fenre pull. |

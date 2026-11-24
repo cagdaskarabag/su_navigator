@@ -27,6 +27,7 @@ require([
             el("h3", { text: "Fenre provider" }),
             el("dl", { "class": "ucm-kv" },
                 el("dt", { text: "Configured ref" }), el("dd", { "class": "ucm-mono", text: data.configured_ref }),
+                el("dt", { text: "Allowed refs" }), el("dd", { "class": "ucm-mono", text: (data.allowed_refs || []).join(", ") }),
                 el("dt", { text: "Remote sync" }), el("dd", {}, statusBadge(data.remote_sync_enabled ? "available" : "unavailable")),
                 el("dt", { text: "Last good version" }), el("dd", { text: s.last_good_version || "none" }),
                 el("dt", { text: "Last good commit" }), el("dd", { "class": "ucm-mono", text: s.last_good_ref || "none" }),
@@ -129,7 +130,7 @@ require([
     }
 
     function providerSection() {
-        var refInput = el("input", { type: "text", placeholder: "Branch, tag or commit (default: configured ref)",
+        var refInput = el("input", { type: "text", placeholder: "Allowed branch or tag, or a commit on one (default: configured ref)",
             maxlength: "200", "aria-label": "Provider ref" });
         var loadBtn = el("button", { "class": "btn", type: "button", text: "Check provider for categories",
             onclick: function () {
@@ -138,8 +139,11 @@ require([
                 ucm.get("provider/manifest", refInput.value.trim() ? { ref: refInput.value.trim() } : {})
                     .done(renderManifest)
                     .fail(function (err) {
-                        ucm.clear(providerBox).appendChild(ucm.stateBox("error", "The provider could not be reached.",
-                            err.message + " Previously imported content remains available. Use offline import if this stack has no outbound access."));
+                        ucm.clear(providerBox).appendChild(err.status === 400
+                            ? ucm.stateBox("error", "The ref was refused.", err.message +
+                                ". Allowed refs are set by [provider:fenre] allowed_refs in ucm.conf.")
+                            : ucm.stateBox("error", "The provider could not be reached.",
+                                err.message + " Previously imported content remains available. Use offline import if this stack has no outbound access."));
                     }).always(function () { loadBtn.disabled = false; });
             } });
         return el("div", { "class": "ucm-section" }, el("h3", { text: "Remote synchronization" }),

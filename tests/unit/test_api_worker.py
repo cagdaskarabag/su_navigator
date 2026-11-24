@@ -75,6 +75,11 @@ class RouterTest(unittest.TestCase):
     def test_post_sync_queues_job_and_validates_input(self):
         ctx = make_ctx(self.store, [CAP_MANAGE_CONTENT])
         status, body = call(ctx, "POST", "sync", body={"categories": ["9", 10], "ref": "v8.25.0"})
+        self.assertEqual((status, body["error"]["message"]), (400, "ref is not in allowed_refs"))
+        cfg = AppConfig({"provider:fenre": {"allowed_refs": "main, v*"}})
+        ctx = make_ctx(self.store, [CAP_MANAGE_CONTENT], config=cfg)
+        self.assertEqual(call(ctx, "GET", "sync")[1]["allowed_refs"], ["main", "v*"])
+        status, body = call(ctx, "POST", "sync", body={"categories": ["9", 10], "ref": "v8.25.0"})
         self.assertEqual(status, 202)
         self.assertEqual(body["job"]["status"], "queued")
         self.assertEqual(body["job"]["categories"], ["9", "10"])

@@ -431,6 +431,12 @@ class LiveApiTest(unittest.TestCase):
         self.assertEqual(status, 200, body)
         self.assertRegex(body["source_ref"], "^[0-9a-f]{40}$")
         self.assertGreaterEqual(len(body["categories"]), 20)
+        status, pinned = api(self.admin, "GET", "provider/manifest", {"ref": body["source_ref"]})
+        self.assertEqual((status, pinned.get("source_ref")), (200, body["source_ref"]), pinned)
+        for ref, message in (("dev", "ref is not in allowed_refs"),
+                             ("0" * 40, "commit is not reachable from an allowed ref")):
+            status, err = api(self.admin, "GET", "provider/manifest", {"ref": ref})
+            self.assertEqual((status, err["error"]["message"]), (400, message), err)
 
 
 if __name__ == "__main__":

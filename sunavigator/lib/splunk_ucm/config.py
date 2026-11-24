@@ -14,7 +14,7 @@ from .storage.transport import SplunkdTransport
 DEFAULTS: Dict[str, Dict[str, str]] = {
     "provider:fenre": {
         "enabled": "true", "remote_sync_enabled": "true", "owner": "fenre",
-        "repo": "splunk-monitoring-use-cases", "ref": "main", "api_base": "https://api.github.com",
+        "repo": "splunk-monitoring-use-cases", "ref": "main", "allowed_refs": "main", "api_base": "https://api.github.com",
         "raw_base": "https://raw.githubusercontent.com", "content_root": "content",
         "schema_path": "schemas/uc.schema.json", "version_path": "VERSION", "allowed_hosts": "",
         "fetch_concurrency": "4", "timeout": "30", "max_attempts": "4", "proxy_url": "", "ca_bundle": "",

@@ -1,8 +1,8 @@
 import unittest
 
 import helpers
-from splunk_ucm.content.fenre.provider import FenreConfig, FenreJsonProvider
-from splunk_ucm.errors import IntegrityError, NotFoundError, ProviderError
+from splunk_ucm.content.fenre.provider import FenreConfig, FenreJsonProvider, parse_allowed_refs
+from splunk_ucm.errors import IntegrityError, NotFoundError, ProviderError, RateLimitedError, ValidationError
 
 
 class FenreProviderTest(unittest.TestCase):
@@ -88,6 +88,66 @@ class FenreProviderTest(unittest.TestCase):
                 self.assertNotIn("Authorization", headers)
             else:
                 self.assertEqual(headers.get("Authorization"), "Bearer ghp_example")
+
+
+class RefPolicyTest(unittest.TestCase):
+    def setUp(self):
+        self.gh = helpers.FakeGitHub()
+
+    def fetched_content(self):
+        return [u for u in self.gh.requests if "/compare/" not in u]
+
+    def test_names_outside_allowed_refs_are_rejected_without_network(self):
+        for ref in ("dev", "v1.0", "feature/main"):
+            with self.assertRaises(ValidationError):
+                helpers.fenre_provider(self.gh, ref=ref).get_manifest()
+        self.assertEqual(self.gh.requests, [])
+        provider = helpers.fenre_provider(self.gh, ref="release/2.0", allowed_refs=("main", "release/*"))
+        self.assertEqual(provider.get_manifest().requested_ref, "release/2.0")
+
+    def test_pinned_commit_on_an_allowed_branch_is_accepted(self):
+        current = self.gh.commit
+        m = helpers.fenre_provider(self.gh, ref=current).get_manifest()
+        self.assertEqual(m.source_ref, current)
+        self.assertIn("/compare/main...%s" % current, self.gh.requests[0])
+        self.gh.put("content/NEW.txt", b"x")
+        self.assertNotEqual(self.gh.commit, current)
+        self.assertEqual(helpers.fenre_provider(self.gh, ref=current).verify_ref(), "main")
+
+    def test_unreachable_commit_is_rejected_before_any_fetch(self):
+        stray = "ab" * 20
+        self.gh.diverged.add("cd" * 20)
+        for sha in (stray, "cd" * 20):
+            self.gh.requests.clear()
+            with self.assertRaises(ValidationError) as ctx:
+                helpers.fenre_provider(self.gh, ref=sha).get_manifest()
+            self.assertEqual(ctx.exception.message, "commit is not reachable from an allowed ref")
+            self.assertEqual(self.fetched_content(), [])
+
+    def test_wildcards_cannot_vouch_for_a_commit(self):
+        with self.assertRaises(ValidationError):
+            helpers.fenre_provider(self.gh, ref=self.gh.commit, allowed_refs=("release/*",)).get_manifest()
+        self.assertEqual(self.gh.requests, [])
+
+    def test_rate_limit_is_not_reported_as_unreachable(self):
+        gh = self.gh
+
+        class Limited:
+            def get(self, url, headers=None, max_bytes=None):
+                if "/compare/" in url:
+                    raise RateLimitedError("rate limited")
+                return gh.get(url, headers, max_bytes)
+        provider = FenreJsonProvider(FenreConfig(ref=gh.commit), fetcher=Limited())
+        with self.assertRaises(RateLimitedError):
+            provider.get_manifest()
+
+    def test_allowed_refs_parsing_and_validation(self):
+        self.assertEqual(parse_allowed_refs(" main, v* ,", "stable"), ("main", "v*", "stable"))
+        self.assertEqual(parse_allowed_refs("", "main"), ("main",))
+        self.assertEqual(parse_allowed_refs("main", "ab" * 20), ("main",))
+        for bad in ("main;x", "a..b", "x y"):
+            with self.assertRaises(ProviderError):
+                FenreJsonProvider(FenreConfig(allowed_refs=(bad,)), fetcher=self.gh)
 
 
 if __name__ == "__main__":

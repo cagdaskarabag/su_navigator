@@ -591,3 +591,24 @@ as drift.
   frozen before this change keep Splunk's values and show no new drift.
   Splunk keeps period and fields when suppression is off, so they are compared
   only while suppression is on.
+
+## D-043 Which upstream refs a sync may use
+*0.7.3+ (T-12, finding F-13).*
+* `[provider:fenre] allowed_refs` (default `main`) lists the branch and tag
+  names a sync or manifest request may use; `*` is a wildcard. The configured
+  `ref` is always allowed when it is a name, so an empty list means "the
+  configured ref only".
+* A name outside the list is refused by the REST handler and again by the
+  provider, with no network request.
+* A 40-character commit is accepted only if `GET compare/<allowed>...<sha>`
+  returns `identical` or `behind` for one of the listed names without a
+  wildcard, i.e. the commit is an ancestor of that branch or tag. Otherwise it
+  is refused before any tree or blob is fetched. Wildcard entries cannot
+  vouch for a commit: there is no single ref to compare against.
+* Rate limiting during the check is reported as rate limiting, not as an
+  unreachable commit. Other compare errors (404, size cap) count as "not
+  reachable from this ref".
+* The Content admin page posts the commit its manifest resolved, so each
+  manual sync costs one compare call. Offline bundles are not affected.
+* Verified against GitHub: an old `main` commit and tips of merged branches
+  are accepted; the tip of an unmerged (diverged) branch is refused.
