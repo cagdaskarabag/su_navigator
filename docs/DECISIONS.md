@@ -1731,3 +1731,125 @@ as drift.
 * Security picture: unchanged. No new route, capability, setting, dependency or collection; no SPL
   refusal, approval control, capability check or ACL was relaxed. All new text is built with
   `ucm.el` and text nodes. Python 3.9 compatible, stdlib only. The build number is 12.
+
+## D-067 ES and ESCU read-only hand-off, and the populated check for CIM data models
+*0.9.1 (B-10, W1, W9, N5; issues #4 and #13).*
+* Context: ESCU detections are alerts that Enterprise Security (ES) is built to run: their
+  stanzas carry `action.notable` and `action.risk`, and ES Content Management enables, tunes
+  and groups them. A SUN deployment is a plain scheduled saved search owned by the scheduler
+  account (D-051). On an ES search head the two would run side by side and the SUN copy would
+  have no notable or risk action. The product has no ES lab, so everything that needs ES to be
+  installed is built from documentation and mocks and is stated as unvalidated.
+* **Rule that does not move.** SUN does not create ES-managed content, writes nothing into
+  another app, and adds no output mode. Alerts stay `es_only` in the sense of D-052 and #4:
+  an ES output mode (findings, notable events, risk) is still not built; it needs an ES lab.
+  No SPL refusal, approval control (four-eyes, no self-approval), capability check or ACL
+  was relaxed, and no bypass was added. The only new policy surface is a read.
+* **Detection (read-only, system token).** `platform/security_content.py`:
+  `GET /services/apps/local/<app id>` for ES (`SplunkEnterpriseSecuritySuite`; the id and
+  releases 8.x were checked on the Splunkbase API, app 263, and the ES 8 documentation; no
+  different id was found for ES 8) and for ESCU (`DA-ESS-ContentUpdate`, 6.11.1 on the lab,
+  verified). A disabled app is `disabled`, a 404 is `not_installed`, any other read failure
+  (403 included) is `unverified` with a reason and is never read as "not installed". The
+  reader runs only with the handler's system session (a viewer cannot read other apps) and
+  never raises. Reads are cached for 60 seconds in the handler process. No new route: the
+  result is `security_content` in `GET platform` and `escu_handoff` in `GET usecase`.
+* **Platform card.** Content Administration → Platform has a row "Security content apps"
+  ("Enterprise Security 8.x installed; ESCU 6.11.1 installed", "not installed" or
+  "unverified (reason)"). The brief called it the Overview platform card; Overview has KPI
+  cards and the scheduler card, and the platform capabilities card is in Content
+  Administration, so the row is there. Both pages read the same `platform` response.
+* **ESCU use-case card.** The saved search ESCU shipped for a record is read with
+  `GET /servicesNS/nobody/DA-ESS-ContentUpdate/saved/searches/<stanza>`; the stanza name is the
+  `stanza` the importer stored in `provider_extras`, else `ESCU - <title> - Rule`. The card
+  shows `enabled`, `disabled`, `not_found` or `unverified`, the cron schedule, the time range
+  and whether the stanza has the notable and risk actions. Wording by case: ES installed:
+  "enable it in ES Content Management"; ESCU without ES: "the shipped search is disabled (or
+  enabled) and nothing manages it; SUN can deploy an independent copy"; stanza missing in the
+  installed ESCU: say so; ESCU not installed: no shipped search to enable; unreadable: "do not
+  assume it is disabled". Cached for 60 seconds per stanza.
+* **Deep link.** With ES installed the card links to the ES app's Content Management page,
+  built from the app id and the view name `ess_content_management`, as a same-origin URL from
+  the current page path (`isSafeHref` still only allows same-app view names, `?`, `#` and
+  http(s), so a cross-app link is assembled in the card and refused for any app id that is not
+  a plain identifier). The path is not verified on any ES version and the card says so ("the
+  exact path varies by ES version"). The ES 8 menu route (Security content, Content
+  management) is given in words.
+* **Parallel-copy warning.** The Deployment panel shows a non-blocking warning for an ESCU
+  use case when ESCU's stanza is enabled or ES is installed. It is text only: Deploy, Enable,
+  four-eyes and every gate are the same. The existing acknowledgment is `review_commands`
+  only, and no free-text acknowledgment exists, so no new one was added. What is recorded:
+  the draft revision carries `parallel_copy` (`warned`, `es_installed`, `escu_enabled`,
+  `stanza`, `stanza_state`, `read_at`) and the draft audit event carries the same key; they
+  are absent when no warning applied. The approver sees it with the revision.
+* **Coverage semantics (Q-3).** "Enabled in ES" and "enabled in ESCU" never count as enabled in
+  SUN coverage. Coverage counts searches SUN deployed; the card says so in one sentence and
+  Coverage is not changed.
+* **What was validated, what was not.** Verified on the lab (Splunk 10.2.9, ESCU 6.11.1, no
+  ES): ESCU detection and version, the real stanza state, cron, time range and actions of a real
+  ESCU saved search (compared with the REST value), the not-found case, the viewer path
+  (the viewer sees the card though cannot read the ESCU app), the draft without a warning. Mocked
+  in unit and JS tests only: ES installed (ES 8 version strings, the link, the "enable it in ES"
+  wording, the warning with ES), a 403 on the app list, a non-admin caller, unreadable stanza,
+  a stanza that appears or disappears between reads. These cases are unvalidated. If ES is
+  found to use another app id or another Content Management route, the constants
+  `ES_APP_IDS` and `CONTENT_MANAGEMENT_VIEW` are the only places to change.
+* **Issue #4.** The issue stays open for the ES output mode. Its decision note is: until an ES
+  lab exists SUN hands off to ES Content Management instead of writing ES content; a future
+  output mode must not weaken the governed deployment and must be built against a real ES 8.
+* **Issue #13, populated check.** Decision on the open question in D-065: a CIM data model that
+  is installed stays `met` with code `model_present`, whatever the check finds, so no score and
+  no recommendation changes. The check adds a separate `populated` value shown next to it.
+  * Where it runs: the discovery job (system dispatch path, same as the pair scan), after the
+    model inventory. One search per model: `| tstats count from datamodel=<model> where
+    earliest=-24h`, run in the model's own app namespace so app-scoped models are visible.
+    The name must be a plain identifier (`[A-Za-z0-9_.-]`, up to 80 characters); no other name
+    reaches the search string.
+  * Which models: those a catalogue requirement or a local datamodel mapping references, then
+    the models of the CIM app (`Splunk_SA_CIM`), by name, up to `populated_max_models` (30).
+    Others are `unverified` with the reason `not_referenced`. On the lab, which has no CIM add-on,
+    the two internal models are therefore `not_referenced`.
+  * Bounds: a per-search time limit (`max_time = populated_timeout_seconds`, 30, the search is
+    finalized by Splunk; `timeout` on the oneshot is only the job's time to live, measured), a
+    total budget of half the discovery job timeout, and a stop after three consecutive
+    failures. A finalized search that counted 0 is `unverified` (`timeout`), never `no`, because
+    a partial count of 0 proves nothing; a finalized search that counted more than 0 is `yes`.
+  * Result per model: `yes` (count above 0), `no` (the search ran to completion and the count
+    is 0) or `unverified` with a reason (`check_disabled`, `not_referenced`, `model_cap`,
+    `time_budget`, `timeout`, `search_failed`, `search_unavailable`, `stopped_after_failures`,
+    `no_result`, `invalid_name`). Stored additively on the data model document of the
+    discovery data (`populated`, `populated_reason`, `populated_count`, `populated_window`,
+    `populated_at`) and as `totals.populated` on the job. Documents from before 0.9.1 have none
+    of these and read as `unverified` ("predates the check; run discovery again"). No schema
+    migration.
+  * Shown: a separate chip on the CIM requirement ("populated: yes / no / unverified") with the
+    sentence, a line in the readiness explanation and the same sentence in the recommendation
+    reasons. `met` still means "the model definition is installed". A model with `no` is still
+    `met`; it is a hint that the data is not CIM-tagged or the model is not accelerated.
+  * Limits, stated: `yes` means events matched the model's constraints in the last 24 hours at
+    discovery time; it does not say the fields a search needs exist, that acceleration is
+    current, or that the sourcetype is tagged for the needed dataset. For a model that is not
+    accelerated the search runs the model's constraint search, which can be slow; the limits
+    above bound the cost. The window is the discovery time, not the assess time.
+  * Setting: `[discovery] populated_check` (default `true`), `populated_max_models` (30) and
+    `populated_timeout_seconds` (30), in `ucm.conf.spec`, the default `ucm.conf` and the config
+    DEFAULTS. With the check off, the models are `unverified` with `check_disabled` and no model
+    search runs.
+  * Lab result: temporary models, one matching `index=_internal` and one matching a sourcetype
+    that does not exist, were `yes` and `no`; a model nothing references was
+    `unverified/not_referenced`; with the setting off, `unverified/check_disabled`; readiness for
+    the same use case was `met` in both cases with the same score (live tests
+    `LivePopulatedTest`). The models and mappings were removed.
+* **Housekeeping.** The live macro-probe test now creates a uniquely named lookup and deletes it;
+  the leftover `ucm_probe_own` saved search and `sun_live_probe.csv` were removed from the lab.
+  **Reindex stays synchronous:** a background job needs a new job document type, a worker
+  branch, status and cancel endpoints, polling in the UI and a decision about which token
+  writes the catalogue, so it was not simple with the existing job mechanism (a draft is in
+  `docs/ISSUES_PENDING.md`).
+* Security picture: new system-token reads, all read-only: `apps/local/<ES and ESCU app id>`,
+  and `saved/searches/<ESCU stanza>` in the ESCU app namespace (name length-limited, control
+  characters refused). The result is visible to every app user (a viewer sees the card), carries
+  names, versions and flags and never the stanza's search text. One new search shape in
+  discovery (`tstats count from datamodel`) for a validated model name, with a time limit. No
+  new route, capability, collection or dependency; no SPL refusal, approval control, capability
+  check or ACL was relaxed. Python 3.9 compatible, stdlib only. The build number is 13.
