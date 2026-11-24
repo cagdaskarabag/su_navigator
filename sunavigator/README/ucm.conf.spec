@@ -97,6 +97,11 @@ default_cron = <five-field cron>
 * Schedule proposed for new drafts. Default */15 * * * *.
 default_earliest = <relative-time>
 default_latest = <relative-time>
+* Time range proposed for new drafts. Default -20m@m to -5m@m: a 15-minute window
+* that matches the default cron and leaves 5 minutes for late-arriving events.
+default_schedule_window = auto|<integer 0-1440>
+* schedule_window proposed for new drafts, so the scheduler can delay the search
+* under load instead of skipping it. Default auto.
 default_alert_mode = none|track
 * track: an alert that adds to Triggered Alerts when results exceed the threshold; no external actions.
 * none: a scheduled report. Default track.

@@ -23,6 +23,7 @@ from ..content.reindex import StoredNormalizer
 from ..errors import ConflictError, NotFoundError, PermissionDenied, UcmError, UnsupportedOperation, ValidationError
 from ..model.canonical import UseCase
 from ..platform.search import SearchClient
+from ..spl.analysis import analyze
 from ..spl.parser import high_cost, parse
 from ..spl.policy import classify, command_exists
 from ..storage import collections as C
@@ -46,10 +47,11 @@ MIN_OVERRIDE_REASON = 10
 class DeploymentSettings:
     def __init__(self, require_approval: bool = True, allow_self_approval: bool = False,
                  block_enable_states: Sequence[str] = ("blocked",), cron: str = "*/15 * * * *",
-                 earliest: str = "-15m", latest: str = "now", alert_mode: str = "track",
+                 earliest: str = "-20m@m", latest: str = "-5m@m", alert_mode: str = "track",
                  max_revisions: int = 20, verify_interval_minutes: int = 60,
-                 extra_safe_commands: Sequence[str] = ()):
+                 extra_safe_commands: Sequence[str] = (), schedule_window: str = "auto"):
         self.extra_safe_commands = tuple(extra_safe_commands)
+        self.schedule_window = schedule_window
         self.require_approval = require_approval
         self.allow_self_approval = allow_self_approval
         self.block_enable_states = tuple(block_enable_states)
@@ -62,7 +64,7 @@ class DeploymentSettings:
 
     def defaults(self) -> Dict[str, str]:
         return {"cron": self.cron, "earliest": self.earliest, "latest": self.latest,
-                "alert_mode": self.alert_mode}
+                "alert_mode": self.alert_mode, "schedule_window": self.schedule_window}
 
 
 def deployment_key(catalog_key: str) -> str:
@@ -175,6 +177,8 @@ class DeploymentService:
         revision = {
             "rev": rev_no, "spl": spl, "spl_hash": spl_hash(spl), "spl_source": spec["spl_source"],
             "cron": spec["cron"], "earliest": spec["earliest"], "latest": spec["latest"],
+            "schedule_window": spec["schedule_window"], "suppress_period": spec["suppress_period"],
+            "suppress_fields": spec["suppress_fields"], "spl_time_bounds": analyze(spl).has_time_bounds,
             "alert_mode": spec["alert_mode"], "severity": spec["severity"], "threshold": spec["threshold"],
             "notes": spec["notes"], "content_source_hash": uc.provenance.source_hash,
             "readiness_state": readiness.get("state"), "readiness_score": readiness.get("score"),

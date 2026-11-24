@@ -569,3 +569,25 @@ as drift.
 * Corpus delta: OR / IN cases falsely not ready 2 → 0; every metric is now 0.
   The none-present OR case scores 50 instead of 33 (still `partially_ready`,
   not ready).
+
+## D-042 Scheduling defaults, schedule window and suppression
+*0.7.3+ (T-10, finding F-14).*
+* New drafts default to `-20m@m` → `-5m@m` instead of `-15m` → `now`. The
+  window matches the default 15-minute cron, is snapped to the minute so runs
+  do not overlap or leave gaps, and ends 5 minutes ago so events that arrive
+  late are still searched.
+* Each revision records `schedule_window` (`auto` or 0–1440 minutes, default
+  `[deployment] default_schedule_window = auto`) so a busy scheduler delays the
+  search instead of skipping it.
+* Alerts (`alert_mode = track`) can set suppression: `suppress_period`
+  (`30m`, `1h`, `1d`) and optional `suppress_fields` (up to 10 names).
+  Written as `alert.suppress`, `alert.suppress.period`, `alert.suppress.fields`.
+  Scheduled reports reject suppression. No suppression writes
+  `alert.suppress = 0`.
+* Revisions record `spl_time_bounds` when the SPL sets `earliest`/`latest`
+  itself; the card warns because that overrides the scheduled range. It is a
+  warning, not a block.
+* Drift checks the new keys only for revisions that have them. Revisions
+  frozen before this change keep Splunk's values and show no new drift.
+  Splunk keeps period and fields when suppression is off, so they are compared
+  only while suppression is on.

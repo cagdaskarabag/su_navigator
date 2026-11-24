@@ -482,7 +482,8 @@ class LiveDeploymentTest(unittest.TestCase):
         return dict(entry["content"], owner=entry["acl"]["owner"])
 
     def test_lifecycle(self):
-        status, body = self.act(self.operator, "draft", cron="*/30 * * * *", earliest="-30m@m", latest="@m")
+        status, body = self.act(self.operator, "draft", cron="*/30 * * * *", earliest="-30m@m", latest="@m",
+                                schedule_window="7", suppress_period="1h", suppress_fields="user, src")
         self.assertEqual(status, 200, body)
         self.assertTrue(body["deployment"]["revisions"][0]["parse_ok"], body)
         name = body["deployment"]["saved_search"]["name"]
@@ -502,6 +503,8 @@ class LiveDeploymentTest(unittest.TestCase):
         self.assertTrue(live["disabled"])
         self.assertEqual(live["owner"], self.OPERATOR)
         self.assertEqual(live["cron_schedule"], "*/30 * * * *")
+        self.assertEqual((live["schedule_window"], live["alert.suppress"], live["alert.suppress.period"],
+                          live["alert.suppress.fields"]), ("7", True, "1h", "user,src"))
         status, body = self.act(self.operator, "enable", override_reason="live test override reason")
         self.assertEqual(status, 200, body)
         self.assertEqual(body["deployment"]["live"]["status"], "enabled")
@@ -515,7 +518,11 @@ class LiveDeploymentTest(unittest.TestCase):
         self.act(self.admin, "approve")
         status, body = self.act(self.operator, "deploy")
         self.assertEqual(body["deployment"]["deployed_revision"], 2)
-        self.assertTrue(self.saved(name)["disabled"])
+        self.assertEqual(body["deployment"]["live"]["drift"], [])
+        live = self.saved(name)
+        self.assertTrue(live["disabled"])
+        self.assertEqual((live["schedule_window"], live["alert.suppress"], live["dispatch.latest_time"]),
+                         ("auto", False, "-5m@m"))
         status, body = self.act(self.operator, "rollback", note="live test")
         self.assertEqual(status, 200, body)
         self.assertEqual(body["deployment"]["deployed_revision"], 1)

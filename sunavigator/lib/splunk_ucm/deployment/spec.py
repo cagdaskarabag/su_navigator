@@ -15,6 +15,10 @@ SEVERITIES = {"info": 1, "low": 2, "medium": 3, "high": 4, "critical": 5}
 _CRON_FIELD = re.compile(r"^(\*|\d{1,2}(-\d{1,2})?)(/\d{1,2})?(,(\*|\d{1,2}(-\d{1,2})?)(/\d{1,2})?)*$")
 _TIME = re.compile(r"^(now|[-+]\d{1,4}[smhdwy](@[smhdwy]\d?)?|@[smhdwy]|rt|rt-\d{1,4}[smhdwy])$")
 _NAME_UNSAFE = re.compile(r"[^A-Za-z0-9 _.:()\-]+")
+_PERIOD = re.compile(r"^\d{1,4}[smhd]$")
+_FIELD = re.compile(r"^[A-Za-z_][\w.:\-]{0,99}$")
+MAX_SCHEDULE_WINDOW = 1440
+MAX_SUPPRESS_FIELDS = 10
 MAX_CUSTOM_SPL = 20000
 
 
@@ -31,6 +35,33 @@ def validate_time(value: str, name: str) -> str:
     if not _TIME.match(text) or text.startswith("rt"):
         raise ValidationError("invalid %s" % name, {"value": text[:40], "allowed": "now, -15m, -1h@h, @d"})
     return text
+
+
+def validate_schedule_window(value: str) -> str:
+    text = (value or "").strip().lower()
+    if text == "auto":
+        return text
+    if text.isdigit() and int(text) <= MAX_SCHEDULE_WINDOW:
+        return str(int(text))
+    raise ValidationError("schedule_window must be auto or 0-%d minutes" % MAX_SCHEDULE_WINDOW, {"value": text[:20]})
+
+
+def validate_suppression(period: str, fields: str, mode: str):
+    period = (period or "").strip()
+    names = [f.strip() for f in str(fields or "").split(",") if f.strip()]
+    if not period:
+        if names:
+            raise ValidationError("suppress_fields needs a suppress_period")
+        return "", ""
+    if mode != "track":
+        raise ValidationError("suppression applies to alerts (alert_mode track) only")
+    if not _PERIOD.match(period):
+        raise ValidationError("suppress_period must look like 30m, 1h or 1d", {"value": period[:20]})
+    bad = [f for f in names if not _FIELD.match(f)]
+    if bad or len(names) > MAX_SUPPRESS_FIELDS:
+        raise ValidationError("suppress_fields must be up to %d field names" % MAX_SUPPRESS_FIELDS,
+                              {"invalid": bad[:5]})
+    return period, ",".join(names)
 
 
 def saved_search_name(record_id: str, title: str) -> str:
@@ -64,12 +95,17 @@ def normalize_spec(body: Dict[str, Any], defaults: Dict[str, str]) -> Dict[str, 
     notes = str(body.get("notes") or "")
     if len(notes) > 1000:
         raise ValidationError("notes too long")
+    period, fields = validate_suppression(str(body.get("suppress_period") or ""),
+                                          str(body.get("suppress_fields") or ""), mode)
     return {
         "spl_source": source,
         "custom_spl": custom.strip() if source == "custom" else "",
         "cron": validate_cron(str(body.get("cron") or defaults.get("cron") or "*/15 * * * *")),
-        "earliest": validate_time(str(body.get("earliest") or defaults.get("earliest") or "-15m"), "earliest"),
-        "latest": validate_time(str(body.get("latest") or defaults.get("latest") or "now"), "latest"),
+        "earliest": validate_time(str(body.get("earliest") or defaults.get("earliest") or "-20m@m"), "earliest"),
+        "latest": validate_time(str(body.get("latest") or defaults.get("latest") or "-5m@m"), "latest"),
+        "schedule_window": validate_schedule_window(
+            str(body.get("schedule_window") or defaults.get("schedule_window") or "auto")),
+        "suppress_period": period, "suppress_fields": fields,
         "alert_mode": mode, "severity": severity, "threshold": threshold, "notes": notes,
     }
 
@@ -103,7 +139,28 @@ def settings_for(revision: Dict[str, Any], content_id: str, disabled: bool = Tru
         })
     else:
         settings.update({"alert_type": "always", "alert.track": "0"})
+    # Revisions frozen before these keys existed leave Splunk's values alone.
+    if "schedule_window" in revision:
+        settings["schedule_window"] = revision["schedule_window"]
+    if "suppress_period" in revision:
+        if _suppressed(revision):
+            settings.update({"alert.suppress": "1", "alert.suppress.period": revision["suppress_period"],
+                             "alert.suppress.fields": revision.get("suppress_fields") or ""})
+        else:
+            settings["alert.suppress"] = "0"
     return settings
+
+
+def _suppressed(revision: Dict[str, Any]) -> bool:
+    return bool(revision.get("suppress_period")) and revision.get("alert_mode") == "track"
+
+
+def _truthy(value: Any) -> bool:
+    return value is True or str(value).strip().lower() in ("1", "true", "yes", "on")
+
+
+def _fields(value: Any) -> str:
+    return ",".join(f.strip() for f in str(value or "").split(",") if f.strip())
 
 
 def spl_hash(spl: str) -> str:
@@ -120,6 +177,20 @@ def drift(revision: Dict[str, Any], live: Dict[str, Any], expected_disabled: boo
                           ("dispatch.latest_time", revision["latest"])):
         if str(live.get(key) or "") != expected:
             out.append({"field": key, "expected": expected, "observed": live.get(key)})
+    if "schedule_window" in revision and str(live.get("schedule_window") or "0").lower() != revision["schedule_window"]:
+        out.append({"field": "schedule_window", "expected": revision["schedule_window"],
+                    "observed": live.get("schedule_window")})
+    if "suppress_period" in revision:
+        expected_on = _suppressed(revision)
+        if _truthy(live.get("alert.suppress")) != expected_on:
+            out.append({"field": "alert.suppress", "expected": expected_on, "observed": live.get("alert.suppress")})
+        elif expected_on:
+            for key, expected, observed in (
+                    ("alert.suppress.period", revision["suppress_period"], str(live.get("alert.suppress.period") or "")),
+                    ("alert.suppress.fields", _fields(revision.get("suppress_fields")),
+                     _fields(live.get("alert.suppress.fields")))):
+                if observed != expected:
+                    out.append({"field": key, "expected": expected, "observed": live.get(key)})
     actions = [a.strip() for a in str(live.get("actions") or "").split(",") if a.strip()]
     if actions:
         out.append({"field": "actions", "expected": "", "observed": ",".join(actions)})

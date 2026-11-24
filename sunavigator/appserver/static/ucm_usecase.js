@@ -236,8 +236,13 @@ require([
         source.addEventListener("change", function () { customWrap.style.display = source.value === "custom" ? "" : "none"; });
         function input(value) { var i = el("input", { "class": "ucm-input", type: "text" }); i.value = value; return i; }
         var cron = input(cur.cron || defaults.cron || "*/15 * * * *");
-        var earliest = input(cur.earliest || defaults.earliest || "-15m");
-        var latest = input(cur.latest || defaults.latest || "now");
+        var earliest = input(cur.earliest || defaults.earliest || "-20m@m");
+        var latest = input(cur.latest || defaults.latest || "-5m@m");
+        var windowIn = input(cur.schedule_window || defaults.schedule_window || "auto");
+        var suppressPeriod = input(cur.suppress_period || "");
+        suppressPeriod.placeholder = "off, or e.g. 1h";
+        var suppressFields = input(cur.suppress_fields || "");
+        suppressFields.placeholder = "all results, or e.g. user,src";
         var mode = el("select", { "class": "ucm-input" }, el("option", { value: "track", text: "Alert (Triggered Alerts only)" }),
             el("option", { value: "none", text: "Scheduled report" }));
         mode.value = cur.alert_mode || defaults.alert_mode || "track";
@@ -251,15 +256,17 @@ require([
             this.disabled = true;
             ucm.post("deployment/draft", { id: uc.content_id, spl_source: source.value, custom_spl: custom.value,
                 cron: cron.value, earliest: earliest.value, latest: latest.value, alert_mode: mode.value,
+                schedule_window: windowIn.value, suppress_period: suppressPeriod.value, suppress_fields: suppressFields.value,
                 severity: severity.value, threshold: threshold.value, notes: notes.value })
                 .done(load).fail(function (err) { save.disabled = false; ucm.notify(err.message); });
         } });
         return el("div", { "class": "ucm-form" }, kv([
             ["Search", source], ["Custom SPL", customWrap], ["Schedule (cron)", cron], ["Earliest", earliest],
-            ["Latest", latest], ["Type", mode], ["Severity", severity], ["Trigger when results >", threshold],
+            ["Latest", latest], ["Schedule window (auto or minutes)", windowIn], ["Type", mode], ["Severity", severity],
+            ["Trigger when results >", threshold], ["Suppress repeats for", suppressPeriod], ["Suppress by fields", suppressFields],
             ["Notes", notes]]),
             el("div", { "class": "ucm-actions" }, save),
-            el("div", { "class": "ucm-sub", text: "The draft is parsed by Splunk. Searches with side-effect commands cannot be submitted. No email, webhook or script actions are configured." }));
+            el("div", { "class": "ucm-sub", text: "The draft is parsed by Splunk. Searches with side-effect commands cannot be submitted. No email, webhook or script actions are configured. The default range ends 5 minutes ago so late events are still counted; suppression applies to alerts only." }));
     }
 
     var LIVE_KIND = { enabled: "ok", disabled: "info", missing: "error", unmanaged: "error", absent: "neutral" };
@@ -289,14 +296,22 @@ require([
             " in app " + dep.saved_search.app + (dep.live && dep.live.owner ? ", owner " + dep.live.owner : "") +
             ". Latest revision " + dep.revision + (dep.deployed_revision ? ", deployed revision " + dep.deployed_revision : ", nothing deployed") + "."));
         card.appendChild(el("div", { "class": "ucm-sub", text: "Revision " + latest.rev + ": " + latest.spl_source + " SPL, cron " +
-            latest.cron + ", " + latest.earliest + " → " + latest.latest + ", " + (latest.alert_mode === "track" ? "alert, severity " +
-            latest.severity + ", results > " + latest.threshold : "scheduled report") + ". " +
+            latest.cron + ", " + latest.earliest + " → " + latest.latest +
+            (latest.schedule_window ? ", schedule window " + latest.schedule_window : "") + ", " +
+            (latest.alert_mode === "track" ? "alert, severity " + latest.severity + ", results > " + latest.threshold +
+                (latest.suppress_period ? ", suppressed for " + latest.suppress_period +
+                    (latest.suppress_fields ? " by " + latest.suppress_fields : "") : "") : "scheduled report") + ". " +
             (latest.parse_ok ? "Parsed by Splunk." : "Parse failed: " + (latest.parse_error || "")) +
             (latest.side_effects && latest.side_effects.length ? " Side effects: " + latest.side_effects.join(", ") + "." : "") +
             (latest.review_commands && latest.review_commands.length ? " Needs review: " + latest.review_commands.join(", ") +
                 (latest.acknowledged_by ? " (acknowledged by " + latest.acknowledged_by + ")" : "") + "." : "") +
             (latest.submitted_by ? " Submitted by " + latest.submitted_by + "." : "") +
             (latest.approved_by ? " Approved by " + latest.approved_by + "." : "") }));
+        if (latest.spl_time_bounds) {
+            card.appendChild(ucm.stateBox("warn", "Time range set inside the SPL",
+                "The search sets earliest/latest itself, which overrides the schedule's " + latest.earliest + " → " +
+                latest.latest + " range. Remove it from the SPL unless the override is intended."));
+        }
         if (dep.last_error) { card.appendChild(ucm.stateBox("error", "Last error", dep.last_error)); }
         var drift = (dep.live && dep.live.drift) || [];
         if (drift.length) {

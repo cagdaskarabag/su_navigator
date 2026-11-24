@@ -504,9 +504,14 @@ failed after a deploy error; retry deploy from approved/failed
 1. Open a use case that is at least partially ready (you *can* draft a
    blocked one; enabling it later will demand an override).
 2. **Save draft** — choose primary / CIM / custom SPL, cron, time range,
-   alert mode (`track` = Triggered Alerts only, `none` = scheduled report),
-   severity, threshold. Splunk parses the SPL. Unparsable SPL cannot be
-   submitted.
+   schedule window, alert mode (`track` = Triggered Alerts only, `none` =
+   scheduled report), severity, threshold and, for alerts, optional
+   suppression (period such as `1h`, optionally per field such as
+   `user,src`). Splunk parses the SPL. Unparsable SPL cannot be submitted.
+   New drafts default to `-20m@m` → `-5m@m` (15 minutes, ending 5 minutes
+   ago so late events are counted) and schedule window `auto`. If the SPL
+   sets `earliest`/`latest` itself, the card warns that it overrides the
+   scheduled range.
 3. **Submit for approval**.
 4. A **different** user with `ucm_deploy` opens the same use case and
    clicks **Approve** (optional audit note) or **Reject**. The submitter
@@ -644,6 +649,8 @@ Common stanzas:
 | `[deployment] require_approval` | `true` | `false` skips four-eyes (submit auto-approves). |
 | `[deployment] allow_self_approval` | `false` | Submitter may click Approve. |
 | `[deployment] block_enable_states` | `blocked` | Readiness states that need an enable override. |
+| `[deployment] default_earliest` / `default_latest` | `-20m@m` / `-5m@m` | Time range proposed for new drafts. |
+| `[deployment] default_schedule_window` | `auto` | Schedule window proposed for new drafts (`auto` or 0–1440 minutes). |
 | `[retention] audit_days` | `365` | `0` keeps audit forever. Also indexed in `_internal` via the app log. |
 
 The worker interval is 60 seconds (`default/inputs.conf`). Do not disable

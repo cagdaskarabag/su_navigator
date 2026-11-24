@@ -17,7 +17,8 @@ MANAGED_MARKER = "Managed by SUNavigator"
 
 READ_KEYS = ("search", "disabled", "is_scheduled", "cron_schedule", "dispatch.earliest_time",
              "dispatch.latest_time", "description", "alert_type", "alert_comparator", "alert_threshold",
-             "alert.track", "alert.severity", "next_scheduled_time", "actions")
+             "alert.track", "alert.severity", "next_scheduled_time", "actions", "schedule_window",
+             "alert.suppress", "alert.suppress.period", "alert.suppress.fields")
 
 
 def _messages(body: bytes) -> str:

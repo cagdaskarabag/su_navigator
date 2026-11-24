@@ -6,7 +6,7 @@ from splunk_ucm.audit import AuditService
 from splunk_ucm.config import AppConfig
 from splunk_ucm.deployment.savedsearch import MANAGED_MARKER
 from splunk_ucm.deployment.service import DeploymentService, DeploymentSettings, deployment_key
-from splunk_ucm.deployment.spec import normalize_spec, saved_search_name, settings_for, validate_cron
+from splunk_ucm.deployment.spec import normalize_spec, saved_search_name, settings_for, spl_hash, validate_cron
 from splunk_ucm.deployment.worker import DeploymentWorker, STATE_KEY
 from splunk_ucm.errors import ConflictError, NotFoundError, PermissionDenied, ValidationError
 from splunk_ucm.storage import collections as C
@@ -113,6 +113,63 @@ class SpecTest(unittest.TestCase):
         self.assertIn(MANAGED_MARKER, s["description"])
         self.assertIn("content_id=%s " % UC, s["description"])
         self.assertFalse(any(k.startswith("action.") for k in s))
+
+
+class SchedulingTest(unittest.TestCase):
+    def test_new_drafts_carry_scheduling_defaults(self):
+        svc, store, saved = service()
+        rev = svc.save_draft("alice", UC, {})["revisions"][-1]
+        self.assertEqual((rev["earliest"], rev["latest"], rev["schedule_window"], rev["suppress_period"]),
+                         ("-20m@m", "-5m@m", "auto", ""))
+        self.assertFalse(rev["spl_time_bounds"])
+        svc.submit("alice", UC)
+        svc.approve("bob", UC)
+        doc = svc.deploy("bob", UC)
+        live = saved.items[doc["saved_search"]["name"]]
+        self.assertEqual((live["dispatch.earliest_time"], live["schedule_window"], live["alert.suppress"]),
+                         ("-20m@m", "auto", "0"))
+        self.assertEqual(doc["live"]["drift"], [])
+
+    def test_suppression_and_window_are_written_and_checked(self):
+        svc, store, saved = service()
+        svc.save_draft("alice", UC, {"schedule_window": "10", "suppress_period": "1h",
+                                     "suppress_fields": "user, src"})
+        svc.submit("alice", UC)
+        svc.approve("bob", UC)
+        name = svc.deploy("bob", UC)["saved_search"]["name"]
+        live = saved.items[name]
+        self.assertEqual((live["schedule_window"], live["alert.suppress"], live["alert.suppress.period"],
+                          live["alert.suppress.fields"]), ("10", "1", "1h", "user,src"))
+        live.update({"schedule_window": "0", "alert.suppress.period": "5m"})
+        fields = [d["field"] for d in svc.verify("bob", UC)["live"]["drift"]]
+        self.assertEqual(fields, ["schedule_window", "alert.suppress.period"])
+
+    def test_revisions_frozen_before_the_keys_show_no_drift(self):
+        from splunk_ucm.deployment.spec import drift
+        old = {"rev": 1, "spl": "index=main", "spl_hash": spl_hash("index=main"), "cron": "*/15 * * * *",
+               "earliest": "-15m", "latest": "now", "alert_mode": "track", "threshold": 0, "severity": "medium"}
+        settings = settings_for(old, UC)
+        self.assertNotIn("schedule_window", settings)
+        self.assertNotIn("alert.suppress", settings)
+        live = dict(settings, is_scheduled=True, disabled=True, schedule_window="5", **{"alert.suppress": True})
+        self.assertEqual(drift(old, live, True), [])
+
+    def test_embedded_time_bounds_are_flagged(self):
+        svc, store, saved = service()
+        rev = svc.save_draft("alice", UC, {"spl_source": "custom",
+                                           "custom_spl": "index=main earliest=-24h | stats count"})
+        self.assertTrue(rev["revisions"][-1]["spl_time_bounds"])
+
+    def test_scheduling_validation(self):
+        for bad in ({"schedule_window": "1441"}, {"schedule_window": "soon"}, {"suppress_period": "1 hour"},
+                    {"suppress_period": "1h", "alert_mode": "none"}, {"suppress_fields": "user"},
+                    {"suppress_period": "1h", "suppress_fields": "us er"},
+                    {"suppress_period": "1h", "suppress_fields": ",".join("f%d" % i for i in range(11))}):
+            with self.assertRaises(ValidationError, msg=bad):
+                normalize_spec(bad, {})
+        spec = normalize_spec({"schedule_window": "AUTO", "suppress_period": "30m"}, {})
+        self.assertEqual((spec["schedule_window"], spec["suppress_period"], spec["suppress_fields"]),
+                         ("auto", "30m", ""))
 
 
 class WorkflowTest(unittest.TestCase):

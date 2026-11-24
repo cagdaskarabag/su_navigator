@@ -232,7 +232,7 @@ sun_navigator/
 │   └── appserver/static/         # Simple XML JS modules and styles
 ├── tools/                        # Development, packaging, and bundle CLI tools
 ├── tests/                        # Automated test suites
-│   ├── unit/                     # 262 mocked unit tests (runs without Splunk)
+│   ├── unit/                     # 267 mocked unit tests (runs without Splunk)
 │   ├── fixtures/readiness/       # Readiness regression corpus and its baseline
 │   └── live/                     # Integration tests against live Splunk instances
 └── docs/                         # Specifications, ADRs, operator guide, and screenshots
