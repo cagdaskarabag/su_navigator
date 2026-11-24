@@ -1,10 +1,10 @@
-# SUNavigator 0.8.7 — operator guide
+# SUNavigator 0.8.8 — operator guide
 
 **SUNavigator** (short for **Splunk use case navigator**) discovers, assesses,
 selects, validates and deploys monitoring use cases in Splunk.
 
 This is the install, usage and troubleshooting guide for **SUNavigator
-0.8.7**. It is written for a single Splunk Enterprise instance
+0.8.8**. It is written for a single Splunk Enterprise instance
 (search head + indexer on one host), including a local macOS install. Search
 head clusters and Splunk Cloud are **not** validated in this version.
 
@@ -24,6 +24,42 @@ Related documents (design, not how-to):
 
 The 0.8 line is a usability release. It adds no schema change and no new
 collections. An upgrade from 0.7.3 keeps your data.
+
+### 0.8.8
+
+- **Control tests tell a broken search from a slow index (D-064).** A search that
+  errors on the test data is now **content error** (Splunk's message and the phase,
+  positive or negative, are shown). **Inconclusive** is kept for data that was not
+  searchable in time, timeouts and transport failures. Results stored before 0.8.8
+  show as they did; nothing is migrated.
+- **The test window follows the sample.** It runs from one hour before the oldest
+  event to one hour after the newest, read from the timestamps in the sample (ISO,
+  splunkd, Windows, Snort, syslog and ctime formats; a time without a zone gets a day
+  of padding). A sample whose events carry no readable time uses the old wide window.
+  The card shows which was used.
+- **The manifest's checks are applied.** `expected.max_count` and `expected.fields`
+  (`name`, `values`, `min`, `max`, `regex`) are read and asserted on the positive run,
+  and the card lists each field. Re-import your fixtures to get them (§6.6a); fixtures
+  imported earlier keep working without them.
+- **Fewer wrong refusals.** The index filter is rewritten only in search clauses, so
+  `eval index=...` and quoted text are left alone, and a quoted `map` or `REST` no
+  longer makes a search not runnable. Two refusals were added: a search that calls a
+  macro, and the commands `typer`, `eventcount`, `walklex`, `metasearch`, `loadjob`,
+  `history`, `audit` and `metadata`. Nothing that was refused is allowed now.
+- **Sample events with blank lines stay one event** when the file starts with a
+  timestamp (a Windows event with a multi-line message).
+- **Administration shows why a sync failed.** The first error of a failed latest job,
+  for example a commit that is not allowed, is shown above the history table.
+- **Field sampling skips `_time`, `host`, `sourcetype` and the other fields every
+  event has.**
+- **All 94 Fenre fixtures were run on a lab without add-ons (issues #5 and #6).**
+  12 passed, 67 failed, 15 were not runnable; nearly all failures are in the sample
+  or the SPL, not in the app. The per-fixture table is
+  [upstream/CONTROL_TEST_CAMPAIGN.md](upstream/CONTROL_TEST_CAMPAIGN.md) and the
+  list for the content owner is [upstream/FENRE_FINDINGS.md](upstream/FENRE_FINDINGS.md).
+  The script is `tools/controltest_campaign.py`.
+- No schema change, no migration, no new capability, route or setting. The build
+  number changed to 10.
 
 ### 0.8.7
 
@@ -277,7 +313,7 @@ commands (`delete`, `outputlookup`, `collect`, script, and similar). Deployed
 searches have **no email, webhook or script alert actions**; the default
 alert mode only writes to Splunk's Triggered Alerts.
 
-**Not in 0.8.7:** PDF export of coverage, a bundled regulation-control
+**Not in 0.8.8:** PDF export of coverage, a bundled regulation-control
 catalogue, validated SHC behaviour, Splunk Cloud vetting submission.
 
 ---
@@ -289,7 +325,7 @@ catalogue, validated SHC behaviour, Splunk Cloud vetting submission.
 | Splunk | Enterprise 10.x (validated on 10.2.9 in development; tested by operators on 10.4.3 Darwin arm64). Python 3.9 or 3.13 in Splunk. |
 | KV Store | Must reach `status: ready`. The app stores catalogue, inventory, readiness, selections, deployments and audit in KV collections. |
 | Role | First-time setup needs `admin` (or `sc_admin` on Cloud). |
-| Disk | The 0.8.7 package is a few megabytes. Category 9 of Fenre is about 120 records; the full Fenre corpus is tens of thousands of records. |
+| Disk | The 0.8.8 package is a few megabytes. Category 9 of Fenre is about 120 records; the full Fenre corpus is tens of thousands of records. |
 | Network | Optional. Remote sync needs HTTPS to `api.github.com` and `raw.githubusercontent.com`. Offline import needs none. |
 | Browser | Splunk Web. The app is a set of Simple XML views plus JavaScript under `/en-US/app/sunavigator/`. |
 
@@ -1019,20 +1055,58 @@ after a deploy or a content change; they do not change the deployment state.
    file as body. The response gives the count and the batch hash. Importing
    again replaces the fixtures of that provider.
 4. On a deployed use case, use **Run control test**. The card shows `passed`,
-   `failed`, `inconclusive`, `not_runnable` or `no_fixture`, with the row counts
-   and the revision that was run.
+   `failed`, `content_error`, `inconclusive`, `not_runnable` or `no_fixture`, with the
+   row counts, the search window, one line per field check and the revision that
+   was run.
 
 What the test does: sends the sample events to the test index with a per-run
 marker, runs the deployed SPL with its index filter pointed at that marker, and
-compares the rows to `expected.min_count` (positive) and zero (negative). A
-search whose index filter cannot be rewritten is not run. Search `earliest` and
-`latest` terms are removed from the test copy because the sample timestamps are
-fixed.
+checks the rows against the manifest's `expected` block: at least `min_count` rows
+and, if present, at most `max_count`, plus each `fields` entry (`values`: any of the
+listed values appears; `min` and `max`: the numeric values are within the bounds;
+`regex`: some value matches). The negative run must return no rows. Field checks apply
+to the positive run only, and to what the search returns: a search that ends in
+`table` returns only the tabled fields.
+
+The window is derived from the timestamps in the sample (one hour either side); the
+search's own `earliest` and `latest` terms are removed from the test copy because the
+sample timestamps are fixed. A sample whose events carry no readable timestamp in
+their first 128 characters is indexed at the current time, and the window is then
+wide (`-10y` to `+1d`); a `timechart` over that window can fail with "too many rows"
+(`content_error`).
+
+Verdicts:
+
+| Verdict | Meaning | What to do |
+|---|---|---|
+| `passed` | Rows and checks as the manifest says. | A pass can be weak: a `timechart` returns empty buckets and a `coalesce` default returns a row without any data selected. Add `fields` checks to such a sample. |
+| `failed` | The search ran; rows or field checks do not match. | The search and the sample disagree; read the reason, find which is wrong. |
+| `content_error` | Splunk reported an error running the search on the test data. | Fix the search (or the sample); the message is shown. It says nothing about access. |
+| `inconclusive` | The events were not all searchable in time, the search timed out, or splunkd could not be reached. | Run it again; check the test index and splunkd. |
+| `not_runnable` | The search was not run. | It cannot be scoped to the test index (see below) or has side effects. |
+| `no_fixture` | No sample is imported for the use case. | Import fixtures. |
+
+Searches that cannot be scoped are not run: `tstats`, `datamodel`, `from`, `rest`,
+`mstats`, `map`, `savedsearch`, `loadjob` and similar commands that read data the
+rewrite cannot redirect; a search that calls a macro; negated or listed index
+filters; a search with no index in a search clause; and a search that filters on
+`source=` (the marker is the event source). About 1 in 12 Fenre searches is in the
+last group.
 
 What it does not prove: alerting, suppression, the schedule, or that the sample
 is realistic. A `failed` result means the search and the sample disagree; check
-which one is wrong before changing either. Events stay in the test index; set its
-retention in Splunk.
+which one is wrong before changing either.
+
+**Retention.** Events from every run stay in the test index. A full set of 94 samples
+adds about 300 events. Set a short retention on the test index in `indexes.conf`
+(`frozenTimePeriodInSecs`, for example 604800, and a `maxTotalDataSizeMB` cap), or
+remove them with `| delete` on `source="ucm-ct-*"`, which needs the `can_delete` role;
+the app never asks for it.
+
+**Running all the samples at once** (lab use): `tools/controltest_campaign.py` runs every
+fixture of a Fenre checkout without deploying anything and writes the verdicts as JSON
+(`--delete` removes its events afterwards). See
+[upstream/CONTROL_TEST_CAMPAIGN.md](upstream/CONTROL_TEST_CAMPAIGN.md).
 
 ### 6.7 Coverage
 
@@ -1066,7 +1140,7 @@ Most non-admin roles cannot. The UI then reports run status **not
 available**, not “no runs”. Tick **Include run status** only if your role
 can search `_internal`.
 
-Regulation controls have no bundled catalogue in 0.8.7; only controls that
+Regulation controls have no bundled catalogue in 0.8.8; only controls that
 appear on imported use cases are listed.
 
 **Export ATT&CK Navigator layer** (next to the legend) downloads the matrix
@@ -1191,7 +1265,7 @@ app. Do the steps in this order:
    $SPLUNK_HOME/bin/splunk restart
    ```
 
-4. **Install SUNavigator 0.8.7** as in §3.2. The first install omits
+4. **Install SUNavigator 0.8.8** as in §3.2. The first install omits
    `-update`, because `sunavigator` is a new app ID.
 5. **Re-create the GitHub token** if you use one (§3.6). It must be stored in
    realm `sunavigator`. The 0.7.0 token in realm `splunk_use_case_manager` is
@@ -1560,7 +1634,7 @@ Full table: [ARCHITECTURE.md §6](ARCHITECTURE.md).
 
 ---
 
-## 12. Known limitations (0.8.7)
+## 12. Known limitations (0.8.8)
 
 - Catalogue total counts are bounded by KV `max_rows_per_query` (50,000).
 - Catalogue search does not rank and does not search descriptions.
@@ -1583,8 +1657,13 @@ Full table: [ARCHITECTURE.md §6](ARCHITECTURE.md).
 - Discovery scans internal indexes only with `[discovery] include_internal = true`;
   otherwise a requirement on one is not verified (§6.4).
 - Default four-eyes blocks a single `admin` from approving their own draft.
-- Control tests (§6.6a) run on the lab with 2 deployed use cases. Other use
-  cases with fixtures are unverified until deployed and run.
+- Control tests (§6.6a): the campaign ran all 94 fixtures against the SPL on the lab
+  but only 2 use cases were deployed and tested through the app. 8 of the 94 searches
+  cannot be scoped (they filter on `source=`, call a lookup that needs the customer's
+  data, or read data the rewrite cannot redirect); 12 searches use `match()` as a search
+  term and never match, whatever the data (a Fenre content defect, FENRE_FINDINGS F-03).
+  A pass on a `timechart` or on `coalesce` defaults is weak. Test-index events are not
+  removed by the app.
 - Search head clusters were validated on a local three-member cluster without a
   deployer and without indexer peers (D-055). Splunk Cloud is unvalidated.
 - On Splunk 10.2.9 earlier builds of this app ran captain-only jobs on every

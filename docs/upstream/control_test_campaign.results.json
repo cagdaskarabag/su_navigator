@@ -1,0 +1,3511 @@
+{
+ "fixtures_skipped": [],
+ "results": [
+  {
+   "duration_s": 2.8,
+   "fixture_events": {
+    "negative": 5,
+    "positive": 3
+   },
+   "negative": {
+    "indexed": 5,
+    "pass": true,
+    "rows": 0,
+    "window": {
+     "derived": true,
+     "earliest": "1776243600",
+     "latest": "+1d"
+    }
+   },
+   "positive": {
+    "fields": [
+     {
+      "failures": [
+       "expected one of ['linux-prod-01'], saw []"
+      ],
+      "name": "host",
+      "pass": false,
+      "present": false
+     },
+     {
+      "failures": [
+       "no numeric values in 0 results"
+      ],
+      "name": "pctIdle",
+      "pass": false,
+      "present": false
+     }
+    ],
+    "indexed": 3,
+    "min_count": 3,
+    "pass": false,
+    "rows": 0,
+    "window": {
+     "derived": true,
+     "earliest": "1776240000",
+     "latest": "1776413400"
+    }
+   },
+   "reason": "positive run returned 0 rows, expected at least 3; field host: expected one of ['linux-prod-01'], saw []; field pctIdle: no numeric values in 0 results",
+   "sample_rows": [],
+   "sourcetype": "cpu",
+   "stage_rows": [
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0
+   ],
+   "status": "failed",
+   "title": "Sustained Linux CPU Utilization Above 90 Percent",
+   "uc_id": "1.1.1"
+  },
+  {
+   "duration_s": 2.6,
+   "fixture_events": {
+    "negative": 3,
+    "positive": 7
+   },
+   "negative": {
+    "indexed": 3,
+    "pass": true,
+    "rows": 0,
+    "window": {
+     "derived": true,
+     "earliest": "1776244204",
+     "latest": "1776417300"
+    }
+   },
+   "positive": {
+    "fields": [
+     {
+      "failures": [
+       "no value matched regex ^(10|172|192)\\."
+      ],
+      "name": "src",
+      "pass": false,
+      "present": false
+     }
+    ],
+    "indexed": 7,
+    "min_count": 5,
+    "pass": false,
+    "rows": 0,
+    "window": {
+     "derived": true,
+     "earliest": "1776240012",
+     "latest": "1776412833"
+    }
+   },
+   "reason": "positive run returned 0 rows, expected at least 5; field src: no value matched regex ^(10|172|192)\\.",
+   "sample_rows": [],
+   "sourcetype": "linux_secure",
+   "stage_rows": [
+    7,
+    7,
+    7,
+    7,
+    1,
+    0,
+    0
+   ],
+   "status": "failed",
+   "title": "SSH Brute-Force Detection",
+   "uc_id": "1.1.8"
+  },
+  {
+   "fixture_events": {
+    "negative": 13,
+    "positive": 2
+   },
+   "reason": "the app would not deploy this search: Splunk could not parse the search: Error in 'EvalCommand': Regex: \\ at end of pattern",
+   "sample_rows": [],
+   "status": "not_runnable",
+   "title": "Registry Run Key Modification (Persistence)",
+   "uc_id": "1.2.29"
+  },
+  {
+   "fixture_events": {
+    "negative": 0,
+    "positive": 3
+   },
+   "reason": "the app would not deploy this search: Splunk could not parse the search: Error in 'lookup' command: Could not construct lookup 'windows_service_failure_policy.csv, host, service_label, OUTPUT, monitor_enabled, criticality, owner, runbook, valid_from_epoch, valid_until_epoch, suppress_until_epoch, exception_change_id, exception_reason'. See search.log for more details.",
+   "sample_rows": [],
+   "status": "not_runnable",
+   "title": "Windows Service Failures",
+   "uc_id": "1.2.4"
+  },
+  {
+   "duration_s": 0.0,
+   "fixture_events": {
+    "negative": 12,
+    "positive": 4
+   },
+   "negative": null,
+   "positive": null,
+   "reason": "the search filters on source, which the test run uses as its marker",
+   "sample_rows": [],
+   "sourcetype": "WinEventLog:Security",
+   "status": "not_runnable",
+   "title": "Failed Login Monitoring",
+   "uc_id": "1.2.6"
+  },
+  {
+   "duration_s": 1.3,
+   "fixture_events": {
+    "negative": 0,
+    "positive": 5
+   },
+   "negative": null,
+   "positive": {
+    "indexed": 5,
+    "min_count": 5,
+    "pass": true,
+    "rows": 49,
+    "window": {
+     "derived": true,
+     "earliest": "1776240612",
+     "latest": "1776415501"
+    }
+   },
+   "reason": "",
+   "sample_rows": [
+    {
+     "NULL": "0",
+     "_time": "2026-04-15T08:00:00.000+00:00"
+    },
+    {
+     "NULL": "0",
+     "_time": "2026-04-15T09:00:00.000+00:00"
+    }
+   ],
+   "sourcetype": "snort:alert",
+   "status": "passed",
+   "title": "Alert Severity Trending",
+   "uc_id": "10.2.1"
+  },
+  {
+   "duration_s": 1.3,
+   "fixture_events": {
+    "negative": 0,
+    "positive": 5
+   },
+   "negative": null,
+   "positive": {
+    "fields": [
+     {
+      "failures": [],
+      "name": "client_ip",
+      "pass": true,
+      "present": true
+     }
+    ],
+    "indexed": 5,
+    "min_count": 1,
+    "pass": true,
+    "rows": 1,
+    "window": {
+     "derived": true,
+     "earliest": "1776932100",
+     "latest": "1777104900"
+    }
+   },
+   "reason": "",
+   "sample_rows": [
+    {
+     "_time": "2026-04-24T08:00:00.000+00:00",
+     "client_ip": "10.0.0.5",
+     "ev": "5",
+     "usr": "jdoe"
+    }
+   ],
+   "sourcetype": "citrix:netscaler:aaalog",
+   "status": "passed",
+   "title": "Citrix SmartAccess Policy Match Failures",
+   "uc_id": "10.6.194"
+  },
+  {
+   "duration_s": 1.4,
+   "fixture_events": {
+    "negative": 0,
+    "positive": 12
+   },
+   "negative": null,
+   "positive": {
+    "fields": [
+     {
+      "failures": [],
+      "name": "user",
+      "pass": true,
+      "present": true
+     }
+    ],
+    "indexed": 12,
+    "min_count": 1,
+    "pass": true,
+    "rows": 1,
+    "window": {
+     "derived": true,
+     "earliest": "1777014900",
+     "latest": "1777022100"
+    }
+   },
+   "reason": "",
+   "sample_rows": [
+    {
+     "_time": "2026-04-24T08:00:00.000+00:00",
+     "allows": "0",
+     "blocks": "12",
+     "direction": "upload",
+     "ops": "12",
+     "tot_bytes": "1200",
+     "user": "u1"
+    }
+   ],
+   "sourcetype": "citrix:hdx:clipboard",
+   "status": "passed",
+   "title": "Citrix Clipboard and File Transfer Data Exfiltration",
+   "uc_id": "10.6.195"
+  },
+  {
+   "duration_s": 1.3,
+   "fixture_events": {
+    "negative": 0,
+    "positive": 3
+   },
+   "negative": null,
+   "positive": {
+    "fields": [
+     {
+      "failures": [
+       "expected one of ['attacker1', 'jdoe', 'u1'], saw []"
+      ],
+      "name": "user",
+      "pass": false,
+      "present": false
+     },
+     {
+      "failures": [
+       "expected one of ['10.0.0.5'], saw []"
+      ],
+      "name": "client_ip",
+      "pass": false,
+      "present": false
+     }
+    ],
+    "indexed": 3,
+    "min_count": 1,
+    "pass": false,
+    "rows": 0,
+    "window": {
+     "derived": true,
+     "earliest": "1776932100",
+     "latest": "1777104900"
+    }
+   },
+   "reason": "positive run returned 0 rows, expected at least 1; field user: expected one of ['attacker1', 'jdoe', 'u1'], saw []; field client_ip: expected one of ['10.0.0.5'], saw []",
+   "sample_rows": [],
+   "sourcetype": "citrix:broker:session",
+   "stage_rows": [
+    3,
+    3,
+    3,
+    3,
+    3,
+    3,
+    0,
+    0
+   ],
+   "status": "failed",
+   "title": "Citrix Session Hijack Detection (Impossible Travel)",
+   "uc_id": "10.6.196"
+  },
+  {
+   "duration_s": 1.3,
+   "fixture_events": {
+    "negative": 0,
+    "positive": 3
+   },
+   "negative": null,
+   "positive": {
+    "fields": [
+     {
+      "failures": [
+       "expected one of ['attacker1', 'jdoe', 'u1'], saw []"
+      ],
+      "name": "user",
+      "pass": false,
+      "present": false
+     },
+     {
+      "failures": [
+       "expected one of ['10.0.0.5'], saw []"
+      ],
+      "name": "client_ip",
+      "pass": false,
+      "present": false
+     }
+    ],
+    "indexed": 3,
+    "min_count": 1,
+    "pass": false,
+    "rows": 0,
+    "window": {
+     "derived": true,
+     "earliest": "1776932100",
+     "latest": "1777104900"
+    }
+   },
+   "reason": "positive run returned 0 rows, expected at least 1; field user: expected one of ['attacker1', 'jdoe', 'u1'], saw []; field client_ip: expected one of ['10.0.0.5'], saw []",
+   "sample_rows": [],
+   "sourcetype": "citrix:broker:admin",
+   "stage_rows": [
+    3,
+    3,
+    0,
+    0,
+    0,
+    0,
+    0
+   ],
+   "status": "failed",
+   "title": "Citrix Admin Console Privilege Escalation Detection",
+   "uc_id": "10.6.197"
+  },
+  {
+   "duration_s": 1.4,
+   "fixture_events": {
+    "negative": 0,
+    "positive": 12
+   },
+   "negative": null,
+   "positive": {
+    "fields": [
+     {
+      "failures": [
+       "expected one of ['attacker1', 'jdoe', 'u1'], saw []"
+      ],
+      "name": "user",
+      "pass": false,
+      "present": false
+     }
+    ],
+    "indexed": 12,
+    "min_count": 1,
+    "pass": false,
+    "rows": 0,
+    "window": {
+     "derived": true,
+     "earliest": "1777014900",
+     "latest": "1777022100"
+    }
+   },
+   "reason": "positive run returned 0 rows, expected at least 1; field user: expected one of ['attacker1', 'jdoe', 'u1'], saw []",
+   "sample_rows": [],
+   "sourcetype": "citrix:hdx:policy",
+   "stage_rows": [
+    12,
+    12,
+    0,
+    0,
+    0,
+    0,
+    0
+   ],
+   "status": "failed",
+   "title": "Citrix Session Watermarking Enforcement Errors",
+   "uc_id": "10.6.198"
+  },
+  {
+   "duration_s": 0.2,
+   "fixture_events": {
+    "negative": 0,
+    "positive": 3
+   },
+   "negative": null,
+   "positive": {
+    "fields": [
+     {
+      "failures": [
+       "expected one of ['attacker1', 'jdoe', 'u1'], saw []"
+      ],
+      "name": "user",
+      "pass": false,
+      "present": false
+     },
+     {
+      "failures": [
+       "expected one of ['10.0.0.5'], saw []"
+      ],
+      "name": "client_ip",
+      "pass": false,
+      "present": false
+     }
+    ],
+    "indexed": 3,
+    "min_count": 1,
+    "pass": false,
+    "rows": 0,
+    "window": {
+     "derived": true,
+     "earliest": "1776932100",
+     "latest": "1777104900"
+    }
+   },
+   "reason": "positive run returned 0 rows, expected at least 1; field user: expected one of ['attacker1', 'jdoe', 'u1'], saw []; field client_ip: expected one of ['10.0.0.5'], saw []",
+   "sample_rows": [],
+   "sourcetype": "citrix:broker:events",
+   "stage_rows": [
+    3,
+    3,
+    0,
+    0,
+    0,
+    0,
+    0
+   ],
+   "status": "failed",
+   "title": "Citrix Unauthorized Published Application Launch Attempts",
+   "uc_id": "10.6.199"
+  },
+  {
+   "duration_s": 1.3,
+   "fixture_events": {
+    "negative": 0,
+    "positive": 3
+   },
+   "negative": null,
+   "positive": {
+    "fields": [
+     {
+      "failures": [
+       "expected one of ['attacker1', 'jdoe', 'u1'], saw []"
+      ],
+      "name": "user",
+      "pass": false,
+      "present": false
+     }
+    ],
+    "indexed": 3,
+    "min_count": 1,
+    "pass": false,
+    "rows": 0,
+    "window": {
+     "derived": true,
+     "earliest": "1776932100",
+     "latest": "1777104900"
+    }
+   },
+   "reason": "positive run returned 0 rows, expected at least 1; field user: expected one of ['attacker1', 'jdoe', 'u1'], saw []",
+   "sample_rows": [],
+   "sourcetype": "citrix:broker:session",
+   "stage_rows": [
+    3,
+    3,
+    3,
+    3,
+    3,
+    0,
+    0,
+    0,
+    0,
+    0
+   ],
+   "status": "failed",
+   "title": "Citrix Anomalous Session Behavior (Off-Hours, Unusual Apps)",
+   "uc_id": "10.6.200"
+  },
+  {
+   "duration_s": 2.6,
+   "fixture_events": {
+    "negative": 2,
+    "positive": 3
+   },
+   "negative": {
+    "indexed": 2,
+    "pass": true,
+    "rows": 0,
+    "window": {
+     "derived": false,
+     "earliest": "-10y",
+     "latest": "+1d"
+    }
+   },
+   "positive": {
+    "indexed": 3,
+    "min_count": 3,
+    "pass": true,
+    "rows": 1000,
+    "window": {
+     "derived": false,
+     "earliest": "-10y",
+     "latest": "+1d"
+    }
+   },
+   "reason": "",
+   "sample_rows": [
+    {
+     "_time": "2016-11-24T00:00:00.000+00:00",
+     "acme/api-gateway": "0",
+     "acme/billing-ui": "0"
+    },
+    {
+     "_time": "2016-11-25T00:00:00.000+00:00",
+     "acme/api-gateway": "0",
+     "acme/billing-ui": "0"
+    }
+   ],
+   "sourcetype": "github:webhook",
+   "status": "passed",
+   "title": "Commit Activity Trending",
+   "uc_id": "12.1.1"
+  },
+  {
+   "duration_s": 0.2,
+   "fixture_events": {
+    "negative": 0,
+    "positive": 2
+   },
+   "negative": null,
+   "positive": null,
+   "reason": "the search uses a command whose data cannot be redirected to the test index",
+   "sample_rows": [],
+   "sourcetype": "splunkd",
+   "status": "not_runnable",
+   "title": "Splunk Certificate Expiration and TLS Trust Chain Health (splunkd server.pem and cacert.pem, Splunk Web, forwarder splunkforwarder.pem, KV Store mongo TLS, cluster manager and peer chains, deployment-server CA, HEC and distributed search peers, SSO callbacks, weak crypto and introspection staleness)",
+   "uc_id": "13.1.15"
+  },
+  {
+   "duration_s": 0.0,
+   "fixture_events": {
+    "negative": 0,
+    "positive": 2
+   },
+   "negative": null,
+   "positive": null,
+   "reason": "the search filters on source, which the test run uses as its marker",
+   "sample_rows": [],
+   "sourcetype": "WinEventLog:Application",
+   "status": "not_runnable",
+   "title": "Local Host Cache (LHC) Sync Status and Mode Transitions",
+   "uc_id": "2.6.28"
+  },
+  {
+   "duration_s": 1.3,
+   "fixture_events": {
+    "negative": 0,
+    "positive": 3
+   },
+   "negative": null,
+   "positive": {
+    "fields": [
+     {
+      "failures": [
+       "expected one of ['citrix-lab-01'], saw []"
+      ],
+      "name": "host",
+      "pass": false,
+      "present": false
+     }
+    ],
+    "indexed": 3,
+    "min_count": 1,
+    "pass": false,
+    "rows": 0,
+    "window": {
+     "derived": true,
+     "earliest": "1777014900",
+     "latest": "1777022100"
+    }
+   },
+   "reason": "positive run returned 0 rows, expected at least 1; field host: expected one of ['citrix-lab-01'], saw []",
+   "sample_rows": [],
+   "sourcetype": "citrix:monitor:odata",
+   "stage_rows": [
+    0,
+    0,
+    0,
+    0,
+    0,
+    0
+   ],
+   "status": "failed",
+   "title": "Machine Catalog Image Pipeline Health",
+   "uc_id": "2.6.29"
+  },
+  {
+   "duration_s": 1.3,
+   "fixture_events": {
+    "negative": 0,
+    "positive": 3
+   },
+   "negative": null,
+   "positive": {
+    "fields": [
+     {
+      "failures": [
+       "no numeric values in 0 results"
+      ],
+      "name": "evts",
+      "pass": false,
+      "present": false
+     }
+    ],
+    "indexed": 3,
+    "min_count": 1,
+    "pass": false,
+    "rows": 0,
+    "window": {
+     "derived": true,
+     "earliest": "1776932100",
+     "latest": "1777104900"
+    }
+   },
+   "reason": "positive run returned 0 rows, expected at least 1; field evts: no numeric values in 0 results",
+   "sample_rows": [],
+   "sourcetype": "citrix:broker:events",
+   "stage_rows": [
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0
+   ],
+   "status": "failed",
+   "title": "MCS Provisioning and Identity Disk Health",
+   "uc_id": "2.6.30"
+  },
+  {
+   "duration_s": 1.3,
+   "fixture_events": {
+    "negative": 0,
+    "positive": 3
+   },
+   "negative": null,
+   "positive": {
+    "indexed": 3,
+    "min_count": 1,
+    "pass": false,
+    "rows": 0,
+    "window": {
+     "derived": true,
+     "earliest": "1776932100",
+     "latest": "1777104900"
+    }
+   },
+   "reason": "positive run returned 0 rows, expected at least 1",
+   "sample_rows": [],
+   "sourcetype": "citrix:broker:events",
+   "stage_rows": [
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0
+   ],
+   "status": "failed",
+   "title": "Citrix Zone Topology and Zone Preference Failover",
+   "uc_id": "2.6.31"
+  },
+  {
+   "duration_s": 1.3,
+   "fixture_events": {
+    "negative": 0,
+    "positive": 3
+   },
+   "negative": null,
+   "positive": {
+    "fields": [
+     {
+      "failures": [
+       "expected one of ['citrix-lab-01'], saw []"
+      ],
+      "name": "host",
+      "pass": false,
+      "present": false
+     }
+    ],
+    "indexed": 3,
+    "min_count": 1,
+    "pass": false,
+    "rows": 0,
+    "window": {
+     "derived": true,
+     "earliest": "1776932100",
+     "latest": "1777104900"
+    }
+   },
+   "reason": "positive run returned 0 rows, expected at least 1; field host: expected one of ['citrix-lab-01'], saw []",
+   "sample_rows": [],
+   "sourcetype": "citrix:broker:events",
+   "stage_rows": [
+    0,
+    0,
+    0,
+    0,
+    0,
+    0
+   ],
+   "status": "failed",
+   "title": "Hypervisor Connection Health Monitoring",
+   "uc_id": "2.6.32"
+  },
+  {
+   "duration_s": 1.3,
+   "fixture_events": {
+    "negative": 0,
+    "positive": 3
+   },
+   "negative": null,
+   "positive": {
+    "fields": [
+     {
+      "failures": [
+       "no numeric values in 0 results"
+      ],
+      "name": "count",
+      "pass": false,
+      "present": false
+     }
+    ],
+    "indexed": 3,
+    "min_count": 1,
+    "pass": false,
+    "rows": 0,
+    "window": {
+     "derived": true,
+     "earliest": "1776932100",
+     "latest": "1777104900"
+    }
+   },
+   "reason": "positive run returned 0 rows, expected at least 1; field count: no numeric values in 0 results",
+   "sample_rows": [],
+   "sourcetype": "citrix:broker:events",
+   "stage_rows": [
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0
+   ],
+   "status": "failed",
+   "title": "Citrix Autoscale Capacity Events",
+   "uc_id": "2.6.33"
+  },
+  {
+   "duration_s": 1.3,
+   "fixture_events": {
+    "negative": 0,
+    "positive": 3
+   },
+   "negative": null,
+   "positive": {
+    "indexed": 3,
+    "min_count": 1,
+    "pass": false,
+    "rows": 0,
+    "window": {
+     "derived": true,
+     "earliest": "1777014900",
+     "latest": "1777022100"
+    }
+   },
+   "reason": "positive run returned 0 rows, expected at least 1",
+   "sample_rows": [],
+   "sourcetype": "citrix:monitor:odata",
+   "stage_rows": [
+    0,
+    0,
+    0,
+    0,
+    0
+   ],
+   "status": "failed",
+   "title": "Maintenance Mode and Drain Operations Tracking",
+   "uc_id": "2.6.34"
+  },
+  {
+   "duration_s": 1.3,
+   "fixture_events": {
+    "negative": 0,
+    "positive": 3
+   },
+   "negative": null,
+   "positive": {
+    "fields": [
+     {
+      "failures": [
+       "no numeric values in 0 results"
+      ],
+      "name": "count",
+      "pass": false,
+      "present": false
+     }
+    ],
+    "indexed": 3,
+    "min_count": 1,
+    "pass": false,
+    "rows": 0,
+    "window": {
+     "derived": true,
+     "earliest": "1776932100",
+     "latest": "1777104900"
+    }
+   },
+   "reason": "positive run returned 0 rows, expected at least 1; field count: no numeric values in 0 results",
+   "sample_rows": [],
+   "sourcetype": "citrix:broker:events",
+   "stage_rows": [
+    0,
+    0,
+    0,
+    0,
+    0,
+    0
+   ],
+   "status": "failed",
+   "title": "Pre-Launch and Lingering Session Management",
+   "uc_id": "2.6.35"
+  },
+  {
+   "duration_s": 1.3,
+   "fixture_events": {
+    "negative": 0,
+    "positive": 2
+   },
+   "negative": null,
+   "positive": {
+    "fields": [
+     {
+      "failures": [
+       "expected one of ['citrix-lab-01'], saw []"
+      ],
+      "name": "host",
+      "pass": false,
+      "present": false
+     }
+    ],
+    "indexed": 2,
+    "min_count": 1,
+    "pass": false,
+    "rows": 0,
+    "window": {
+     "derived": true,
+     "earliest": "1776932100",
+     "latest": "1777104900"
+    }
+   },
+   "reason": "positive run returned 0 rows, expected at least 1; field host: expected one of ['citrix-lab-01'], saw []",
+   "sample_rows": [],
+   "sourcetype": "citrix:vda:events",
+   "stage_rows": [
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0
+   ],
+   "status": "failed",
+   "title": "Session Reliability and Auto Client Reconnect",
+   "uc_id": "2.6.36"
+  },
+  {
+   "duration_s": 1.3,
+   "fixture_events": {
+    "negative": 0,
+    "positive": 2
+   },
+   "negative": null,
+   "positive": {
+    "fields": [
+     {
+      "failures": [
+       "expected one of ['citrix-lab-01'], saw []"
+      ],
+      "name": "host",
+      "pass": false,
+      "present": false
+     }
+    ],
+    "indexed": 2,
+    "min_count": 1,
+    "pass": false,
+    "rows": 0,
+    "window": {
+     "derived": true,
+     "earliest": "1777014900",
+     "latest": "1777022100"
+    }
+   },
+   "reason": "positive run returned 0 rows, expected at least 1; field host: expected one of ['citrix-lab-01'], saw []",
+   "sample_rows": [],
+   "sourcetype": "uberAgent:Network:NetworkPerformanceEDT",
+   "stage_rows": [
+    2,
+    2,
+    0,
+    0,
+    0,
+    0
+   ],
+   "status": "failed",
+   "title": "HDX Adaptive Transport (EDT) and Graphics Mode",
+   "uc_id": "2.6.37"
+  },
+  {
+   "duration_s": 1.3,
+   "fixture_events": {
+    "negative": 0,
+    "positive": 2
+   },
+   "negative": null,
+   "positive": {
+    "fields": [
+     {
+      "failures": [
+       "expected one of ['attacker1', 'jdoe', 'u1'], saw []"
+      ],
+      "name": "user",
+      "pass": false,
+      "present": false
+     }
+    ],
+    "indexed": 2,
+    "min_count": 1,
+    "pass": false,
+    "rows": 0,
+    "window": {
+     "derived": true,
+     "earliest": "1776932100",
+     "latest": "1777104900"
+    }
+   },
+   "reason": "positive run returned 0 rows, expected at least 1; field user: expected one of ['attacker1', 'jdoe', 'u1'], saw []",
+   "sample_rows": [],
+   "sourcetype": "WinEventLog:Application",
+   "stage_rows": [
+    0,
+    0,
+    0,
+    0,
+    0
+   ],
+   "status": "failed",
+   "title": "Universal Print Server Health and Printing Failures",
+   "uc_id": "2.6.38"
+  },
+  {
+   "duration_s": 1.3,
+   "fixture_events": {
+    "negative": 0,
+    "positive": 2
+   },
+   "negative": null,
+   "positive": {
+    "fields": [
+     {
+      "failures": [
+       "expected one of ['citrix-lab-01'], saw []"
+      ],
+      "name": "host",
+      "pass": false,
+      "present": false
+     },
+     {
+      "failures": [
+       "expected one of ['attacker1', 'jdoe', 'u1'], saw []"
+      ],
+      "name": "user",
+      "pass": false,
+      "present": false
+     }
+    ],
+    "indexed": 2,
+    "min_count": 1,
+    "pass": false,
+    "rows": 0,
+    "window": {
+     "derived": true,
+     "earliest": "1776932100",
+     "latest": "1777104900"
+    }
+   },
+   "reason": "positive run returned 0 rows, expected at least 1; field host: expected one of ['citrix-lab-01'], saw []; field user: expected one of ['attacker1', 'jdoe', 'u1'], saw []",
+   "sample_rows": [],
+   "sourcetype": "citrix:vda:events",
+   "stage_rows": [
+    2,
+    0,
+    0,
+    0,
+    0,
+    0
+   ],
+   "status": "failed",
+   "title": "USB and Peripheral Redirection Failures",
+   "uc_id": "2.6.39"
+  },
+  {
+   "duration_s": 1.3,
+   "fixture_events": {
+    "negative": 0,
+    "positive": 2
+   },
+   "negative": null,
+   "positive": {
+    "fields": [
+     {
+      "failures": [
+       "expected one of ['citrix-lab-01'], saw []"
+      ],
+      "name": "host",
+      "pass": false,
+      "present": false
+     }
+    ],
+    "indexed": 2,
+    "min_count": 1,
+    "pass": false,
+    "rows": 0,
+    "window": {
+     "derived": true,
+     "earliest": "1776932100",
+     "latest": "1777104900"
+    }
+   },
+   "reason": "positive run returned 0 rows, expected at least 1; field host: expected one of ['citrix-lab-01'], saw []",
+   "sample_rows": [],
+   "sourcetype": "WinEventLog:Application",
+   "stage_rows": [
+    0,
+    0,
+    0,
+    0,
+    0,
+    0
+   ],
+   "status": "failed",
+   "title": "Citrix App Layering Health and Layer Attach Status",
+   "uc_id": "2.6.40"
+  },
+  {
+   "duration_s": 0.1,
+   "fixture_events": {
+    "negative": 0,
+    "positive": 2
+   },
+   "negative": null,
+   "positive": null,
+   "reason": "the search filters on source, which the test run uses as its marker",
+   "sample_rows": [],
+   "sourcetype": "WinEventLog:Application",
+   "status": "not_runnable",
+   "title": "FSLogix and Profile Container Health",
+   "uc_id": "2.6.41"
+  },
+  {
+   "duration_s": 1.4,
+   "fixture_events": {
+    "negative": 0,
+    "positive": 2
+   },
+   "negative": null,
+   "positive": {
+    "fields": [
+     {
+      "failures": [
+       "expected one of ['citrix-lab-01'], saw []"
+      ],
+      "name": "host",
+      "pass": false,
+      "present": false
+     }
+    ],
+    "indexed": 2,
+    "min_count": 1,
+    "pass": false,
+    "rows": 0,
+    "window": {
+     "derived": true,
+     "earliest": "1776932100",
+     "latest": "1777104900"
+    }
+   },
+   "reason": "positive run returned 0 rows, expected at least 1; field host: expected one of ['citrix-lab-01'], saw []",
+   "sample_rows": [],
+   "sourcetype": "WinEventLog:Security",
+   "stage_rows": [
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0
+   ],
+   "status": "failed",
+   "title": "Citrix Configuration Change Audit Trail",
+   "uc_id": "2.6.42"
+  },
+  {
+   "duration_s": 0.0,
+   "fixture_events": {
+    "negative": 0,
+    "positive": 2
+   },
+   "negative": null,
+   "positive": null,
+   "reason": "the search filters on source, which the test run uses as its marker",
+   "sample_rows": [],
+   "sourcetype": "WinEventLog:Application",
+   "status": "not_runnable",
+   "title": "Citrix Site Database Connectivity from Controllers",
+   "uc_id": "2.6.43"
+  },
+  {
+   "fixture_events": {
+    "negative": 0,
+    "positive": 2
+   },
+   "reason": "the app would not deploy this search: Splunk could not parse the search: Error in 'where' command: The arguments to the 'match' function are invalid.",
+   "sample_rows": [],
+   "status": "not_runnable",
+   "title": "VDA Disk IOPS and Write Cache Utilization",
+   "uc_id": "2.6.44"
+  },
+  {
+   "duration_s": 1.3,
+   "fixture_events": {
+    "negative": 0,
+    "positive": 3
+   },
+   "negative": null,
+   "positive": {
+    "indexed": 3,
+    "min_count": 1,
+    "pass": false,
+    "rows": 0,
+    "window": {
+     "derived": true,
+     "earliest": "1776932100",
+     "latest": "1777104900"
+    }
+   },
+   "reason": "positive run returned 0 rows, expected at least 1",
+   "sample_rows": [],
+   "sourcetype": "citrix:broker:events",
+   "stage_rows": [
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0
+   ],
+   "status": "failed",
+   "title": "Machine Boot Storm Detection and Mitigation",
+   "uc_id": "2.6.45"
+  },
+  {
+   "duration_s": 1.3,
+   "fixture_events": {
+    "negative": 0,
+    "positive": 3
+   },
+   "negative": null,
+   "positive": {
+    "indexed": 3,
+    "min_count": 1,
+    "pass": false,
+    "rows": 0,
+    "window": {
+     "derived": true,
+     "earliest": "1777014900",
+     "latest": "1777022100"
+    }
+   },
+   "reason": "positive run returned 0 rows, expected at least 1",
+   "sample_rows": [],
+   "sourcetype": "citrix:monitor:odata",
+   "stage_rows": [
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0
+   ],
+   "status": "failed",
+   "title": "Citrix Monitor OData Load Index Trending",
+   "uc_id": "2.6.46"
+  },
+  {
+   "duration_s": 1.3,
+   "fixture_events": {
+    "negative": 0,
+    "positive": 3
+   },
+   "negative": null,
+   "positive": {
+    "indexed": 3,
+    "min_count": 1,
+    "pass": false,
+    "rows": 0,
+    "window": {
+     "derived": true,
+     "earliest": "1776932100",
+     "latest": "1777104900"
+    }
+   },
+   "reason": "positive run returned 0 rows, expected at least 1",
+   "sample_rows": [],
+   "sourcetype": "citrix:broker:events",
+   "stage_rows": [
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0
+   ],
+   "status": "failed",
+   "title": "Workspace App Client Version Distribution",
+   "uc_id": "2.6.47"
+  },
+  {
+   "duration_s": 1.3,
+   "fixture_events": {
+    "negative": 0,
+    "positive": 3
+   },
+   "negative": null,
+   "positive": {
+    "indexed": 3,
+    "min_count": 1,
+    "pass": true,
+    "rows": 1,
+    "window": {
+     "derived": true,
+     "earliest": "1776932100",
+     "latest": "1777104900"
+    }
+   },
+   "reason": "",
+   "sample_rows": [
+    {
+     "_time": "2026-04-24T00:00:00.000+00:00",
+     "actor": "unknown",
+     "app": "Unknown",
+     "change_types": "change",
+     "changes": "3"
+    }
+   ],
+   "sourcetype": "citrix:broker:events",
+   "status": "passed",
+   "title": "Published Application Inventory Drift",
+   "uc_id": "2.6.48"
+  },
+  {
+   "duration_s": 1.3,
+   "fixture_events": {
+    "negative": 0,
+    "positive": 3
+   },
+   "negative": null,
+   "positive": {
+    "indexed": 3,
+    "min_count": 1,
+    "pass": false,
+    "rows": 0,
+    "window": {
+     "derived": true,
+     "earliest": "1776932100",
+     "latest": "1777104900"
+    }
+   },
+   "reason": "positive run returned 0 rows, expected at least 1",
+   "sample_rows": [],
+   "sourcetype": "citrix:broker:events",
+   "stage_rows": [
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0
+   ],
+   "status": "failed",
+   "title": "Stuck Sessions and Ghost Session Detection",
+   "uc_id": "2.6.49"
+  },
+  {
+   "duration_s": 1.4,
+   "fixture_events": {
+    "negative": 0,
+    "positive": 3
+   },
+   "negative": null,
+   "positive": {
+    "indexed": 3,
+    "min_count": 1,
+    "pass": true,
+    "rows": 1,
+    "window": {
+     "derived": true,
+     "earliest": "1776932100",
+     "latest": "1777104900"
+    }
+   },
+   "reason": "",
+   "sample_rows": [
+    {
+     "_time": "2026-04-24T00:00:00.000+00:00",
+     "event_codes": [
+      "1001",
+      "41"
+     ],
+     "host": "citrix-lab-01",
+     "instabilities": "2",
+     "stop_codes": [
+      "0x0",
+      "0x0000000A"
+     ]
+    }
+   ],
+   "sourcetype": "WinEventLog:System",
+   "status": "passed",
+   "title": "VDA BSOD and Machine Stability Tracking",
+   "uc_id": "2.6.50"
+  },
+  {
+   "duration_s": 0.0,
+   "fixture_events": {
+    "negative": 0,
+    "positive": 2
+   },
+   "negative": null,
+   "positive": null,
+   "reason": "the search filters on source, which the test run uses as its marker",
+   "sample_rows": [],
+   "sourcetype": "iis",
+   "status": "not_runnable",
+   "title": "Citrix StoreFront Server IIS Health",
+   "uc_id": "2.6.51"
+  },
+  {
+   "duration_s": 1.3,
+   "fixture_events": {
+    "negative": 0,
+    "positive": 2
+   },
+   "negative": null,
+   "positive": {
+    "indexed": 2,
+    "min_count": 1,
+    "pass": false,
+    "rows": 0,
+    "window": {
+     "derived": true,
+     "earliest": "1776932100",
+     "latest": "1777104900"
+    }
+   },
+   "reason": "positive run returned 0 rows, expected at least 1",
+   "sample_rows": [],
+   "sourcetype": "citrix:vda:events",
+   "stage_rows": [
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0
+   ],
+   "status": "failed",
+   "title": "VDA Software and OS Version Lifecycle Tracking",
+   "uc_id": "2.6.52"
+  },
+  {
+   "duration_s": 1.3,
+   "fixture_events": {
+    "negative": 0,
+    "positive": 3
+   },
+   "negative": null,
+   "positive": {
+    "indexed": 3,
+    "min_count": 1,
+    "pass": false,
+    "rows": 0,
+    "window": {
+     "derived": true,
+     "earliest": "1776932100",
+     "latest": "1777104900"
+    }
+   },
+   "reason": "positive run returned 0 rows, expected at least 1",
+   "sample_rows": [],
+   "sourcetype": "citrix:broker:events",
+   "stage_rows": [
+    3,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0
+   ],
+   "status": "failed",
+   "title": "Citrix Delivery Group Desktop Assignment Changes",
+   "uc_id": "2.6.53"
+  },
+  {
+   "duration_s": 0.0,
+   "fixture_events": {
+    "negative": 0,
+    "positive": 2
+   },
+   "negative": null,
+   "positive": null,
+   "reason": "the search filters on source, which the test run uses as its marker",
+   "sample_rows": [],
+   "sourcetype": "WinEventLog:Application",
+   "status": "not_runnable",
+   "title": "RDS Licensing Validation for Multi-Session Hosts",
+   "uc_id": "2.6.54"
+  },
+  {
+   "duration_s": 1.3,
+   "fixture_events": {
+    "negative": 0,
+    "positive": 2
+   },
+   "negative": null,
+   "positive": {
+    "indexed": 2,
+    "min_count": 1,
+    "pass": true,
+    "rows": 1,
+    "window": {
+     "derived": true,
+     "earliest": "1777014900",
+     "latest": "1777022100"
+    }
+   },
+   "reason": "",
+   "sample_rows": [
+    {
+     "driver_version": "unknown",
+     "err_signals": "0",
+     "host_name": "citrix-lab-01",
+     "license_state": "unknown",
+     "vgpu": "Unknown"
+    }
+   ],
+   "sourcetype": "uberAgent:GPU:NVIDIA",
+   "status": "passed",
+   "title": "GPU Driver Version and License Status (NVIDIA GRID / vGPU)",
+   "uc_id": "2.6.55"
+  },
+  {
+   "duration_s": 1.3,
+   "fixture_events": {
+    "negative": 0,
+    "positive": 2
+   },
+   "negative": null,
+   "positive": {
+    "indexed": 2,
+    "min_count": 1,
+    "pass": false,
+    "rows": 0,
+    "window": {
+     "derived": true,
+     "earliest": "1777014900",
+     "latest": "1777022100"
+    }
+   },
+   "reason": "positive run returned 0 rows, expected at least 1",
+   "sample_rows": [],
+   "sourcetype": "citrix:cloud:status",
+   "stage_rows": [
+    2,
+    2,
+    2,
+    2,
+    2,
+    0,
+    0,
+    0
+   ],
+   "status": "failed",
+   "title": "Citrix Cloud Service Health Status Monitoring",
+   "uc_id": "2.6.56"
+  },
+  {
+   "duration_s": 1.3,
+   "fixture_events": {
+    "negative": 0,
+    "positive": 2
+   },
+   "negative": null,
+   "positive": {
+    "fields": [
+     {
+      "failures": [
+       "expected one of ['citrix-lab-01'], saw []"
+      ],
+      "name": "host",
+      "pass": false,
+      "present": false
+     }
+    ],
+    "indexed": 2,
+    "min_count": 1,
+    "pass": false,
+    "rows": 0,
+    "window": {
+     "derived": true,
+     "earliest": "1777014900",
+     "latest": "1777022100"
+    }
+   },
+   "reason": "positive run returned 0 rows, expected at least 1; field host: expected one of ['citrix-lab-01'], saw []",
+   "sample_rows": [],
+   "sourcetype": "citrix:cloudconnector:healthdata",
+   "stage_rows": [
+    2,
+    2,
+    2,
+    2,
+    2,
+    2,
+    0,
+    0
+   ],
+   "status": "failed",
+   "title": "Citrix Cloud Connector Deep Health (HealthData API)",
+   "uc_id": "2.6.57"
+  },
+  {
+   "fixture_events": {
+    "negative": 0,
+    "positive": 2
+   },
+   "reason": "the app would not deploy this search: Splunk could not parse the search: Error in 'timechart' command: The argument 'user_principal' is invalid.",
+   "sample_rows": [],
+   "status": "not_runnable",
+   "title": "Citrix Analytics for Performance Data Export",
+   "uc_id": "2.6.58"
+  },
+  {
+   "duration_s": 0.2,
+   "fixture_events": {
+    "negative": 0,
+    "positive": 2
+   },
+   "negative": null,
+   "positive": {
+    "indexed": 2,
+    "min_count": 1,
+    "pass": false,
+    "rows": 0,
+    "window": {
+     "derived": true,
+     "earliest": "1777014900",
+     "latest": "1777022100"
+    }
+   },
+   "reason": "positive run returned 0 rows, expected at least 1",
+   "sample_rows": [],
+   "sourcetype": "citrix:analytics:security",
+   "stage_rows": [
+    2,
+    2,
+    2,
+    0,
+    0,
+    0,
+    0
+   ],
+   "status": "failed",
+   "title": "Citrix Analytics for Security Risk Indicators",
+   "uc_id": "2.6.59"
+  },
+  {
+   "duration_s": 1.4,
+   "fixture_events": {
+    "negative": 0,
+    "positive": 2
+   },
+   "negative": null,
+   "positive": {
+    "indexed": 2,
+    "min_count": 1,
+    "pass": false,
+    "rows": 0,
+    "window": {
+     "derived": true,
+     "earliest": "1777014900",
+     "latest": "1777022100"
+    }
+   },
+   "reason": "positive run returned 0 rows, expected at least 1",
+   "sample_rows": [],
+   "sourcetype": "citrix:workspace:saml:diag",
+   "stage_rows": [
+    2,
+    2,
+    0,
+    0,
+    0,
+    0,
+    0
+   ],
+   "status": "failed",
+   "title": "Identity Provider (SAML/AAD) Integration Failures",
+   "uc_id": "2.6.60"
+  },
+  {
+   "duration_s": 1.4,
+   "fixture_events": {
+    "negative": 0,
+    "positive": 12
+   },
+   "negative": null,
+   "positive": {
+    "fields": [
+     {
+      "failures": [
+       "expected one of ['citrix-lab-01'], saw []"
+      ],
+      "name": "host",
+      "pass": false,
+      "present": false
+     },
+     {
+      "failures": [
+       "expected one of ['attacker1', 'jdoe', 'u1'], saw []"
+      ],
+      "name": "user",
+      "pass": false,
+      "present": false
+     }
+    ],
+    "indexed": 12,
+    "min_count": 1,
+    "pass": false,
+    "rows": 0,
+    "window": {
+     "derived": true,
+     "earliest": "1777014900",
+     "latest": "1777022100"
+    }
+   },
+   "reason": "positive run returned 0 rows, expected at least 1; field host: expected one of ['citrix-lab-01'], saw []; field user: expected one of ['attacker1', 'jdoe', 'u1'], saw []",
+   "sample_rows": [],
+   "sourcetype": "citrix:hdx:rendezvous",
+   "stage_rows": [
+    12,
+    12,
+    12,
+    12,
+    12,
+    12,
+    0,
+    0
+   ],
+   "status": "failed",
+   "title": "Citrix HDX Rendezvous Protocol Path Selection",
+   "uc_id": "2.6.61"
+  },
+  {
+   "fixture_events": {
+    "negative": 0,
+    "positive": 2
+   },
+   "reason": "the app would not deploy this search: Splunk could not parse the search: Error in 'timechart' command: The argument 'store_name' is invalid.",
+   "sample_rows": [],
+   "status": "not_runnable",
+   "title": "Citrix Workspace Service Feed Availability",
+   "uc_id": "2.6.62"
+  },
+  {
+   "duration_s": 1.4,
+   "fixture_events": {
+    "negative": 0,
+    "positive": 2
+   },
+   "negative": null,
+   "positive": {
+    "indexed": 2,
+    "min_count": 1,
+    "pass": false,
+    "rows": 0,
+    "window": {
+     "derived": true,
+     "earliest": "1777014900",
+     "latest": "1777022100"
+    }
+   },
+   "reason": "positive run returned 0 rows, expected at least 1",
+   "sample_rows": [],
+   "sourcetype": "azure:consume:export",
+   "stage_rows": [
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0
+   ],
+   "status": "failed",
+   "title": "DaaS Autoscale Cloud Economics Tracking",
+   "uc_id": "2.6.63"
+  },
+  {
+   "duration_s": 0.2,
+   "fixture_events": {
+    "negative": 0,
+    "positive": 2
+   },
+   "negative": null,
+   "positive": {
+    "indexed": 2,
+    "min_count": 1,
+    "pass": false,
+    "rows": 0,
+    "window": {
+     "derived": true,
+     "earliest": "1777014900",
+     "latest": "1777022100"
+    }
+   },
+   "reason": "positive run returned 0 rows, expected at least 1",
+   "sample_rows": [],
+   "sourcetype": "citrix:endpoint:enrollment",
+   "stage_rows": [
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0
+   ],
+   "status": "failed",
+   "title": "Citrix Endpoint Management Device Enrollment Failures",
+   "uc_id": "2.6.64"
+  },
+  {
+   "duration_s": 0.2,
+   "fixture_events": {
+    "negative": 0,
+    "positive": 2
+   },
+   "negative": null,
+   "positive": {
+    "indexed": 2,
+    "min_count": 1,
+    "pass": false,
+    "rows": 0,
+    "window": {
+     "derived": true,
+     "earliest": "1777014900",
+     "latest": "1777022100"
+    }
+   },
+   "reason": "positive run returned 0 rows, expected at least 1",
+   "sample_rows": [],
+   "sourcetype": "citrix:endpoint:compliance",
+   "stage_rows": [
+    2,
+    2,
+    2,
+    2,
+    2,
+    2,
+    2,
+    0,
+    0
+   ],
+   "status": "failed",
+   "title": "Citrix Endpoint Management MDM/MAM Policy Compliance",
+   "uc_id": "2.6.65"
+  },
+  {
+   "fixture_events": {
+    "negative": 0,
+    "positive": 2
+   },
+   "reason": "the app would not deploy this search: Splunk could not parse the search: Error in 'timechart' command: The argument 'plat' is invalid.",
+   "sample_rows": [],
+   "status": "not_runnable",
+   "title": "Citrix Endpoint Management App Distribution Failures",
+   "uc_id": "2.6.66"
+  },
+  {
+   "duration_s": 1.3,
+   "fixture_events": {
+    "negative": 0,
+    "positive": 2
+   },
+   "negative": null,
+   "positive": {
+    "fields": [
+     {
+      "failures": [],
+      "name": "device_id",
+      "pass": true,
+      "present": true
+     }
+    ],
+    "indexed": 2,
+    "min_count": 1,
+    "pass": true,
+    "rows": 2,
+    "window": {
+     "derived": true,
+     "earliest": "1777014900",
+     "latest": "1777022100"
+    }
+   },
+   "reason": "",
+   "sample_rows": [
+    {
+     "_time": "2026-04-24T08:15:00.000+00:00",
+     "cert_type": "scep",
+     "days_left": "-219",
+     "device_id": "cem-dvc-0",
+     "error_on_renew": "renewal failure",
+     "renewal_status": "fail",
+     "template_name": "UserCert"
+    },
+    {
+     "_time": "2026-04-24T08:15:00.000+00:00",
+     "cert_type": "scep",
+     "days_left": "-219",
+     "device_id": "cem-dvc-1",
+     "error_on_renew": "renewal failure",
+     "renewal_status": "fail",
+     "template_name": "UserCert"
+    }
+   ],
+   "sourcetype": "citrix:endpoint:cert",
+   "status": "passed",
+   "title": "Citrix Endpoint Management Device Certificate Expiry",
+   "uc_id": "2.6.67"
+  },
+  {
+   "fixture_events": {
+    "negative": 0,
+    "positive": 2
+   },
+   "reason": "the app would not deploy this search: Splunk could not parse the search: Error in 'timechart' command: The argument 'outcome' is invalid.",
+   "sample_rows": [],
+   "status": "not_runnable",
+   "title": "Citrix Endpoint Management Remote Wipe/Lock Action Tracking",
+   "uc_id": "2.6.68"
+  },
+  {
+   "duration_s": 1.3,
+   "fixture_events": {
+    "negative": 0,
+    "positive": 2
+   },
+   "negative": null,
+   "positive": {
+    "fields": [
+     {
+      "failures": [
+       "expected one of ['citrix-lab-01'], saw []"
+      ],
+      "name": "host",
+      "pass": false,
+      "present": false
+     }
+    ],
+    "indexed": 2,
+    "min_count": 1,
+    "pass": false,
+    "rows": 0,
+    "window": {
+     "derived": true,
+     "earliest": "1777014900",
+     "latest": "1777022100"
+    }
+   },
+   "reason": "positive run returned 0 rows, expected at least 1; field host: expected one of ['citrix-lab-01'], saw []",
+   "sample_rows": [],
+   "sourcetype": "citrix:endpoint:server:health",
+   "stage_rows": [
+    2,
+    2,
+    2,
+    2,
+    2,
+    2,
+    2,
+    0,
+    0,
+    0
+   ],
+   "status": "failed",
+   "title": "Citrix Endpoint Management Server Health",
+   "uc_id": "2.6.69"
+  },
+  {
+   "duration_s": 1.4,
+   "fixture_events": {
+    "negative": 0,
+    "positive": 2
+   },
+   "negative": null,
+   "positive": {
+    "indexed": 2,
+    "min_count": 1,
+    "pass": false,
+    "rows": 0,
+    "window": {
+     "derived": true,
+     "earliest": "1777014900",
+     "latest": "1777022100"
+    }
+   },
+   "reason": "positive run returned 0 rows, expected at least 1",
+   "sample_rows": [],
+   "sourcetype": "citrix:sharefile:storagezone",
+   "stage_rows": [
+    2,
+    2,
+    2,
+    0,
+    0,
+    0
+   ],
+   "status": "failed",
+   "title": "Citrix ShareFile Storage Zone Controller Health",
+   "uc_id": "2.6.70"
+  },
+  {
+   "duration_s": 1.3,
+   "fixture_events": {
+    "negative": 0,
+    "positive": 2
+   },
+   "negative": null,
+   "positive": {
+    "fields": [
+     {
+      "failures": [
+       "expected one of ['attacker1', 'jdoe', 'u1'], saw []"
+      ],
+      "name": "user",
+      "pass": false,
+      "present": false
+     }
+    ],
+    "indexed": 2,
+    "min_count": 1,
+    "pass": false,
+    "rows": 0,
+    "window": {
+     "derived": true,
+     "earliest": "1777014900",
+     "latest": "1777022100"
+    }
+   },
+   "reason": "positive run returned 0 rows, expected at least 1; field user: expected one of ['attacker1', 'jdoe', 'u1'], saw []",
+   "sample_rows": [],
+   "sourcetype": "citrix:sharefile:dlp",
+   "stage_rows": [
+    2,
+    2,
+    2,
+    0,
+    0,
+    0,
+    0
+   ],
+   "status": "failed",
+   "title": "Citrix ShareFile DLP Policy Violation Tracking",
+   "uc_id": "2.6.71"
+  },
+  {
+   "duration_s": 0.2,
+   "fixture_events": {
+    "negative": 0,
+    "positive": 2
+   },
+   "negative": null,
+   "positive": {
+    "fields": [
+     {
+      "failures": [
+       "expected one of ['attacker1', 'jdoe', 'u1'], saw []"
+      ],
+      "name": "user",
+      "pass": false,
+      "present": false
+     },
+     {
+      "failures": [
+       "expected one of ['10.0.0.5'], saw []"
+      ],
+      "name": "client_ip",
+      "pass": false,
+      "present": false
+     }
+    ],
+    "indexed": 2,
+    "min_count": 1,
+    "pass": false,
+    "rows": 0,
+    "window": {
+     "derived": true,
+     "earliest": "1777014900",
+     "latest": "1777022100"
+    }
+   },
+   "reason": "positive run returned 0 rows, expected at least 1; field user: expected one of ['attacker1', 'jdoe', 'u1'], saw []; field client_ip: expected one of ['10.0.0.5'], saw []",
+   "sample_rows": [],
+   "sourcetype": "citrix:sharefile:audit",
+   "stage_rows": [
+    2,
+    2,
+    2,
+    2,
+    2,
+    0,
+    0,
+    0
+   ],
+   "status": "failed",
+   "title": "Citrix ShareFile Mass Download and Data Exfiltration Detection",
+   "uc_id": "2.6.72"
+  },
+  {
+   "duration_s": 1.3,
+   "fixture_events": {
+    "negative": 0,
+    "positive": 2
+   },
+   "negative": null,
+   "positive": {
+    "indexed": 2,
+    "min_count": 1,
+    "pass": false,
+    "rows": 0,
+    "window": {
+     "derived": true,
+     "earliest": "1777014900",
+     "latest": "1777022100"
+    }
+   },
+   "reason": "positive run returned 0 rows, expected at least 1",
+   "sample_rows": [],
+   "sourcetype": "citrix:sharefile:api",
+   "stage_rows": [
+    2,
+    2,
+    2,
+    1,
+    0,
+    0
+   ],
+   "status": "failed",
+   "title": "Citrix ShareFile API Rate Limiting and Auth Failures",
+   "uc_id": "2.6.73"
+  },
+  {
+   "duration_s": 0.2,
+   "fixture_events": {
+    "negative": 0,
+    "positive": 2
+   },
+   "negative": null,
+   "positive": {
+    "indexed": 2,
+    "min_count": 1,
+    "pass": true,
+    "rows": 1,
+    "window": {
+     "derived": true,
+     "earliest": "1777014900",
+     "latest": "1777022100"
+    }
+   },
+   "reason": "",
+   "sample_rows": [
+    {
+     "_time": "2026-04-24T00:00:00.000+00:00",
+     "actions": "download",
+     "actor": "user",
+     "events": "2",
+     "users": "0"
+    }
+   ],
+   "sourcetype": "citrix:sharefile:audit",
+   "status": "passed",
+   "title": "Citrix ShareFile User Activity Audit Trail",
+   "uc_id": "2.6.74"
+  },
+  {
+   "duration_s": 1.3,
+   "fixture_events": {
+    "negative": 0,
+    "positive": 3
+   },
+   "negative": null,
+   "positive": {
+    "fields": [
+     {
+      "failures": [
+       "no numeric values in 0 results"
+      ],
+      "name": "n",
+      "pass": false,
+      "present": false
+     }
+    ],
+    "indexed": 3,
+    "min_count": 1,
+    "pass": false,
+    "rows": 0,
+    "window": {
+     "derived": true,
+     "earliest": "1776932100",
+     "latest": "1777104900"
+    }
+   },
+   "reason": "positive run returned 0 rows, expected at least 1; field n: no numeric values in 0 results",
+   "sample_rows": [],
+   "sourcetype": "citrix:broker:events",
+   "stage_rows": [
+    0,
+    0,
+    0,
+    0,
+    0,
+    0
+   ],
+   "status": "failed",
+   "title": "End-to-End Citrix Session Launch Time",
+   "uc_id": "2.6.75"
+  },
+  {
+   "duration_s": 1.3,
+   "fixture_events": {
+    "negative": 0,
+    "positive": 2
+   },
+   "negative": null,
+   "positive": {
+    "indexed": 2,
+    "min_count": 1,
+    "pass": true,
+    "rows": 1,
+    "window": {
+     "derived": true,
+     "earliest": "1777014900",
+     "latest": "1777022100"
+    }
+   },
+   "reason": "",
+   "sample_rows": [
+    {
+     "_time": "2026-04-24T00:00:00.000+00:00",
+     "dev": "unknown",
+     "os": "unknown",
+     "sessions": "2",
+     "ver": "unknown"
+    }
+   ],
+   "sourcetype": "citrix:workspace:client",
+   "status": "passed",
+   "title": "Citrix Client Ecosystem and Platform Distribution",
+   "uc_id": "2.6.76"
+  },
+  {
+   "duration_s": 1.3,
+   "fixture_events": {
+    "negative": 0,
+    "positive": 2
+   },
+   "negative": null,
+   "positive": {
+    "fields": [
+     {
+      "failures": [
+       "expected one of ['citrix-lab-01'], saw []"
+      ],
+      "name": "host",
+      "pass": false,
+      "present": false
+     }
+    ],
+    "indexed": 2,
+    "min_count": 1,
+    "pass": false,
+    "rows": 0,
+    "window": {
+     "derived": true,
+     "earliest": "1777014900",
+     "latest": "1777022100"
+    }
+   },
+   "reason": "positive run returned 0 rows, expected at least 1; field host: expected one of ['citrix-lab-01'], saw []",
+   "sample_rows": [],
+   "sourcetype": "uberAgent:Process:ProcessStartup",
+   "stage_rows": [
+    2,
+    2,
+    2,
+    1,
+    0,
+    0
+   ],
+   "status": "failed",
+   "title": "Citrix Per-Application Perceived Performance (Startup vs Hang vs Network)",
+   "uc_id": "2.6.77"
+  },
+  {
+   "duration_s": 1.3,
+   "fixture_events": {
+    "negative": 0,
+    "positive": 2
+   },
+   "negative": null,
+   "positive": {
+    "fields": [
+     {
+      "failures": [
+       "expected one of ['citrix-lab-01'], saw []"
+      ],
+      "name": "host",
+      "pass": false,
+      "present": false
+     }
+    ],
+    "indexed": 2,
+    "min_count": 1,
+    "pass": false,
+    "rows": 0,
+    "window": {
+     "derived": true,
+     "earliest": "1777014900",
+     "latest": "1777022100"
+    }
+   },
+   "reason": "positive run returned 0 rows, expected at least 1; field host: expected one of ['citrix-lab-01'], saw []",
+   "sample_rows": [],
+   "sourcetype": "citrix:session:recording:server",
+   "stage_rows": [
+    2,
+    2,
+    2,
+    1,
+    0,
+    0
+   ],
+   "status": "failed",
+   "title": "Citrix Session Recording Pipeline and Storage Health",
+   "uc_id": "2.6.78"
+  },
+  {
+   "duration_s": 1.3,
+   "fixture_events": {
+    "negative": 0,
+    "positive": 2
+   },
+   "negative": null,
+   "positive": {
+    "fields": [
+     {
+      "failures": [
+       "expected one of ['attacker1', 'jdoe', 'u1'], saw []"
+      ],
+      "name": "user",
+      "pass": false,
+      "present": false
+     }
+    ],
+    "indexed": 2,
+    "min_count": 1,
+    "pass": false,
+    "rows": 0,
+    "window": {
+     "derived": true,
+     "earliest": "1777014900",
+     "latest": "1777022100"
+    }
+   },
+   "reason": "positive run returned 0 rows, expected at least 1; field user: expected one of ['attacker1', 'jdoe', 'u1'], saw []",
+   "sample_rows": [],
+   "sourcetype": "citrix:ztna:session",
+   "stage_rows": [
+    2,
+    2,
+    2,
+    0,
+    0,
+    0
+   ],
+   "status": "failed",
+   "title": "Citrix Secure Private Access (ZTNA) Session Monitoring",
+   "uc_id": "2.6.79"
+  },
+  {
+   "fixture_events": {
+    "negative": 2,
+    "positive": 6
+   },
+   "reason": "the app would not deploy this search: Splunk could not parse the search: Error in 'TsidxStats': Invalid value \"-6h@5m\" for time term 'earliest'",
+   "sample_rows": [],
+   "status": "not_runnable",
+   "title": "Kubernetes Pod Container Restart Churn and Rolling Restart-Rate Anomalies",
+   "uc_id": "3.2.1"
+  },
+  {
+   "duration_s": 1.3,
+   "fixture_events": {
+    "negative": 0,
+    "positive": 3
+   },
+   "negative": null,
+   "positive": {
+    "fields": [
+     {
+      "failures": [
+       "expected one of ['AccessDenied', 'Client.UnauthorizedOperation', 'UnauthorizedAccess'], saw []"
+      ],
+      "name": "errorCode",
+      "pass": false,
+      "present": false
+     }
+    ],
+    "indexed": 3,
+    "min_count": 3,
+    "pass": false,
+    "rows": 2,
+    "window": {
+     "derived": false,
+     "earliest": "-10y",
+     "latest": "+1d"
+    }
+   },
+   "reason": "positive run returned 2 rows, expected at least 3; field errorCode: expected one of ['AccessDenied', 'Client.UnauthorizedOperation', 'UnauthorizedAccess'], saw []",
+   "sample_rows": [
+    {
+     "_time": "2026-11-24T18:50:38.000+00:00",
+     "awsRegion": "us-east-1",
+     "eventName": "CreateUser",
+     "sourceIPAddress": "198.51.100.42",
+     "uc_marker": "UC-4.1.1_unauthorized_api_calls_1",
+     "userIdentity.arn": "arn:aws:iam::111122223333:user/bob"
+    },
+    {
+     "_time": "2026-11-24T18:50:38.000+00:00",
+     "awsRegion": "us-east-1",
+     "eventName": "GetBucketPolicy",
+     "sourceIPAddress": "203.0.113.7",
+     "uc_marker": "UC-4.1.1_unauthorized_api_calls_1",
+     "userIdentity.arn": "arn:aws:iam::111122223333:user/alice"
+    }
+   ],
+   "sourcetype": "aws:cloudtrail",
+   "stage_rows": [
+    2,
+    2,
+    2,
+    2
+   ],
+   "status": "failed",
+   "title": "Unauthorized API Calls",
+   "uc_id": "4.1.1"
+  },
+  {
+   "duration_s": 2.6,
+   "fixture_events": {
+    "negative": 1,
+    "positive": 2
+   },
+   "negative": {
+    "indexed": 1,
+    "pass": true,
+    "rows": 0,
+    "window": {
+     "derived": false,
+     "earliest": "-10y",
+     "latest": "+1d"
+    }
+   },
+   "positive": {
+    "fields": [
+     {
+      "failures": [
+       "expected one of ['Root'], saw []"
+      ],
+      "name": "userIdentity.type",
+      "pass": false,
+      "present": false
+     }
+    ],
+    "indexed": 2,
+    "min_count": 2,
+    "pass": false,
+    "rows": 2,
+    "window": {
+     "derived": false,
+     "earliest": "-10y",
+     "latest": "+1d"
+    }
+   },
+   "reason": "field userIdentity.type: expected one of ['Root'], saw []",
+   "sample_rows": [
+    {
+     "_time": "2026-11-24T18:50:40.000+00:00",
+     "awsRegion": "us-east-1",
+     "eventName": "ConsoleLogin",
+     "sourceIPAddress": "203.0.113.99",
+     "uc_marker": "UC-4.1.2_root_account_usage_2",
+     "userIdentity.arn": "arn:aws:iam::111122223333:root"
+    },
+    {
+     "_time": "2026-11-24T18:50:40.000+00:00",
+     "awsRegion": "us-east-1",
+     "eventName": "AttachUserPolicy",
+     "sourceIPAddress": "203.0.113.99",
+     "uc_marker": "UC-4.1.2_root_account_usage_2",
+     "userIdentity.arn": "arn:aws:iam::111122223333:root"
+    }
+   ],
+   "sourcetype": "aws:cloudtrail",
+   "stage_rows": [
+    2,
+    2,
+    2,
+    2
+   ],
+   "status": "failed",
+   "title": "Root Account Usage",
+   "uc_id": "4.1.2"
+  },
+  {
+   "duration_s": 1.3,
+   "fixture_events": {
+    "negative": 0,
+    "positive": 7
+   },
+   "negative": null,
+   "positive": {
+    "fields": [
+     {
+      "failures": [],
+      "name": "interface",
+      "pass": true,
+      "present": true
+     },
+     {
+      "failures": [],
+      "name": "state",
+      "pass": true,
+      "present": true
+     }
+    ],
+    "indexed": 7,
+    "min_count": 3,
+    "pass": false,
+    "rows": 1,
+    "window": {
+     "derived": true,
+     "earliest": "1776240600",
+     "latest": "1776413560"
+    }
+   },
+   "reason": "positive run returned 1 rows, expected at least 3",
+   "sample_rows": [
+    {
+     "count": "4",
+     "host": "core-sw-01",
+     "interface": "GigabitEthernet1/0/24",
+     "state": "down"
+    }
+   ],
+   "sourcetype": "cisco:ios",
+   "stage_rows": [
+    7,
+    7,
+    3,
+    1,
+    1
+   ],
+   "status": "failed",
+   "title": "Interface Up/Down Events",
+   "uc_id": "5.1.1"
+  },
+  {
+   "duration_s": 2.6,
+   "fixture_events": {
+    "negative": 1,
+    "positive": 3
+   },
+   "negative": {
+    "indexed": 1,
+    "pass": true,
+    "rows": 0,
+    "window": {
+     "derived": true,
+     "earliest": "1776241800",
+     "latest": "1776414600"
+    }
+   },
+   "positive": {
+    "fields": [
+     {
+      "failures": [
+       "expected one of ['critical', 'high'], saw []"
+      ],
+      "name": "severity",
+      "pass": false,
+      "present": false
+     }
+    ],
+    "indexed": 3,
+    "min_count": 3,
+    "pass": false,
+    "rows": 0,
+    "window": {
+     "derived": true,
+     "earliest": "1776241201",
+     "latest": "1776414142"
+    }
+   },
+   "reason": "positive run returned 0 rows, expected at least 3; field severity: expected one of ['critical', 'high'], saw []",
+   "sample_rows": [],
+   "sourcetype": "pan:threat",
+   "stage_rows": [
+    0,
+    0,
+    0
+   ],
+   "status": "failed",
+   "title": "Threat Detection Events",
+   "uc_id": "5.2.3"
+  },
+  {
+   "duration_s": 1.3,
+   "fixture_events": {
+    "negative": 0,
+    "positive": 3
+   },
+   "negative": null,
+   "positive": {
+    "fields": [
+     {
+      "failures": [
+       "expected one of ['citrix-lab-01'], saw []"
+      ],
+      "name": "host",
+      "pass": false,
+      "present": false
+     }
+    ],
+    "indexed": 3,
+    "min_count": 1,
+    "pass": false,
+    "rows": 0,
+    "window": {
+     "derived": true,
+     "earliest": "1776932100",
+     "latest": "1777104902"
+    }
+   },
+   "reason": "positive run returned 0 rows, expected at least 1; field host: expected one of ['citrix-lab-01'], saw []",
+   "sample_rows": [],
+   "sourcetype": "citrix:netscaler:syslog",
+   "stage_rows": [
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0
+   ],
+   "status": "failed",
+   "title": "Citrix ADC AppFlow Export Health",
+   "uc_id": "5.3.23"
+  },
+  {
+   "duration_s": 1.3,
+   "fixture_events": {
+    "negative": 0,
+    "positive": 2
+   },
+   "negative": null,
+   "positive": {
+    "indexed": 2,
+    "min_count": 1,
+    "pass": false,
+    "rows": 0,
+    "window": {
+     "derived": true,
+     "earliest": "1776932100",
+     "latest": "1777104960"
+    }
+   },
+   "reason": "positive run returned 0 rows, expected at least 1",
+   "sample_rows": [],
+   "sourcetype": "citrix:netscaler:syslog",
+   "stage_rows": [
+    1,
+    1,
+    1,
+    1,
+    1,
+    0,
+    0,
+    0,
+    0
+   ],
+   "status": "failed",
+   "title": "Citrix ADC Web Application Firewall (WAF) Violations",
+   "uc_id": "5.3.24"
+  },
+  {
+   "duration_s": 1.3,
+   "fixture_events": {
+    "negative": 0,
+    "positive": 3
+   },
+   "negative": null,
+   "positive": {
+    "fields": [
+     {
+      "failures": [
+       "expected one of ['citrix-lab-01'], saw []"
+      ],
+      "name": "host",
+      "pass": false,
+      "present": false
+     }
+    ],
+    "indexed": 3,
+    "min_count": 1,
+    "pass": false,
+    "rows": 0,
+    "window": {
+     "derived": true,
+     "earliest": "1776932100",
+     "latest": "1777104902"
+    }
+   },
+   "reason": "positive run returned 0 rows, expected at least 1; field host: expected one of ['citrix-lab-01'], saw []",
+   "sample_rows": [],
+   "sourcetype": "citrix:netscaler:appflow",
+   "stage_rows": [
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0
+   ],
+   "status": "failed",
+   "title": "Citrix ADC Bot Management Detection",
+   "uc_id": "5.3.25"
+  },
+  {
+   "duration_s": 1.3,
+   "fixture_events": {
+    "negative": 0,
+    "positive": 2
+   },
+   "negative": null,
+   "positive": {
+    "indexed": 2,
+    "min_count": 1,
+    "pass": false,
+    "rows": 0,
+    "window": {
+     "derived": true,
+     "earliest": "1776932100",
+     "latest": "1777104960"
+    }
+   },
+   "reason": "positive run returned 0 rows, expected at least 1",
+   "sample_rows": [],
+   "sourcetype": "citrix:netscaler:syslog",
+   "stage_rows": [
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0
+   ],
+   "status": "failed",
+   "title": "Citrix ADC nFactor Authentication Pipeline Failures",
+   "uc_id": "5.3.26"
+  },
+  {
+   "duration_s": 1.3,
+   "fixture_events": {
+    "negative": 0,
+    "positive": 2
+   },
+   "negative": null,
+   "positive": {
+    "indexed": 2,
+    "min_count": 1,
+    "pass": false,
+    "rows": 0,
+    "window": {
+     "derived": true,
+     "earliest": "1776932100",
+     "latest": "1777104960"
+    }
+   },
+   "reason": "positive run returned 0 rows, expected at least 1",
+   "sample_rows": [],
+   "sourcetype": "citrix:netscaler:syslog",
+   "stage_rows": [
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0
+   ],
+   "status": "failed",
+   "title": "Citrix ADC Surge Queue and Spillover Events",
+   "uc_id": "5.3.27"
+  },
+  {
+   "duration_s": 1.3,
+   "fixture_events": {
+    "negative": 0,
+    "positive": 2
+   },
+   "negative": null,
+   "positive": {
+    "fields": [
+     {
+      "failures": [
+       "expected one of ['citrix-lab-01'], saw []"
+      ],
+      "name": "host",
+      "pass": false,
+      "present": false
+     }
+    ],
+    "indexed": 2,
+    "min_count": 1,
+    "pass": false,
+    "rows": 0,
+    "window": {
+     "derived": true,
+     "earliest": "1777014900",
+     "latest": "1777022100"
+    }
+   },
+   "reason": "positive run returned 0 rows, expected at least 1; field host: expected one of ['citrix-lab-01'], saw []",
+   "sample_rows": [],
+   "sourcetype": "citrix:netscaler:perf",
+   "stage_rows": [
+    2,
+    2,
+    2,
+    0,
+    0,
+    0
+   ],
+   "status": "failed",
+   "title": "Citrix ADC TCP Connection Multiplexing Analysis",
+   "uc_id": "5.3.28"
+  },
+  {
+   "duration_s": 1.3,
+   "fixture_events": {
+    "negative": 0,
+    "positive": 3
+   },
+   "negative": null,
+   "positive": {
+    "fields": [
+     {
+      "failures": [
+       "expected one of ['citrix-lab-01'], saw []"
+      ],
+      "name": "host",
+      "pass": false,
+      "present": false
+     }
+    ],
+    "indexed": 3,
+    "min_count": 1,
+    "pass": false,
+    "rows": 0,
+    "window": {
+     "derived": true,
+     "earliest": "1776932100",
+     "latest": "1777104902"
+    }
+   },
+   "reason": "positive run returned 0 rows, expected at least 1; field host: expected one of ['citrix-lab-01'], saw []",
+   "sample_rows": [],
+   "sourcetype": "citrix:netscaler:appflow",
+   "stage_rows": [
+    3,
+    3,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0
+   ],
+   "status": "failed",
+   "title": "Citrix ADC Frontend vs Backend RTT Analysis",
+   "uc_id": "5.3.29"
+  },
+  {
+   "duration_s": 1.3,
+   "fixture_events": {
+    "negative": 0,
+    "positive": 2
+   },
+   "negative": null,
+   "positive": {
+    "indexed": 2,
+    "min_count": 1,
+    "pass": false,
+    "rows": 0,
+    "window": {
+     "derived": true,
+     "earliest": "1777014900",
+     "latest": "1777022100"
+    }
+   },
+   "reason": "positive run returned 0 rows, expected at least 1",
+   "sample_rows": [],
+   "sourcetype": "citrix:netscaler:perf",
+   "stage_rows": [
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0
+   ],
+   "status": "failed",
+   "title": "Citrix ADC Integrated Cache Hit Ratio",
+   "uc_id": "5.3.30"
+  },
+  {
+   "duration_s": 1.3,
+   "fixture_events": {
+    "negative": 0,
+    "positive": 2
+   },
+   "negative": null,
+   "positive": {
+    "fields": [
+     {
+      "failures": [
+       "expected one of ['citrix-lab-01'], saw []"
+      ],
+      "name": "host",
+      "pass": false,
+      "present": false
+     }
+    ],
+    "indexed": 2,
+    "min_count": 1,
+    "pass": false,
+    "rows": 0,
+    "window": {
+     "derived": true,
+     "earliest": "1777014900",
+     "latest": "1777022100"
+    }
+   },
+   "reason": "positive run returned 0 rows, expected at least 1; field host: expected one of ['citrix-lab-01'], saw []",
+   "sample_rows": [],
+   "sourcetype": "citrix:netscaler:perf",
+   "stage_rows": [
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0
+   ],
+   "status": "failed",
+   "title": "Citrix ADC Compression Savings and CPU Impact",
+   "uc_id": "5.3.31"
+  },
+  {
+   "duration_s": 1.3,
+   "fixture_events": {
+    "negative": 0,
+    "positive": 2
+   },
+   "negative": null,
+   "positive": {
+    "indexed": 2,
+    "min_count": 1,
+    "pass": false,
+    "rows": 0,
+    "window": {
+     "derived": true,
+     "earliest": "1776932100",
+     "latest": "1777104960"
+    }
+   },
+   "reason": "positive run returned 0 rows, expected at least 1",
+   "sample_rows": [],
+   "sourcetype": "citrix:netscaler:syslog",
+   "stage_rows": [
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0
+   ],
+   "status": "failed",
+   "title": "Citrix ADC DNS/ADNS Service Health",
+   "uc_id": "5.3.32"
+  },
+  {
+   "duration_s": 1.3,
+   "fixture_events": {
+    "negative": 0,
+    "positive": 2
+   },
+   "negative": null,
+   "positive": {
+    "indexed": 2,
+    "min_count": 1,
+    "pass": false,
+    "rows": 0,
+    "window": {
+     "derived": true,
+     "earliest": "1777014900",
+     "latest": "1777022100"
+    }
+   },
+   "reason": "positive run returned 0 rows, expected at least 1",
+   "sample_rows": [],
+   "sourcetype": "citrix:netscaler:snmp",
+   "stage_rows": [
+    2,
+    2,
+    2,
+    2,
+    0,
+    0,
+    0
+   ],
+   "status": "failed",
+   "title": "Citrix SDX Platform Health (Partition Resources)",
+   "uc_id": "5.3.33"
+  },
+  {
+   "duration_s": 1.3,
+   "fixture_events": {
+    "negative": 0,
+    "positive": 2
+   },
+   "negative": null,
+   "positive": {
+    "fields": [
+     {
+      "failures": [
+       "expected one of ['citrix-lab-01'], saw []"
+      ],
+      "name": "host",
+      "pass": false,
+      "present": false
+     }
+    ],
+    "indexed": 2,
+    "min_count": 1,
+    "pass": false,
+    "rows": 0,
+    "window": {
+     "derived": true,
+     "earliest": "1776932100",
+     "latest": "1777104960"
+    }
+   },
+   "reason": "positive run returned 0 rows, expected at least 1; field host: expected one of ['citrix-lab-01'], saw []",
+   "sample_rows": [],
+   "sourcetype": "citrix:netscaler:syslog",
+   "stage_rows": [
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0
+   ],
+   "status": "failed",
+   "title": "Citrix ADC Cluster Configuration Replication",
+   "uc_id": "5.3.34"
+  },
+  {
+   "duration_s": 1.3,
+   "fixture_events": {
+    "negative": 0,
+    "positive": 2
+   },
+   "negative": null,
+   "positive": {
+    "fields": [
+     {
+      "failures": [
+       "expected one of ['citrix-lab-01'], saw []"
+      ],
+      "name": "host",
+      "pass": false,
+      "present": false
+     }
+    ],
+    "indexed": 2,
+    "min_count": 1,
+    "pass": false,
+    "rows": 0,
+    "window": {
+     "derived": true,
+     "earliest": "1776932100",
+     "latest": "1777104960"
+    }
+   },
+   "reason": "positive run returned 0 rows, expected at least 1; field host: expected one of ['citrix-lab-01'], saw []",
+   "sample_rows": [],
+   "sourcetype": "citrix:netscaler:syslog",
+   "stage_rows": [
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0
+   ],
+   "status": "failed",
+   "title": "Citrix ADC AAA Audit Trail and Command Logging",
+   "uc_id": "5.3.35"
+  },
+  {
+   "duration_s": 1.3,
+   "fixture_events": {
+    "negative": 0,
+    "positive": 3
+   },
+   "negative": null,
+   "positive": {
+    "fields": [
+     {
+      "failures": [
+       "expected one of ['citrix-lab-01'], saw []"
+      ],
+      "name": "host",
+      "pass": false,
+      "present": false
+     }
+    ],
+    "indexed": 3,
+    "min_count": 1,
+    "pass": false,
+    "rows": 0,
+    "window": {
+     "derived": true,
+     "earliest": "1776932100",
+     "latest": "1777104902"
+    }
+   },
+   "reason": "positive run returned 0 rows, expected at least 1; field host: expected one of ['citrix-lab-01'], saw []",
+   "sample_rows": [],
+   "sourcetype": "citrix:netscaler:syslog",
+   "stage_rows": [
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0
+   ],
+   "status": "failed",
+   "title": "Citrix ADC API Gateway Policy Evaluation",
+   "uc_id": "5.3.36"
+  },
+  {
+   "duration_s": 1.3,
+   "fixture_events": {
+    "negative": 0,
+    "positive": 2
+   },
+   "negative": null,
+   "positive": {
+    "fields": [
+     {
+      "failures": [
+       "expected one of ['citrix-lab-01'], saw []"
+      ],
+      "name": "host",
+      "pass": false,
+      "present": false
+     }
+    ],
+    "indexed": 2,
+    "min_count": 1,
+    "pass": false,
+    "rows": 0,
+    "window": {
+     "derived": true,
+     "earliest": "1776932100",
+     "latest": "1777104960"
+    }
+   },
+   "reason": "positive run returned 0 rows, expected at least 1; field host: expected one of ['citrix-lab-01'], saw []",
+   "sample_rows": [],
+   "sourcetype": "citrix:netscaler:syslog",
+   "stage_rows": [
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0
+   ],
+   "status": "failed",
+   "title": "Citrix ADC Pooled Licensing Utilization",
+   "uc_id": "5.3.37"
+  },
+  {
+   "duration_s": 1.3,
+   "fixture_events": {
+    "negative": 0,
+    "positive": 2
+   },
+   "negative": null,
+   "positive": {
+    "indexed": 2,
+    "min_count": 1,
+    "pass": true,
+    "rows": 1,
+    "window": {
+     "derived": true,
+     "earliest": "1777014900",
+     "latest": "1777022100"
+    }
+   },
+   "reason": "",
+   "sample_rows": [
+    {
+     "_time": "2026-04-24T08:15:00.000+00:00",
+     "avg_lat": "200",
+     "avg_loss": "5",
+     "path_name": "MPLS1",
+     "site_id": "site-a"
+    }
+   ],
+   "sourcetype": "citrix:sdwan:virtual_path",
+   "status": "passed",
+   "title": "Citrix SD-WAN Virtual Path Loss, Jitter, and Latency",
+   "uc_id": "5.3.38"
+  },
+  {
+   "duration_s": 0.2,
+   "fixture_events": {
+    "negative": 0,
+    "positive": 2
+   },
+   "negative": null,
+   "positive": {
+    "indexed": 2,
+    "min_count": 1,
+    "pass": false,
+    "rows": 0,
+    "window": {
+     "derived": true,
+     "earliest": "1777014900",
+     "latest": "1777022100"
+    }
+   },
+   "reason": "positive run returned 0 rows, expected at least 1",
+   "sample_rows": [],
+   "sourcetype": "citrix:sdwan:app_route",
+   "stage_rows": [
+    2,
+    2,
+    2,
+    1,
+    0,
+    0
+   ],
+   "status": "failed",
+   "title": "Citrix SD-WAN Application Steering and QoS Enforcement",
+   "uc_id": "5.3.39"
+  },
+  {
+   "duration_s": 1.3,
+   "fixture_events": {
+    "negative": 0,
+    "positive": 2
+   },
+   "negative": null,
+   "positive": {
+    "indexed": 2,
+    "min_count": 1,
+    "pass": false,
+    "rows": 0,
+    "window": {
+     "derived": true,
+     "earliest": "1777014900",
+     "latest": "1777022100"
+    }
+   },
+   "reason": "positive run returned 0 rows, expected at least 1",
+   "sample_rows": [],
+   "sourcetype": "citrix:sdwan:wan_link",
+   "stage_rows": [
+    2,
+    2,
+    2,
+    0,
+    0,
+    0
+   ],
+   "status": "failed",
+   "title": "Citrix SD-WAN WAN Link Health and Standby Failover",
+   "uc_id": "5.3.40"
+  },
+  {
+   "duration_s": 1.3,
+   "fixture_events": {
+    "negative": 0,
+    "positive": 2
+   },
+   "negative": null,
+   "positive": {
+    "indexed": 2,
+    "min_count": 1,
+    "pass": false,
+    "rows": 0,
+    "window": {
+     "derived": true,
+     "earliest": "1777014900",
+     "latest": "1777022100"
+    }
+   },
+   "reason": "positive run returned 0 rows, expected at least 1",
+   "sample_rows": [],
+   "sourcetype": "citrix:sdwan:ha",
+   "stage_rows": [
+    2,
+    2,
+    2,
+    0,
+    0,
+    0
+   ],
+   "status": "failed",
+   "title": "Citrix SD-WAN High Availability and VRRP Status",
+   "uc_id": "5.3.41"
+  },
+  {
+   "duration_s": 1.3,
+   "fixture_events": {
+    "negative": 0,
+    "positive": 2
+   },
+   "negative": null,
+   "positive": {
+    "indexed": 2,
+    "min_count": 1,
+    "pass": false,
+    "rows": 0,
+    "window": {
+     "derived": true,
+     "earliest": "1777014900",
+     "latest": "1777022100"
+    }
+   },
+   "reason": "positive run returned 0 rows, expected at least 1",
+   "sample_rows": [],
+   "sourcetype": "citrix:sdwan:orchestrator",
+   "stage_rows": [
+    2,
+    2,
+    2,
+    0,
+    0,
+    0
+   ],
+   "status": "failed",
+   "title": "Citrix SD-WAN Orchestrator Config Push Failures",
+   "uc_id": "5.3.42"
+  },
+  {
+   "duration_s": 1.3,
+   "fixture_events": {
+    "negative": 0,
+    "positive": 3
+   },
+   "negative": null,
+   "positive": {
+    "fields": [
+     {
+      "failures": [],
+      "name": "reason",
+      "pass": true,
+      "present": true
+     }
+    ],
+    "indexed": 3,
+    "min_count": 3,
+    "pass": true,
+    "rows": 3,
+    "window": {
+     "derived": true,
+     "earliest": "1776241801",
+     "latest": "1776414754"
+    }
+   },
+   "reason": "",
+   "sample_rows": [
+    {
+     "count": "1",
+     "reason": "22040 Wrong password or invalid shared secret",
+     "username": "alice,"
+    },
+    {
+     "count": "1",
+     "reason": "24408 User authentication against Active Directory failed since user has been disabled",
+     "username": "nonexistent,"
+    }
+   ],
+   "sourcetype": "cisco:ise:syslog",
+   "status": "passed",
+   "title": "RADIUS Authentication Failures",
+   "uc_id": "5.4.8"
+  },
+  {
+   "duration_s": 1.3,
+   "fixture_events": {
+    "negative": 0,
+    "positive": 2
+   },
+   "negative": null,
+   "positive": {
+    "fields": [
+     {
+      "failures": [
+       "expected one of ['4740'], saw []"
+      ],
+      "name": "EventCode",
+      "pass": false,
+      "present": false
+     }
+    ],
+    "indexed": 2,
+    "min_count": 2,
+    "pass": false,
+    "rows": 2,
+    "window": {
+     "derived": true,
+     "earliest": "1776243012",
+     "latest": "1776416145"
+    }
+   },
+   "reason": "field EventCode: expected one of ['4740'], saw []",
+   "sample_rows": [
+    {
+     "_time": "2026-04-16T08:55:45.000+00:00"
+    },
+    {
+     "_time": "2026-04-16T08:50:12.000+00:00"
+    }
+   ],
+   "sourcetype": "WinEventLog:Security",
+   "stage_rows": [
+    2,
+    2,
+    2
+   ],
+   "status": "failed",
+   "title": "Account Lockout Monitoring",
+   "uc_id": "9.1.2"
+  }
+ ],
+ "run_at": "2026-11-24T18:48:12Z",
+ "summary": {
+  "content_error": 0,
+  "failed": 67,
+  "inconclusive": 0,
+  "not_runnable": 15,
+  "passed": 12,
+  "total": 94
+ },
+ "test_index": "ucm_controltest"
+}
