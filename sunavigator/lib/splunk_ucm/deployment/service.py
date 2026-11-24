@@ -23,7 +23,8 @@ from ..content.reindex import StoredNormalizer
 from ..errors import ConflictError, NotFoundError, PermissionDenied, UcmError, UnsupportedOperation, ValidationError
 from ..model.canonical import UseCase
 from ..platform.search import SearchClient
-from ..spl.parser import combined_side_effects, high_cost, parse
+from ..spl.parser import high_cost, parse
+from ..spl.policy import classify, command_exists
 from ..storage import collections as C
 from ..storage.collections import DOC_SCHEMA
 from ..storage.kvstore import DocumentStore
@@ -46,7 +47,9 @@ class DeploymentSettings:
     def __init__(self, require_approval: bool = True, allow_self_approval: bool = False,
                  block_enable_states: Sequence[str] = ("blocked",), cron: str = "*/15 * * * *",
                  earliest: str = "-15m", latest: str = "now", alert_mode: str = "track",
-                 max_revisions: int = 20, verify_interval_minutes: int = 60):
+                 max_revisions: int = 20, verify_interval_minutes: int = 60,
+                 extra_safe_commands: Sequence[str] = ()):
+        self.extra_safe_commands = tuple(extra_safe_commands)
         self.require_approval = require_approval
         self.allow_self_approval = allow_self_approval
         self.block_enable_states = tuple(block_enable_states)
@@ -188,14 +191,17 @@ class DeploymentService:
         self._save(doc, actor)
         self.audit.record(actor, "deployment.draft", "deployment", uc.content_id,
                           details={"revision": rev_no, "spl_source": spec["spl_source"],
-                                   "parse_ok": check["parse_ok"], "side_effects": check["side_effects"]})
+                                   "parse_ok": check["parse_ok"], "side_effects": check["side_effects"],
+                                   "review_commands": check["review_commands"]})
         return self._decorate(doc)
 
-    def submit(self, actor: str, content_id: str, note: str = "") -> Dict[str, Any]:
+    def submit(self, actor: str, content_id: str, note: str = "", acknowledge_commands: bool = False) -> Dict[str, Any]:
         doc = self._require(content_id)
         self._expect(doc, (DRAFT,), "submit")
         rev = self._latest(doc)
         self._require_clean_spl(rev)
+        if not self.settings.require_approval:
+            self._acknowledge(rev, actor, acknowledge_commands)
         rev["submitted_by"] = actor
         rev["submitted_at"] = utc_now_iso()
         target = PENDING
@@ -207,7 +213,7 @@ class DeploymentService:
         self._transition(doc, actor, "submit", target, note)
         return self._decorate(doc)
 
-    def approve(self, actor: str, content_id: str, note: str = "") -> Dict[str, Any]:
+    def approve(self, actor: str, content_id: str, note: str = "", acknowledge_commands: bool = False) -> Dict[str, Any]:
         doc = self._require(content_id)
         self._expect(doc, (PENDING,), "approve")
         rev = self._latest(doc)
@@ -215,10 +221,12 @@ class DeploymentService:
             raise PermissionDenied("the submitter cannot approve their own deployment "
                                    "(ucm.conf [deployment] allow_self_approval)")
         self._require_clean_spl(rev)
+        self._acknowledge(rev, actor, acknowledge_commands)
         rev["approved_by"] = actor
         rev["approved_at"] = utc_now_iso()
         rev["approval"] = "approved"
-        self._transition(doc, actor, "approve", APPROVED, note)
+        self._transition(doc, actor, "approve", APPROVED, note,
+                         {"acknowledged_commands": rev.get("acknowledged_commands") or []})
         return self._decorate(doc)
 
     def reject(self, actor: str, content_id: str, note: str = "") -> Dict[str, Any]:
@@ -239,6 +247,7 @@ class DeploymentService:
         recheck = self._check_spl(rev["spl"])
         rev.update(recheck)
         self._require_clean_spl(rev)
+        self._require_acknowledged(rev)
         name = doc["saved_search"]["name"]
         settings = settings_for(rev, doc["content_id"], disabled=True)
         try:
@@ -453,15 +462,43 @@ class DeploymentService:
             parsed = parse(self.search, spl, app=self.saved.app)
         except (UnsupportedOperation, ValidationError) as exc:
             out["parse_error"] = exc.message[:500]
-            out["side_effects"] = combined_side_effects(spl, [])
+            out.update(self._policy(spl, None))
             return out
-        out["side_effects"] = combined_side_effects(spl, parsed.commands)
+        out.update(self._policy(spl, parsed))
         out["high_cost"] = high_cost(parsed.commands)
         out["commands"] = parsed.commands[:50]
         out["parse_ok"] = bool(parsed.ok)
         if not parsed.ok:
             out["parse_error"] = (parsed.errors[0] if parsed.errors else "parse failed")[:500]
         return out
+
+    def _policy(self, spl: str, parsed) -> Dict[str, Any]:
+        policy = classify(spl, parsed, self.settings.extra_safe_commands,
+                          exists=lambda name: command_exists(self.search, name, self.saved.app))
+        return {"side_effects": policy.side_effects, "indirect_commands": policy.indirect,
+                "unknown_commands": policy.unknown, "review_commands": policy.review}
+
+    @staticmethod
+    def _acknowledge(rev: Dict[str, Any], actor: str, acknowledged: bool) -> None:
+        review = rev.get("review_commands") or []
+        if not review:
+            return
+        if not acknowledged:
+            raise ConflictError("this search runs commands SUN cannot verify as read-only (%s); approving it "
+                                "needs an explicit acknowledgment" % ", ".join(review),
+                                {"code": "acknowledgment_required", "commands": review,
+                                 "indirect": rev.get("indirect_commands") or [],
+                                 "unknown": rev.get("unknown_commands") or []})
+        rev["acknowledged_commands"] = list(review)
+        rev["acknowledged_by"] = actor
+
+    @staticmethod
+    def _require_acknowledged(rev: Dict[str, Any]) -> None:
+        missing = [c for c in rev.get("review_commands") or [] if c not in (rev.get("acknowledged_commands") or [])]
+        if missing:
+            raise ConflictError("the search now runs commands the approver did not acknowledge (%s), for example "
+                                "after a macro changed; start a new revision" % ", ".join(missing),
+                                {"code": "unacknowledged_commands", "commands": missing})
 
     @staticmethod
     def _require_clean_spl(rev: Dict[str, Any]) -> None:

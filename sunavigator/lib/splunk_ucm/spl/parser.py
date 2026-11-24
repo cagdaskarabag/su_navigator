@@ -8,7 +8,7 @@ from typing import List
 
 from ..errors import ValidationError
 from ..platform.search import ParseResult, SearchClient
-from .analysis import HIGH_COST_COMMANDS, SIDE_EFFECT_COMMANDS, analyze
+from .analysis import HIGH_COST_COMMANDS
 
 
 def for_parser(spl: str) -> str:
@@ -44,18 +44,5 @@ def parse(client: SearchClient, spl: str, app: str = "") -> ParseResult:
     return last
 
 
-def side_effects(commands: List[str]) -> List[str]:
-    return [c for c in commands if c in SIDE_EFFECT_COMMANDS]
-
-
 def high_cost(commands: List[str]) -> List[str]:
     return [c for c in commands if c in HIGH_COST_COMMANDS]
-
-
-def combined_side_effects(spl: str, commands: List[str]) -> List[str]:
-    """Union of parser commands and the static analyser (parser may not run if syntax fails)."""
-    seen = []
-    for name in list(commands) + analyze(spl).side_effect_commands:
-        if name not in seen:
-            seen.append(name)
-    return [c for c in seen if c in SIDE_EFFECT_COMMANDS]

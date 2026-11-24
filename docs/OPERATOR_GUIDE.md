@@ -405,7 +405,7 @@ Bookmarks are not listed here.
 From a use-case page you can Select / Defer / Reject and add notes. From
 the same page, with `ucm_run_discovery`:
 
-- **Validate** — `/services/search/parser` plus optional field sample
+- **Validate** — Splunk's search parser, in the `sunavigator` namespace, plus optional field sample
   (`fieldsummary` over discovered index/sourcetype pairs, not the imported
   pipeline).
 - **Preview** — dispatches the imported SPL only after a successful parse
@@ -414,7 +414,13 @@ the same page, with `ucm_run_discovery`:
   payloads are not stored.
 
 Searches with `delete`, `outputlookup`, `collect`, `script` and similar
-commands are refused.
+commands are refused. So are searches with commands that run other searches or
+reach data the SPL does not show (`map`, `savedsearch`, `loadjob`, `rest`,
+`dbxquery`), and commands outside SUN's read-only list, such as MLTK `apply` or
+an add-on's custom command. The validation panel lists them as "commands
+needing review". Approving such a deployment needs an explicit acknowledgment,
+which is audited. To trust a read-only custom command, add it to
+`[spl] extra_safe_commands` in `local/ucm.conf` (decision D-038).
 
 ![Use-case page with selection, SPL validation and deployment panels](images/09-spl-validation.png)
 
@@ -842,7 +848,8 @@ If **neither** Approve nor Reject appears, the account lacks `ucm_deploy`
 ### 9.9 Deploy fails / saved search `absent`
 
 Read **Last error** on the deployment card. Common causes: SPL failed
-re-parse, side-effect commands, missing `schedule_search` (the
+re-parse, side-effect commands, review commands the approver did not acknowledge
+(`unacknowledged_commands`: start a new revision), missing `schedule_search` (the
 `ucm_deployment_operator` role grants it; a custom role may not), or the
 search name colliding with an unmanaged search.
 

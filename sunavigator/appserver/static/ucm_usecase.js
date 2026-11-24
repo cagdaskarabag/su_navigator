@@ -141,6 +141,9 @@ require([
         if (v && v.side_effects && v.side_effects.length) {
             parseLine += " Side-effect commands (preview refused): " + v.side_effects.join(", ");
         }
+        if (v && v.review_commands && v.review_commands.length) {
+            parseLine += " Commands needing review (preview refused, approval needs acknowledgment): " + v.review_commands.join(", ");
+        }
         var previewLine = (v && v.preview)
             ? ("Last preview: " + v.preview.event_count + " events (" + v.preview.earliest + " → " + v.preview.latest +
                 "). Event payloads are not stored.")
@@ -163,7 +166,7 @@ require([
                         ucm.post("preview", { id: uc.content_id }).done(load)
                             .fail(function (err) { window.alert(err.message); });
                     } })),
-            el("div", { "class": "ucm-sub", text: "Preview forces a short time window and a result cap. Searches with delete, outputlookup, collect, script or similar commands are refused. Field sampling uses a constructed fieldsummary, not the imported pipeline." }));
+            el("div", { "class": "ucm-sub", text: "Preview forces a short time window and a result cap. Searches with delete, outputlookup, collect, script or similar commands are refused, and so are searches with map, savedsearch, rest or commands outside SUN's read-only list. Field sampling uses a constructed fieldsummary, not the imported pipeline." }));
     }
 
     var ACTION_LABELS = { submit: "Submit for approval", approve: "Approve", reject: "Reject", deploy: "Deploy (disabled)",
@@ -185,6 +188,14 @@ require([
             var note = window.prompt("Optional note for the audit trail:", "");
             if (note === null) { return; }
             body.note = note;
+        }
+        var revs = (dep.deployment && dep.deployment.revisions) || [];
+        var review = (revs[revs.length - 1] || {}).review_commands || [];
+        if (review.length && (action === "approve" || (action === "submit" && settings.require_approval === false))) {
+            if (!window.confirm("This search runs commands SUN cannot verify as read-only: " + review.join(", ") +
+                    ". They can run other searches or reach data the SPL does not show. Confirm you reviewed them. " +
+                    "Your acknowledgment is recorded in the audit trail.")) { return; }
+            body.acknowledge_commands = true;
         }
         ucm.post("deployment/" + action, body).done(load).fail(function (err) { window.alert(err.message); });
     }
@@ -260,6 +271,8 @@ require([
             latest.severity + ", results > " + latest.threshold : "scheduled report") + ". " +
             (latest.parse_ok ? "Parsed by Splunk." : "Parse failed: " + (latest.parse_error || "")) +
             (latest.side_effects && latest.side_effects.length ? " Side effects: " + latest.side_effects.join(", ") + "." : "") +
+            (latest.review_commands && latest.review_commands.length ? " Needs review: " + latest.review_commands.join(", ") +
+                (latest.acknowledged_by ? " (acknowledged by " + latest.acknowledged_by + ")" : "") + "." : "") +
             (latest.submitted_by ? " Submitted by " + latest.submitted_by + "." : "") +
             (latest.approved_by ? " Approved by " + latest.approved_by + "." : "") }));
         if (dep.last_error) { card.appendChild(ucm.stateBox("error", "Last error", dep.last_error)); }

@@ -8,7 +8,7 @@ pipeline (docs/DECISIONS.md D-026, D-027).
 
 import json
 import re
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 from .. import APP_NAME
 from ..audit import AuditService
@@ -20,7 +20,8 @@ from ..model.canonical import UseCase
 from ..platform.search import SearchClient
 from ..readiness.service import ReadinessService
 from ..spl.analysis import analyze
-from ..spl.parser import combined_side_effects, high_cost, parse
+from ..spl.parser import high_cost, parse
+from ..spl.policy import classify, command_exists
 from ..storage import collections as C
 from ..storage.collections import DOC_SCHEMA
 from ..storage.kvstore import DocumentStore
@@ -34,7 +35,8 @@ _FIELD = re.compile(r"^[\w.\-]{1,100}$")
 class ValidationSettings:
     def __init__(self, earliest: str = "-15m", latest: str = "now", preview_max: int = 50,
                  preview_timeout: int = 30, sample_events: int = 200, sample_timeout: int = 30,
-                 max_pairs: int = 3):
+                 max_pairs: int = 3, extra_safe_commands: Sequence[str] = ()):
+        self.extra_safe_commands = tuple(extra_safe_commands)
         self.earliest = earliest
         self.latest = latest
         self.preview_max = preview_max
@@ -85,6 +87,13 @@ class ValidationService:
         if not doc["parse_ok"]:
             raise ValidationError("preview refused: Splunk could not parse the search",
                                   {"error": doc.get("parse_error")})
+        if doc["review_commands"]:
+            raise ValidationError(
+                "preview refused: search runs commands SUN cannot verify as read-only (%s); "
+                "review the SPL, or list trusted read-only commands in ucm.conf [spl] extra_safe_commands"
+                % ", ".join(doc["review_commands"]),
+                {"code": "review_commands", "indirect": doc["indirect_commands"],
+                 "unknown": doc["unknown_commands"]})
         earliest = _time(earliest or self.settings.earliest, "earliest")
         latest = _time(latest or self.settings.latest, "latest")
         from ..spl.parser import parser_candidates
@@ -137,6 +146,7 @@ class ValidationService:
             "_key": uc.key, "doc_schema": DOC_SCHEMA, "content_id": uc.content_id,
             "source_hash": uc.provenance.source_hash, "parsed_at": utc_now_iso(),
             "parse_ok": False, "parse_error": "", "commands": [], "side_effects": [],
+            "indirect_commands": [], "unknown_commands": [], "review_commands": [],
             "high_cost": [], "warnings": [], "cim_parse_ok": None, "cim_parse_error": "",
             "preview": previous.get("preview"), "field_samples": previous.get("field_samples") or [],
             "sampled_at": previous.get("sampled_at"), "normalized": "",
@@ -151,9 +161,10 @@ class ValidationService:
             parsed = parse(self.search, uc.spl, app=APP_NAME)
         except (UnsupportedOperation, ValidationError) as exc:
             doc["parse_error"] = str(exc)
+            self._apply_policy(doc, uc.spl, None)
             return doc
         doc["commands"] = parsed.commands
-        doc["side_effects"] = combined_side_effects(uc.spl, parsed.commands)
+        self._apply_policy(doc, uc.spl, parsed)
         doc["high_cost"] = high_cost(parsed.commands)
         if parsed.ok:
             doc["parse_ok"] = True
@@ -171,7 +182,17 @@ class ValidationService:
                 doc["cim_parse_error"] = str(exc)
         if doc["side_effects"]:
             doc["warnings"].append("side-effect commands: " + ", ".join(doc["side_effects"]))
+        if doc["review_commands"]:
+            doc["warnings"].append("commands needing review: " + ", ".join(doc["review_commands"]))
         return doc
+
+    def _apply_policy(self, doc: Dict[str, Any], spl: str, parsed) -> None:
+        policy = classify(spl, parsed, self.settings.extra_safe_commands,
+                          exists=lambda name: command_exists(self.search, name, APP_NAME))
+        doc["side_effects"] = policy.side_effects
+        doc["indirect_commands"] = policy.indirect
+        doc["unknown_commands"] = policy.unknown
+        doc["review_commands"] = policy.review
 
     def _sample(self, fields: List[str], sourcetypes: List[str]) -> List[Dict[str, Any]]:
         pairs: List[Tuple[str, str]] = []

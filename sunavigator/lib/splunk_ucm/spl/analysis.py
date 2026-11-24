@@ -14,7 +14,8 @@ from typing import Dict, List, Optional, Tuple
 # search unsuitable for unattended preview and requires explicit review.
 SIDE_EFFECT_COMMANDS = frozenset({
     "outputlookup", "outputcsv", "collect", "mcollect", "meventcollect", "tscollect",
-    "sendemail", "sendalert", "delete", "script", "run", "sendresults",
+    "sendemail", "sendalert", "delete", "script", "run", "sendresults", "summaryindex",
+    "dbxoutput", "runshellscript", "deletemodel", "dump", "crawl", "outputtelemetry",
 })
 # Commands that can amplify cost or reach outside the search scope.
 HIGH_COST_COMMANDS = frozenset({"map", "join", "transaction", "rest", "dbxquery", "localize"})

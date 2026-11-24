@@ -202,6 +202,64 @@ class WorkflowTest(unittest.TestCase):
         with self.assertRaises(ValidationError):
             svc2.submit("alice", UC)
 
+    def test_review_commands_need_approver_acknowledgment(self):
+        svc, store, saved = service(parser=FakeParser(commands=["search", "map"]))
+        doc = svc.save_draft("alice", UC, {"spl_source": "custom", "custom_spl": 'index=main | map search="x"'})
+        self.assertEqual(doc["revisions"][0]["review_commands"], ["map"])
+        svc.submit("alice", UC)
+        with self.assertRaises(ConflictError) as cm:
+            svc.approve("bob", UC)
+        self.assertEqual(cm.exception.details["code"], "acknowledgment_required")
+        self.assertEqual(cm.exception.details["indirect"], ["map"])
+        doc = svc.approve("bob", UC, acknowledge_commands=True)
+        rev = doc["revisions"][-1]
+        self.assertEqual((rev["acknowledged_commands"], rev["acknowledged_by"]), (["map"], "bob"))
+        audit = AuditService(store).recent(10, "deployment.approve")[0]
+        self.assertEqual(audit["details"]["acknowledged_commands"], ["map"])
+        self.assertEqual(svc.deploy("bob", UC)["state"], "deployed")
+
+    def test_deploy_refuses_commands_added_after_approval(self):
+        parser = FakeParser(commands=["search", "map"])
+        svc, _, saved = service(parser=parser)
+        svc.save_draft("alice", UC, {"spl_source": "custom", "custom_spl": "index=main | `m`"})
+        svc.submit("alice", UC)
+        svc.approve("bob", UC, acknowledge_commands=True)
+        parser.commands = ["search", "map", "rest"]
+        with self.assertRaises(ConflictError) as cm:
+            svc.deploy("bob", UC)
+        self.assertEqual(cm.exception.details, {"code": "unacknowledged_commands", "commands": ["rest"]})
+        self.assertEqual(saved.items, {})
+
+    def test_unknown_commands_and_extra_safe(self):
+        svc, _, _ = service(parser=FakeParser(commands=["search", "apply"]))
+        doc = svc.save_draft("alice", UC, {"spl_source": "custom", "custom_spl": "index=main | apply m"})
+        self.assertEqual(doc["revisions"][0]["unknown_commands"], ["apply"])
+        svc2, _, _ = service(parser=FakeParser(commands=["search", "apply"]), extra_safe_commands=["apply"])
+        doc = svc2.save_draft("alice", UC, {"spl_source": "custom", "custom_spl": "index=main | apply m"})
+        self.assertEqual(doc["revisions"][0]["review_commands"], [])
+
+    def test_no_approval_mode_acknowledges_at_submit(self):
+        svc, _, _ = service(parser=FakeParser(commands=["search", "rest"]), require_approval=False)
+        svc.save_draft("alice", UC, {"spl_source": "custom", "custom_spl": "| rest /services/server/info"})
+        with self.assertRaises(ConflictError):
+            svc.submit("alice", UC)
+        doc = svc.submit("alice", UC, acknowledge_commands=True)
+        self.assertEqual(doc["state"], "approved")
+        self.assertEqual(doc["revisions"][-1]["acknowledged_by"], "alice")
+
+    def test_api_passes_acknowledgment(self):
+        svc, store, _ = service(parser=FakeParser(commands=["search", "map"]))
+        ctx = make_ctx(store, ["ucm_deploy"], user="bob")
+        svc.save_draft("alice", UC, {"spl_source": "custom", "custom_spl": 'index=main | map search="x"'})
+        svc.submit("alice", UC)
+        ctx.deployment_service = lambda: svc
+        status, body = call(ctx, "POST", "deployment/approve", body={"id": UC})
+        self.assertEqual((status, body["error"]["details"]["code"]), (409, "acknowledgment_required"))
+        status, body = call(ctx, "POST", "deployment/approve", body={"id": UC, "acknowledge_commands": "yes"})
+        self.assertEqual(status, 409)
+        status, body = call(ctx, "POST", "deployment/approve", body={"id": UC, "acknowledge_commands": True})
+        self.assertEqual((status, body["deployment"]["state"]), (200, "approved"))
+
     def test_missing_cim_spl_is_refused(self):
         svc, store, _ = service()
         with self.assertRaises(ValidationError):

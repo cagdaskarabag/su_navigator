@@ -73,6 +73,14 @@ sample_events = <integer>
 * Events read per index/sourcetype pair for fieldsummary. Default 200.
 sample_timeout_seconds = <integer>
 
+[spl]
+extra_safe_commands = <comma-separated command names>
+* Commands you trust to be read-only, in addition to SUN's built-in allowlist
+* (for example custom or add-on search commands such as an MLTK "apply").
+* Commands outside the allowlist block preview and need an approver's acknowledgment.
+* Side-effect commands (outputlookup, collect, sendemail, ...) and indirect-execution
+* commands (map, savedsearch, loadjob, rest, dbxquery, ...) are ignored here. Default empty.
+
 [deployment]
 require_approval = <boolean>
 * A submitted revision must be approved by a user with ucm_deploy before it can be deployed. Default true.

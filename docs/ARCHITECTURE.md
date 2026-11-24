@@ -196,7 +196,7 @@ Downgrades are not supported (D-033).
 | `POST ucm/selections/delete` | caller | Remove the caller's selection. |
 | `GET ucm/validation?id=` | read | Last parse / preview / field-sample document. |
 | `POST ucm/validate` | `ucm_run_discovery` | Parse with `/services/search/parser`, optionally sample fields and re-assess (`sample`). |
-| `POST ucm/preview` | `ucm_run_discovery` | Bounded preview of imported SPL; refused when side-effect commands are present. |
+| `POST ucm/preview` | `ucm_run_discovery` | Bounded preview of imported SPL; refused when side-effect, indirect-execution or unknown commands are present (D-038). |
 | `GET ucm/deployments` | read | Deployments (`state`, `live`, `drift=1`, `summary=1`, paging). |
 | `GET ucm/deployment?id=` | read | Deployment document plus `allowed_actions` for the caller. Also embedded in `GET ucm/usecase`. |
 | `POST ucm/deployment/draft` | `ucm_run_discovery` or `ucm_deploy` | Create or replace a draft revision (`spl_source`, `custom_spl`, `cron`, `earliest`, `latest`, `alert_mode`, `severity`, `threshold`, `notes`). |

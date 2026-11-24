@@ -39,6 +39,7 @@ from ..readiness.query import ReadinessFilter, ReadinessQueryService
 from ..readiness.service import ReadinessService, new_job as new_readiness_job
 from ..readiness.worker import settings_from_config as readiness_settings
 from ..selection.service import SelectionService
+from ..spl.policy import parse_extra_safe
 from ..validation.service import ValidationService, ValidationSettings
 from ..log import get_logger
 from ..platform.capabilities import PlatformProbe
@@ -166,7 +167,8 @@ class Context:
             preview_max=cfg.get_int("validation", "preview_max_events", 50, 1, 200),
             preview_timeout=cfg.get_int("validation", "preview_timeout_seconds", 30, 5, 120),
             sample_events=cfg.get_int("validation", "sample_events", 200, 10, 1000),
-            sample_timeout=cfg.get_int("validation", "sample_timeout_seconds", 30, 5, 120))
+            sample_timeout=cfg.get_int("validation", "sample_timeout_seconds", 30, 5, 120),
+            extra_safe_commands=parse_extra_safe(cfg.get("spl", "extra_safe_commands", "")))
         return ValidationService(self.store, self.audit, SearchClient(self.user_transport),
                                  settings, self.readiness_service())
 
@@ -540,6 +542,9 @@ def _deployment_action(action: str) -> Handler:
             doc = svc.enable(ctx.user, use_case_id, str(body.get("override_reason") or ""))
         elif action == "verify":
             doc = svc.verify(ctx.user, use_case_id)
+        elif action in ("submit", "approve"):
+            doc = getattr(svc, action)(ctx.user, use_case_id, note,
+                                       acknowledge_commands=body.get("acknowledge_commands") is True)
         else:
             doc = getattr(svc, action)(ctx.user, use_case_id, note)
         return Response(200, _deployment_view(ctx, svc, doc))

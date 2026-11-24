@@ -7,9 +7,9 @@ Status: WP5 (catalogue, discovery, readiness, selection, SPL validation, deploym
 | Boundary | Treatment |
 | --- | --- |
 | Upstream content (GitHub, offline bundles) | Untrusted. Size-capped, git-blob-SHA verified, schema- and safety-validated, normalized by allowlisted field mapping. Stored as opaque JSON text (`raw_json`). |
-| Imported SPL | Displayed only, labelled "untrusted". Never executed by the catalogue or by discovery. SPL analysis is lexical (no search is dispatched). Side-effect commands (`delete`, `outputlookup`, `collect`, ...) are flagged. |
+| Imported SPL | Displayed only, labelled "untrusted". Never executed by the catalogue or by discovery. SPL analysis is lexical (no search is dispatched). Side-effect commands (`delete`, `outputlookup`, `collect`, ...) are flagged, and so are indirect-execution and unknown commands (D-038). |
 | Discovery searches | Only a constructed `tstats` template over index names from `/services/data/indexes`, validated against `^[A-Za-z0-9_][A-Za-z0-9_-]{0,79}$`. Relative time window and result cap are required. |
-| Imported SPL preview | Dispatched only after an explicit user action, a successful `/services/search/parser` parse, and a side-effect command gate. Time window and `max_count` are forced. Event payloads are not stored. |
+| Imported SPL preview | Dispatched only after an explicit user action, a successful parse in the app namespace, a side-effect command gate, and a refusal of indirect-execution (`map`, `savedsearch`, `rest`, ...) and unknown commands (D-038). Time window and `max_count` are forced. Event payloads are not stored. |
 | Field sampling | Constructed `| search index=… sourcetype=… \| head N \| fieldsummary` over discovered pairs. Imported pipelines are not used. |
 | Selections | Per-user KV rows; the handler only reads and writes the caller's `user` field. |
 | Deployment | Saved searches are written with the operator's session, owned by the operator (D-028), disabled first, read back and compared. Only searches carrying the app's marker are modified. No alert actions. Workflow records are written with the system token after the capability check (D-029). |

@@ -278,6 +278,11 @@ def eval_spl_validity(req, snap: EnvironmentSnapshot, settings: EvaluationSettin
         return result(PARTIAL, "side_effects",
                       "Search parses but contains side-effect commands (%s); it will not be previewed or auto-deployed."
                       % ", ".join(doc["side_effects"]), observed)
+    if doc.get("review_commands"):
+        observed[0]["review_commands"] = doc["review_commands"]
+        return result(PARTIAL, "review_commands",
+                      "Search parses but runs commands SUN cannot verify as read-only (%s); preview is refused and "
+                      "approval needs an explicit acknowledgment." % ", ".join(doc["review_commands"]), observed)
     return result(MET, "parsed", "Splunk parsed the primary search (%s)." % ", ".join(doc.get("commands") or []),
                   observed)
 

@@ -59,7 +59,7 @@ class EnvironmentSnapshot:
         sources = store.query(C.ENVIRONMENT_SOURCES)
         mappings = store.query(C.SOURCE_MAPPINGS)
         validations = store.query(C.VALIDATION, fields=[
-            "_key", "content_id", "parse_ok", "parse_error", "side_effects", "commands",
+            "_key", "content_id", "parse_ok", "parse_error", "side_effects", "review_commands", "commands",
             "field_samples", "sampled_at", "source_hash", "cim_parse_ok"])
         return cls(sources, mappings, DiscoveryStateRepository(store).state(), validations)
 

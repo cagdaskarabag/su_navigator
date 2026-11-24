@@ -6,6 +6,7 @@ from typing import Any, Callable, Dict, Optional
 from ..audit import AuditService
 from ..config import AppConfig
 from ..platform.search import SearchClient
+from ..spl.policy import parse_extra_safe
 from ..storage import collections as C
 from ..storage.kvstore import DocumentStore
 from ..storage.transport import SplunkdTransport
@@ -27,7 +28,8 @@ def settings_from_config(config: AppConfig) -> DeploymentSettings:
         latest=config.get("deployment", "default_latest", "now") or "now",
         alert_mode=config.get("deployment", "default_alert_mode", "track") or "track",
         max_revisions=config.get_int("deployment", "max_revisions", 20, 2, 100),
-        verify_interval_minutes=config.get_int("deployment", "verify_interval_minutes", 60, 0, 10080))
+        verify_interval_minutes=config.get_int("deployment", "verify_interval_minutes", 60, 0, 10080),
+        extra_safe_commands=parse_extra_safe(config.get("spl", "extra_safe_commands", "")))
 
 
 def _parse_iso(value: str) -> Optional[datetime.datetime]:

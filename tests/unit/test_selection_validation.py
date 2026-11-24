@@ -112,6 +112,24 @@ class ValidationServiceTest(unittest.TestCase):
         self.assertIn("side-effect", str(ctx.exception).lower())
         self.assertEqual(self.search.preview_calls, [])
 
+    def test_review_commands_refuse_preview(self):
+        self.search.commands = ["search", "map"]
+        with self.assertRaises(ValidationError) as ctx:
+            self.svc.preview("fenre:UC-9.1.1", "alice")
+        self.assertEqual(ctx.exception.details["code"], "review_commands")
+        self.assertEqual(ctx.exception.details["indirect"], ["map"])
+        self.assertEqual(self.search.preview_calls, [])
+        doc = self.svc.parse_only("fenre:UC-9.1.1", "alice")
+        self.assertEqual(doc["review_commands"], ["map"])
+        self.assertIn("commands needing review: map", doc["warnings"])
+
+    def test_extra_safe_command_allows_preview(self):
+        self.search.commands = ["search", "apply"]
+        with self.assertRaises(ValidationError):
+            self.svc.preview("fenre:UC-9.1.1", "alice")
+        self.svc.settings.extra_safe_commands = ("apply",)
+        self.assertTrue(self.svc.preview("fenre:UC-9.1.1", "alice")["preview"]["ok"])
+
     def test_parse_and_preview_use_the_deploy_namespace(self):
         self.svc.preview("fenre:UC-9.1.1", "alice")
         self.assertEqual(set(self.search.parse_apps), {"sunavigator"})
@@ -204,6 +222,13 @@ class EvaluatorValidationTest(unittest.TestCase):
             "commands": ["search", "delete"]}])
         out = evaluate({"type": "spl_validity", "value": "primary"}, snap, EvaluationSettings(), "fenre:UC-x", "k")
         self.assertEqual(out["status"], PARTIAL)
+
+    def test_review_commands_parse_is_partial(self):
+        snap = EnvironmentSnapshot([], [], {"last_completed_at": "t"}, [{
+            "content_id": "fenre:UC-x", "_key": "k", "parse_ok": True, "side_effects": [],
+            "review_commands": ["map"], "commands": ["search", "map"]}])
+        out = evaluate({"type": "spl_validity", "value": "primary"}, snap, EvaluationSettings(), "fenre:UC-x", "k")
+        self.assertEqual((out["status"], out["code"]), (PARTIAL, "review_commands"))
 
     def test_synthetic_spl_requirement_scored(self):
         store = loaded_catalog()

@@ -118,6 +118,31 @@ class LiveOneshotContractTest(unittest.TestCase):
         finally:
             t.request("DELETE", base + "/" + name)
 
+    def test_policy_sees_commands_in_macros_inside_subsearches(self):
+        from splunk_ucm.platform.search import SearchClient
+        from splunk_ucm.spl.parser import parse
+        from splunk_ucm.spl.policy import classify, command_exists
+        t = transport()
+        name = "sun_live_se_" + uuid.uuid4().hex[:6]
+        base = "/servicesNS/nobody/sunavigator/admin/macros"
+        status, _ = t.request("POST", base, None, None,
+                              form={"name": name, "definition": "| makeresults | outputlookup sun_live_probe.csv"})
+        self.assertIn(status, (200, 201))
+        try:
+            t.request("POST", base + "/" + name + "/acl", None, None, form={"sharing": "app", "owner": "nobody"})
+            client = SearchClient(t)
+            spl = '| makeresults | append [ `%s` ] | append [| makeresults | map search="| makeresults"]' % name
+            parsed = parse(client, spl, app="sunavigator")
+            self.assertTrue(parsed.ok, parsed.messages)
+            self.assertEqual(classify(spl).side_effects, [])
+            policy = classify(spl, parsed, exists=lambda n: command_exists(client, n, "sunavigator"))
+            self.assertEqual(policy.side_effects, ["outputlookup"])
+            self.assertEqual(policy.indirect, ["map"])
+            self.assertFalse(command_exists(client, "sun_no_such_command", "sunavigator"))
+            self.assertTrue(command_exists(client, "stats", "sunavigator"))
+        finally:
+            t.request("DELETE", base + "/" + name)
+
     def test_event_search_truncation(self):
         from splunk_ucm.platform.search import SearchClient
         cut = SearchClient(transport()).preview("search index=_internal", max_count=5, earliest="-24h")
