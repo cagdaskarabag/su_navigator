@@ -288,7 +288,7 @@ def _app_docs(apps, imported, job_id) -> List[Dict[str, Any]]:
         docs.append(_doc(
             kind="app", name=app["name"], index="", sourcetype="",
             extra={"label": app.get("label"), "version": app.get("version"),
-                   "visible": app.get("visible")},
+                   "package_id": app.get("package_id") or "", "visible": app.get("visible")},
             window_count=0, last_time=None, now=0, imported=imported, job_id=job_id,
             identity=(app["name"],)))
     return docs

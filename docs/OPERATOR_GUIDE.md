@@ -453,6 +453,14 @@ When the job succeeds you see index/sourcetype pairs, event counts in the
 window, and data age. Coverage cards compare catalogue requirement values
 (sourcetype, index, datamodel, add-on) with what was found.
 
+Add-ons are recognised as installed when an enabled app matches by folder
+name, `[package] id` or label, or through the Splunkbase id the use case
+cites. Splunk does not record Splunkbase ids in installed apps, so the app
+ships a list of 32 ids it has checked against Splunkbase (D-048). Ids not on
+the list fall back to name and label matching; a renamed or
+custom-packaged add-on can be linked with a local `addon` mapping. The
+use-case evidence shows which rule matched (`matched_by`).
+
 **Source mappings** (same page): a **local** mapping (kind + value →
 discovered source) is never overwritten by discovery. Auto matches are
 medium/low confidence and are **not** used as readiness evidence. Only

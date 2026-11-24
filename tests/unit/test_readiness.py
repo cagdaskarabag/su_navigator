@@ -77,6 +77,26 @@ class EvaluatorTest(unittest.TestCase):
         self.assertEqual(old["code"], "version_below_minimum")
         self.assertEqual(evaluate(req("addon", "Other TA"), s, SETTINGS)["status"], NOT_MET)
 
+    def test_addon_by_package_id_and_verified_splunkbase_map(self):
+        s = snap([{"kind": "app", "name": "aws_renamed", "label": "AWS", "package_id": "Splunk_TA_aws",
+                   "version": "7.0.0", "status": "active"},
+                  {"kind": "app", "name": "docker_simple", "label": "Docker Simple", "status": "active"}])
+        out = evaluate(req("addon", "Splunk Add-on for AWS", splunkbase_id=1876), s, SETTINGS)
+        self.assertEqual((out["status"], out["observed"][0]["matched_by"]), (MET, "splunkbase_id"))
+        self.assertEqual(evaluate(req("addon", "Splunk_TA_aws"), s, SETTINGS)["status"], MET)
+        # Upstream records cite 4467 for Kubernetes; Splunkbase 4467 is Docker Simple.
+        wrong = evaluate(req("addon", "Splunk Connect for Kubernetes", splunkbase_id=4467), s, SETTINGS)
+        self.assertEqual(wrong["status"], NOT_MET)
+        self.assertEqual(evaluate(req("addon", "x", splunkbase_id=True), s, SETTINGS)["status"], NOT_MET)
+
+    def test_splunkbase_map_shape(self):
+        from splunk_ucm.discovery.apps import SPLUNKBASE_APPS, package_id
+        for sb, (pkg, title) in SPLUNKBASE_APPS.items():
+            self.assertTrue(isinstance(sb, int) and pkg and title, sb)
+            self.assertEqual(package_id("https://apps.splunk.com/apps/id/" + pkg), pkg)
+        self.assertFalse({4413, 4467, 4800, 5018, 5680} & set(SPLUNKBASE_APPS))
+        self.assertEqual(package_id("https://evil.example/apps/id/../x"), "")
+
     def test_product_alias(self):
         s = snap([{"kind": "app", "name": "SplunkEnterpriseSecuritySuite", "label": "Enterprise Security",
                    "status": "active"}])

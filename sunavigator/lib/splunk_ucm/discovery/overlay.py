@@ -4,6 +4,7 @@ from typing import Any, Dict, List
 
 from ..storage import collections as C
 from ..storage.kvstore import DocumentStore
+from .apps import app_candidates
 from .mapping import MappingService
 
 _REQ_TO_MAP = {
@@ -21,7 +22,7 @@ def attach_environment(detail: Dict[str, Any], store: DocumentStore) -> Dict[str
             req["environment"] = {"applicable": False}
             continue
         mapping = mappings.get(kind, req.get("value") or "")
-        sources = _sources(store, kind, req.get("value") or "", mapping)
+        sources = _sources(store, kind, req.get("value") or "", mapping, req)
         req["environment"] = {
             "applicable": True,
             "mapping": None if mapping is None else {
@@ -42,7 +43,8 @@ def attach_environment(detail: Dict[str, Any], store: DocumentStore) -> Dict[str
     return detail
 
 
-def _sources(store: DocumentStore, kind: str, value: str, mapping: Dict[str, Any] = None) -> List[Dict]:
+def _sources(store: DocumentStore, kind: str, value: str, mapping: Dict[str, Any] = None,
+             req: Dict[str, Any] = None) -> List[Dict]:
     lookup = (mapping or {}).get("canonical_value") or value
     if kind == "sourcetype":
         query = {"kind": "pair", "status": "active", "sourcetype": lookup}
@@ -55,8 +57,10 @@ def _sources(store: DocumentStore, kind: str, value: str, mapping: Dict[str, Any
         query = {"kind": "datamodel", "status": "active", "name": lookup}
         fields = ["name", "app", "accelerated", "status"]
     else:
-        query = {"kind": "app", "status": "active", "name": lookup}
-        fields = ["name", "label", "version", "status"]
+        names = [lookup] + [name for name, _ in app_candidates(req or {})]
+        query = {"kind": "app", "status": "active",
+                 "$or": [{f: {"$in": names}} for f in ("name", "package_id", "label")]}
+        fields = ["name", "label", "version", "package_id", "status"]
     rows = store.query(C.ENVIRONMENT_SOURCES, query, sort=[("window_count", -1)], limit=10,
                        fields=fields)
     return rows

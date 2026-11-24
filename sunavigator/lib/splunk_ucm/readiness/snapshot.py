@@ -31,6 +31,7 @@ class EnvironmentSnapshot:
         self.indexes: Dict[str, Dict[str, Any]] = {}
         self.apps: Dict[str, Dict[str, Any]] = {}
         self.app_labels: Dict[str, Dict[str, Any]] = {}
+        self.app_packages: Dict[str, Dict[str, Any]] = {}
         self.datamodels: Dict[str, Dict[str, Any]] = {}
         self.objects: Dict[str, Dict[str, List[Dict[str, Any]]]] = {"macro": {}, "lookup": {}, "eventtype": {}}
         for doc in sources:
@@ -45,6 +46,8 @@ class EnvironmentSnapshot:
                 self.apps[_lower(doc.get("name"))] = doc
                 if doc.get("label"):
                     self.app_labels[_lower(doc.get("label"))] = doc
+                if doc.get("package_id"):
+                    self.app_packages[_lower(doc.get("package_id"))] = doc
             elif kind == "datamodel" and active:
                 self.datamodels[_lower(doc.get("name"))] = doc
             elif kind in self.objects and active:
@@ -89,7 +92,7 @@ class EnvironmentSnapshot:
 
     def app(self, name: str) -> Optional[Dict[str, Any]]:
         key = _lower(name)
-        return self.apps.get(key) or self.app_labels.get(key)
+        return self.apps.get(key) or self.app_packages.get(key) or self.app_labels.get(key)
 
     def validation(self, content_id: str, key: str = "") -> Optional[Dict[str, Any]]:
         return self.validations.get(content_id) or self.validations.get(key)

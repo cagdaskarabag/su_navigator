@@ -120,12 +120,12 @@ All collections are app-scoped (`nobody` owner) and replicated in SHC.
 
 | Collection | Key | Shared/user | Written by | Contents |
 |---|---|---|---|---|
-| `uc_catalog` | `fenre_UC-1.1.1` | shared | sync | Canonical summary + filter fields (`domains`, `category_key`, `criticality`, `criticality_rank`, `difficulty`, `sourcetypes`, `indexes`, `datamodels`, `addons`, `mitre_ids`, `provider_status`, `search_text`, `sort_key`). ~1–2 KB. |
+| `uc_catalog` | `fenre_UC-1.1.1` | shared | sync | Canonical summary + filter fields (`domains`, `category_key`, `criticality`, `criticality_rank`, `difficulty`, `sourcetypes`, `indexes`, `datamodels`, `addons`, `addon_ids` (name / Splunkbase id pairs), `mitre_ids`, `provider_status`, `search_text`, `sort_key`). ~1–2 KB. |
 | `uc_content` | same | shared | sync | `raw_json` (verbatim record as JSON text; KV Store forbids `$`/`.` in keys, e.g. `$schema`), `provenance`, `normalizer_version`, `source_hash`. ~10–80 KB. |
 | `uc_categories` | `fenre_cat-01` | shared | sync | Category metadata, `tree_sha`, `selected`, counts, `last_synced_at`. |
 | `uc_sync_state` | `provider::fenre` / `job::<uuid>` | shared | REST (system token), worker | Provider state (pin, last-good commit/version, schema version) and job records (status, counts, errors). Retain last 200 jobs. |
 | `uc_audit` | uuid | shared (append) | all services | `time, actor, action, object_type, object_id, outcome, details`. Purged after `[retention] audit_days` (default 365, D-034). |
-| `uc_environment_sources` | `src_<kind>_<hash>` | shared | discovery worker | Index, index/sourcetype pair, app and data-model rows with window counts and data age. Missing sources are marked, never deleted. |
+| `uc_environment_sources` | `src_<kind>_<hash>` | shared | discovery worker | Index, index/sourcetype pair, app (name, label, version, `package_id`) and data-model rows with window counts and data age. Missing sources are marked, never deleted. |
 | `uc_source_mappings` | `map_<kind>_<hash>` | shared | discovery worker / REST (system token) | Local and auto mappings. Local rows are never overwritten by discovery. |
 | `uc_readiness` | same as `uc_catalog` | shared | readiness worker / REST (system token) | `state`, `score`, `coverage`, `blockers`, `gaps`, `counts`, per-requirement `results[]` (status, code, detail, observed, via_mapping), `engine_version`, `discovery_at`, `source_hash`. ~3 KB. Staleness computed on read. |
 | `uc_selections` | `sel_<user>_<content_id>` | per-user | user | Bookmark / select / defer / reject. Sync never writes this collection. |

@@ -21,7 +21,7 @@ def sort_key_for(record_id: str) -> str:
 
 # Bump when catalog_summary gains or changes fields; the upgrade migration
 # re-derives older summaries from stored raw records (no network).
-SUMMARY_VERSION = 4
+SUMMARY_VERSION = 5
 # Description text kept in search_text; KV regex search scans this field.
 SEARCH_DESCRIPTION_CHARS = 1500
 
@@ -38,6 +38,10 @@ def catalog_summary(uc: UseCase) -> Dict[str, Any]:
     controls = dedupe("%s#%s" % (m.framework, m.object_id) for m in uc.framework_mappings
                       if m.framework != "mitre_attack" and m.object_id)[:300]
     addons = dedupe(a.name for a in uc.addons)
+    addon_ids = []
+    for a in uc.addons:
+        if a.name and isinstance(a.splunkbase_id, int) and a.name not in {n for n, _ in addon_ids}:
+            addon_ids.append([a.name, a.splunkbase_id])
     search_text = " ".join([uc.provenance.provider_record_id, uc.content_id, uc.title,
                             " ".join(sourcetypes), " ".join(uc.tags), " ".join(mitre),
                             " ".join(uc.description.split())[:SEARCH_DESCRIPTION_CHARS]]).lower()
@@ -70,6 +74,7 @@ def catalog_summary(uc: UseCase) -> Dict[str, Any]:
         "indexes": indexes,
         "datamodels": datamodels,
         "addons": addons,
+        "addon_ids": addon_ids,
         "premium_apps": uc.premium_apps,
         "mitre_ids": mitre,
         "frameworks": frameworks,

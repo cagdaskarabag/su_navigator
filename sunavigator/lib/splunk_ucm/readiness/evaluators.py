@@ -16,30 +16,13 @@ import fnmatch
 import re
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
+from ..discovery.apps import app_candidates
 from .snapshot import EnvironmentSnapshot
 
 MET, PARTIAL, NOT_MET, UNKNOWN, UNVERIFIED, NOT_APPLICABLE = (
     "met", "partial", "not_met", "unknown", "unverified", "not_applicable")
 STATUSES = (MET, PARTIAL, NOT_MET, UNKNOWN, UNVERIFIED, NOT_APPLICABLE)
 MAX_OBSERVED = 5
-
-# Splunkbase id -> installed app folder name, for ids whose folder name is stable.
-SPLUNKBASE_APPS = {
-    263: "SplunkEnterpriseSecuritySuite",
-    742: "Splunk_TA_windows",
-    833: "Splunk_TA_nix",
-    1621: "Splunk_SA_CIM",
-    1876: "Splunk_TA_aws",
-}
-PRODUCT_APPS = {
-    "splunk enterprise security": ["SplunkEnterpriseSecuritySuite"],
-    "enterprise security": ["SplunkEnterpriseSecuritySuite"],
-    "splunk es": ["SplunkEnterpriseSecuritySuite"],
-    "splunk it service intelligence": ["itsi", "SA-ITOA"],
-    "splunk itsi": ["itsi", "SA-ITOA"],
-    "itsi": ["itsi", "SA-ITOA"],
-}
-
 
 @dataclasses.dataclass
 class EvaluationSettings:
@@ -166,31 +149,28 @@ def _version_tuple(text: str) -> Tuple[int, ...]:
     return tuple(int(p) for p in parts[:4])
 
 
-def _find_app(snap: EnvironmentSnapshot, req) -> Tuple[Optional[Dict[str, Any]], Optional[Dict[str, Any]]]:
-    value = (req.get("value") or "").strip()
-    attrs = req.get("attributes") or {}
-    names = [value]
-    sb = attrs.get("splunkbase_id")
-    if isinstance(sb, int) and sb in SPLUNKBASE_APPS:
-        names.append(SPLUNKBASE_APPS[sb])
-    names.extend(PRODUCT_APPS.get(value.lower(), []))
-    for name in names:
+def _find_app(snap: EnvironmentSnapshot, req) -> Tuple[Optional[Dict[str, Any]], Optional[Dict[str, Any]], str]:
+    for name, how in app_candidates(req):
         doc = snap.app(name)
         if doc:
-            return doc, None
-    for kind in ("addon",):
-        for mapping in snap.aliases(kind, value):
-            doc = snap.app(mapping.get("value") or "")
-            if doc:
-                return doc, mapping
-    return None, None
+            return doc, None, how
+    for mapping in snap.aliases("addon", (req.get("value") or "").strip()):
+        doc = snap.app(mapping.get("value") or "")
+        if doc:
+            return doc, mapping, "mapping"
+    return None, None, ""
+
+
+def _app_row(doc: Dict[str, Any], how: str) -> Dict[str, Any]:
+    return {"name": doc.get("name"), "label": doc.get("label"), "version": doc.get("version"),
+            "matched_by": how}
 
 
 def eval_addon(req, snap: EnvironmentSnapshot, settings: EvaluationSettings):
-    doc, mapping = _find_app(snap, req)
+    doc, mapping, how = _find_app(snap, req)
     if not doc:
         return result(NOT_MET, "not_installed", "No installed app matches this add-on by name, label or Splunkbase id.")
-    row = {"name": doc.get("name"), "label": doc.get("label"), "version": doc.get("version")}
+    row = _app_row(doc, how)
     minimum = (req.get("attributes") or {}).get("min_version") or ""
     if minimum and doc.get("version") and _version_tuple(doc["version"]) < _version_tuple(minimum):
         return result(PARTIAL, "version_below_minimum", "Installed version %s is below the documented minimum %s."
@@ -200,12 +180,10 @@ def eval_addon(req, snap: EnvironmentSnapshot, settings: EvaluationSettings):
 
 
 def eval_product(req, snap: EnvironmentSnapshot, settings: EvaluationSettings):
-    doc, mapping = _find_app(snap, req)
+    doc, mapping, how = _find_app(snap, req)
     if not doc:
         return result(NOT_MET, "not_installed", "Premium product is not installed on this search head.")
-    return result(MET, "installed", "Installed as %s." % doc.get("name"),
-                  [{"name": doc.get("name"), "label": doc.get("label"), "version": doc.get("version")}],
-                  _via(mapping))
+    return result(MET, "installed", "Installed as %s." % doc.get("name"), [_app_row(doc, how)], _via(mapping))
 
 
 # -- knowledge objects ------------------------------------------------------

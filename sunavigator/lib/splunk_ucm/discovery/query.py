@@ -7,6 +7,7 @@ from typing import Any, Dict, List, Optional, Sequence
 from ..errors import ValidationError
 from ..storage import collections as C
 from ..storage.kvstore import DocumentStore
+from .apps import app_candidates
 
 KINDS = ("index", "pair", "app", "datamodel", "macro", "lookup", "eventtype")
 STATUSES = ("active", "missing")
@@ -92,13 +93,16 @@ class InventoryQueryService:
 def coverage(store: DocumentStore) -> Dict[str, Any]:
     """Compare catalogue requirement values against discovered environment sources."""
     catalog = store.query(C.CATALOG, {"provider_status": "active"},
-                          fields=["sourcetypes", "indexes", "datamodels", "addons"])
+                          fields=["sourcetypes", "indexes", "datamodels", "addons", "addon_ids"])
     wanted = {"sourcetype": set(), "index": set(), "datamodel": set(), "addon": set()}
+    addon_ids: Dict[str, int] = {}
     for row in catalog:
         wanted["sourcetype"].update(row.get("sourcetypes") or [])
         wanted["index"].update(row.get("indexes") or [])
         wanted["datamodel"].update(row.get("datamodels") or [])
         wanted["addon"].update(row.get("addons") or [])
+        for name, sb in row.get("addon_ids") or []:
+            addon_ids.setdefault(name, sb)
     present = {
         "sourcetype": {r.get("sourcetype") for r in store.query(
             C.ENVIRONMENT_SOURCES, {"kind": "pair", "status": "active"}, fields=["sourcetype"])
@@ -109,10 +113,17 @@ def coverage(store: DocumentStore) -> Dict[str, Any]:
         "datamodel": {r.get("name") for r in store.query(
             C.ENVIRONMENT_SOURCES, {"kind": "datamodel", "status": "active"}, fields=["name"])
             if r.get("name")},
-        "addon": {r.get("name") for r in store.query(
-            C.ENVIRONMENT_SOURCES, {"kind": "app", "status": "active"}, fields=["name"])
-            if r.get("name")},
+        "addon": set(),
     }
+    installed = set()
+    for r in store.query(C.ENVIRONMENT_SOURCES, {"kind": "app", "status": "active"},
+                         fields=["name", "label", "package_id"]):
+        installed.update(str(r.get(f) or "").lower() for f in ("name", "label", "package_id"))
+    installed.discard("")
+    for name in wanted["addon"]:
+        req = {"value": name, "attributes": {"splunkbase_id": addon_ids.get(name)}}
+        if any(candidate.lower() in installed for candidate, _ in app_candidates(req)):
+            present["addon"].add(name)
     out: Dict[str, Any] = {}
     for kind, values in wanted.items():
         found = sorted(v for v in values if v in present[kind])

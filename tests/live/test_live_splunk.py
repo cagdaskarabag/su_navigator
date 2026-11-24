@@ -353,15 +353,16 @@ class LiveApiTest(unittest.TestCase):
         self.assertEqual(caps.get("adhoc_search"), "available")
         self.assertEqual(caps.get("run_discovery"), "available")
 
-    def test_discovery_inventory_and_local_mapping(self):
-        self.wait_idle()
+    def wait_discovery_idle(self):
         for _ in range(60):
             _, body = api(self.admin, "GET", "discovery")
             if not any(j["status"] in ("queued", "running") for j in body["jobs"]):
-                break
+                return
             time.sleep(5)
-        else:
-            self.fail("existing discovery job did not finish")
+        self.fail("existing discovery job did not finish")
+
+    def run_discovery(self):
+        self.wait_discovery_idle()
         status, body = api(self.admin, "POST", "discovery", body={"include_internal": True, "earliest": "-15m"})
         self.assertEqual(status, 202, body)
         job_id = body["job"]["job_id"]
@@ -369,11 +370,47 @@ class LiveApiTest(unittest.TestCase):
             _, state = api(self.admin, "GET", "discovery")
             job = next((j for j in state["jobs"] if j["job_id"] == job_id), None)
             if job and job["status"] not in ("queued", "running"):
-                break
+                self.assertEqual(job["status"], "succeeded", job)
+                return job
             time.sleep(5)
-        else:
-            self.fail("discovery job did not finish")
-        self.assertEqual(job["status"], "succeeded", job)
+        self.fail("discovery job did not finish")
+
+    def test_addon_detected_by_splunkbase_id_and_package_id(self):
+        self.wait_idle()
+        bundle = helpers.fixture_bundle(record_ids=["1.1.1"])
+        status, body = api(self.admin, "POST", "import", raw=json.dumps(bundle).encode("utf-8"))
+        self.assertEqual(status, 200, body)
+        probe = "ucm_probe_ta_" + uuid.uuid4().hex[:6]
+        status, _ = self.admin.request("POST", "/services/apps/local",
+                                       form={"name": probe, "template": "barebones", "visible": "false"})
+        self.assertEqual(status, 201)
+        try:
+            status, _ = self.admin.request("POST", "/servicesNS/nobody/%s/configs/conf-app" % probe,
+                                           form={"name": "package", "id": "Splunk_TA_nix"})
+            self.assertEqual(status, 201)
+            status, _ = self.admin.request("POST", "/servicesNS/nobody/%s/configs/conf-app/launcher" % probe,
+                                           form={"version": "10.2.0"})
+            self.assertEqual(status, 200)
+            self.admin.request("POST", "/services/apps/local/_reload")
+            self.run_discovery()
+            status, inv = api(self.admin, "GET", "inventory", {"kind": "app", "q": probe})
+            self.assertEqual(status, 200, inv)
+            self.assertEqual([i.get("package_id") for i in inv["items"]], ["Splunk_TA_nix"], inv)
+            status, doc = api(self.admin, "POST", "readiness/assess", body={"id": "fenre:UC-1.1.1"})
+            self.assertEqual(status, 200, doc)
+            addon = [r for r in doc["results"] if r["req_id"].startswith("addon:")]
+            self.assertEqual([(r["status"], r["observed"][0]["name"], r["observed"][0]["matched_by"])
+                              for r in addon], [("met", probe, "splunkbase_id")], addon)
+            status, detail = api(self.viewer, "GET", "usecase", {"id": "fenre:UC-1.1.1"})
+            env = [r["environment"] for r in detail["requirements"] if r["type"] == "addon"]
+            self.assertEqual([e["sources"][0]["name"] for e in env], [probe], env)
+        finally:
+            self.admin.request("DELETE", "/services/apps/local/" + probe)
+            self.run_discovery()
+
+    def test_discovery_inventory_and_local_mapping(self):
+        self.wait_idle()
+        job = self.run_discovery()
         self.assertGreater(job["totals"]["pairs"], 0)
         status, inv = api(self.admin, "GET", "inventory", {"kind": "pair", "count": "50"})
         self.assertEqual(status, 200)

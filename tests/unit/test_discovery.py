@@ -12,7 +12,7 @@ from splunk_ucm.discovery.inventory import SplunkInventory
 from splunk_ucm.discovery.keys import source_key
 from splunk_ucm.discovery.mapping import MappingService
 from splunk_ucm.discovery.overlay import attach_environment
-from splunk_ucm.discovery.query import InventoryFilter, InventoryQueryService
+from splunk_ucm.discovery.query import InventoryFilter, InventoryQueryService, coverage
 from splunk_ucm.discovery.service import DiscoveryService, DiscoverySettings, new_job as new_djob
 from splunk_ucm.discovery.spl import tstats_by_index_sourcetype, tstats_searches, validate_index_name
 from splunk_ucm.discovery.worker import DiscoveryWorker
@@ -288,6 +288,31 @@ class InventoryQueryAndOverlayTest(unittest.TestCase):
         self.assertTrue(st[0]["environment"]["present"])
         self.assertGreater(detail["environment_summary"]["requirements_present"], 0)
 
+    def test_overlay_matches_addon_like_readiness(self):
+        detail = {"requirements": [
+            {"type": "addon", "value": "Splunk Add-on for Microsoft Windows",
+             "attributes": {"splunkbase_id": 742}},
+            {"type": "addon", "value": "Windows TA", "attributes": {}},
+            {"type": "addon", "value": "Splunk Connect for Kubernetes", "attributes": {"splunkbase_id": 4467}},
+        ]}
+        attach_environment(detail, self.store)
+        present = [r["environment"]["present"] for r in detail["requirements"]]
+        self.assertEqual(present, [True, True, False])
+        self.assertEqual(detail["requirements"][0]["environment"]["sources"][0]["name"], "Splunk_TA_windows")
+
+    def test_addon_coverage_uses_splunkbase_ids(self):
+        store = InMemoryStore()
+        store.batch_save(C.CATALOG, [{
+            "_key": "a", "provider_status": "active",
+            "addons": ["Splunk Add-on for Unix and Linux", "Splunk Connect for Kubernetes", "Probe"],
+            "addon_ids": [["Splunk Add-on for Unix and Linux", 833], ["Splunk Connect for Kubernetes", 4467]]}])
+        store.batch_save(C.ENVIRONMENT_SOURCES, [
+            {"_key": "1", "kind": "app", "status": "active", "name": "nix", "package_id": "Splunk_TA_nix"},
+            {"_key": "2", "kind": "app", "status": "active", "name": "docker_simple"},
+            {"_key": "3", "kind": "app", "status": "active", "name": "probe_ta", "label": "probe"}])
+        out = coverage(store)["addon"]
+        self.assertEqual((out["found"], out["missing_values"]), (2, ["Splunk Connect for Kubernetes"]))
+
 
 class RouterDiscoveryTest(unittest.TestCase):
     def test_viewer_denied_discovery_write(self):
@@ -332,7 +357,9 @@ class InventoryRestParseTest(unittest.TestCase):
                         "totalEventCount": "12", "minTime": "", "maxTime": ""}}]}
                 elif "apps/local" in path:
                     body = {"entry": [{"name": "TA-foo", "content": {
-                        "label": "Foo", "version": "1", "disabled": False, "visible": True}}]}
+                        "label": "Foo", "version": "1", "disabled": False, "visible": True,
+                        "details": "https://apps.splunk.com/apps/id/Splunk_TA_foo"}},
+                        {"name": "local", "content": {"details": "javascript:alert(1)"}}]}
                 else:
                     body = {"entry": [{"name": "Network_Traffic", "content": {
                         "disabled": False, "eai:appName": "Splunk_SA_CIM",
@@ -343,7 +370,9 @@ class InventoryRestParseTest(unittest.TestCase):
 
         inv = SplunkInventory(T())
         self.assertEqual(inv.list_indexes()[0]["total_event_count"], 12)
-        self.assertEqual(inv.list_apps()[0]["name"], "TA-foo")
+        apps = inv.list_apps()
+        self.assertEqual((apps[0]["name"], apps[0]["package_id"]), ("TA-foo", "Splunk_TA_foo"))
+        self.assertEqual(apps[1]["package_id"], "")
         models = inv.list_datamodels()
         self.assertEqual(models[0]["display_name"], "Network Traffic")
         self.assertTrue(models[0]["accelerated"])

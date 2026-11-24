@@ -698,3 +698,29 @@ as drift.
   `web.conf` expose patterns.
 * Verified on the lab (138 records): 26 regulations offered, FedRAMP 4 use
   cases, FedRAMP + verified 3, `q=pipeline` 7 including description matches.
+
+## D-048 Add-on detection: package ids and a verified Splunkbase list
+*0.7.3+ (T-17, finding F-19). Readiness engine `ucm.readiness/3`, catalogue summary v5.*
+* Investigation: `/services/apps/local` exposes folder name, label, version
+  and `details`. `details` is `https://apps.splunk.com/apps/id/<package id>`,
+  built from `[package] id` in `app.conf` (verified on 10.2.9 with a renamed
+  probe app). No installed-app field carries the numeric Splunkbase id, so
+  the static id map cannot be replaced, only extended.
+* Discovery stores the package id (`package_id`) for every app. Readiness,
+  the use-case "present in environment" overlay and the inventory coverage
+  cards now share one matcher (`discovery/apps.py`): folder name, package id
+  or label, then a local `addon` mapping. Evidence rows record `matched_by`.
+* `SPLUNKBASE_APPS` grew from 5 to 32 ids. Each entry's package id and title
+  were read from `https://splunkbase.splunk.com/api/v1/app/<id>/` and kept
+  only when the provider's add-on name agrees with the Splunkbase title.
+* Upstream measurement (16,726 records, 2,870 add-on references to 65 ids):
+  32 ids (2,705 references) agree with Splunkbase. 26 ids (152 references)
+  name a different app, for example 4467 "Splunk Connect for Kubernetes" is
+  Docker Simple, 4413 "Splunk SOAR" is Puppet Report Viewer, 5680 "Oracle
+  Cloud Infrastructure" is a Windows performance app. 7 ids (13 references)
+  do not exist. Those references are matched by name only, so an unrelated
+  app is never reported as the required add-on.
+* The upstream `data/splunkbase-catalog.json` was not used: it omits archived
+  apps (29 of the 65 ids) and lists the ES installer rather than
+  `SplunkEnterpriseSecuritySuite`.
+* No network access at runtime; the list changes only with an app release.

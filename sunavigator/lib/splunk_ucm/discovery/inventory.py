@@ -10,6 +10,7 @@ from typing import Any, Dict, List
 
 from ..errors import StorageError, UnsupportedOperation
 from ..storage.transport import SplunkdTransport
+from .apps import package_id
 
 
 def _entries(data: Any) -> List[Dict[str, Any]]:
@@ -65,6 +66,7 @@ class SplunkInventory:
                 "name": name,
                 "label": str(content.get("label") or name),
                 "version": str(content.get("version") or ""),
+                "package_id": package_id(content.get("details")),
                 "disabled": bool(content.get("disabled")),
                 "visible": bool(content.get("visible")),
             })
