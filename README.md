@@ -232,7 +232,8 @@ sun_navigator/
 │   └── appserver/static/         # Simple XML JS modules and styles
 ├── tools/                        # Development, packaging, and bundle CLI tools
 ├── tests/                        # Automated test suites
-│   ├── unit/                     # 202 mocked unit tests (runs without Splunk)
+│   ├── unit/                     # 245 mocked unit tests (runs without Splunk)
+│   ├── fixtures/readiness/       # Readiness regression corpus and its baseline
 │   └── live/                     # Integration tests against live Splunk instances
 └── docs/                         # Specifications, ADRs, operator guide, and screenshots
 ```
@@ -247,6 +248,13 @@ Unit tests run out of the box with standard Python 3.9+ without needing Splunk i
 cd tests
 python3 -m unittest discover -s unit -t .
 ```
+
+The readiness regression corpus (`tests/fixtures/readiness/corpus.json`) scores
+synthetic use cases against a synthetic environment and compares every
+requirement with its ground truth. `test_readiness_corpus.py` fails when the
+counts move from `baseline.json`; print the per-case report with
+`python3 unit/test_readiness_corpus.py` and rewrite the baseline with `--write`
+in the same change.
 
 To run live integration tests against a test Splunk Enterprise instance:
 
