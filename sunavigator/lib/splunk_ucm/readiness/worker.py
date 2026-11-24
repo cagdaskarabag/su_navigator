@@ -8,7 +8,9 @@ from ..config import AppConfig
 from ..storage import collections as C
 from ..storage.jobs import job_problem, reject
 from ..storage.kvstore import DocumentStore
+from ..storage.transport import SplunkdTransport
 from ..util import utc_now
+from .principal import read_principal
 from .evaluators import EvaluationSettings
 from .scoring import ScoringSettings
 from .service import JOB_FAILED, JOB_RUNNING, ReadinessService, ReadinessSettings, new_job
@@ -28,17 +30,21 @@ def settings_from_config(config: AppConfig) -> ReadinessSettings:
             ready_threshold=config.get_int("readiness", "ready_threshold", 90, 1, 100),
             partial_threshold=config.get_int("readiness", "partial_threshold", 50, 0, 100),
             min_coverage=config.get_float("readiness", "min_coverage", 0.5, 0.0, 1.0)),
-        job_timeout_seconds=config.get_int("readiness", "job_timeout_seconds", 3600, 60, 86400))
+        job_timeout_seconds=config.get_int("readiness", "job_timeout_seconds", 3600, 60, 86400),
+        scheduled_owner=config.get("deployment", "scheduled_owner", "").strip())
 
 
 class ReadinessWorker:
     def __init__(self, store: DocumentStore, config: AppConfig, is_leader: Callable[[], Optional[bool]],
-                 now: Callable[[], datetime.datetime] = utc_now):
+                 now: Callable[[], datetime.datetime] = utc_now,
+                 transport: Optional[SplunkdTransport] = None):
         self.store = store
         self.config = config
         self.is_leader = is_leader
         self.now = now
-        self.service = ReadinessService(store, AuditService(store), settings_from_config(config))
+        reader = (lambda owner: read_principal(transport, owner)) if transport is not None else None
+        self.service = ReadinessService(store, AuditService(store), settings_from_config(config),
+                                        principal_reader=reader)
 
     def expire_stale(self) -> int:
         expired = 0

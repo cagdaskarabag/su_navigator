@@ -244,8 +244,8 @@ define(["jquery", "splunk.util"], function ($, splunkUtil) {
             "installed, or SPL rejected by Splunk's parser. Unmet critical requirements block the use case.",
         unknown: "An evaluator ran but could not decide, for example the Splunk version was not recorded. Counts as 0 in the " +
             "score and lowers coverage.",
-        unverified: "Not checked yet: the inventory cannot evaluate it (fields not sampled, event conditions, permissions, " +
-            "free-text sources, SPL not parsed). Left out of score and coverage. It is not a failure and does not mean the data is absent.",
+        unverified: "Not checked yet: the inventory cannot evaluate it (fields not sampled, event conditions, free-text sources, " +
+            "SPL not parsed, internal indexes that discovery did not scan, or index access that could not be fully verified). Left out of score and coverage. It is not a failure and does not mean the data is absent.",
         not_applicable: "Does not apply to this deployment. Left out of score and coverage."
     };
 
@@ -628,7 +628,72 @@ define(["jquery", "splunk.util"], function ($, splunkUtil) {
         return deferred.promise();
     }
 
+    var ACCESS_LABELS = { met: ["scheduler access: met", "ok"], partial: ["scheduler access: partial", "warn"],
+        not_met: ["scheduler access: not met", "error"], unverified: ["scheduler access: not verified", "info"],
+        not_applicable: ["scheduler access: n/a", "neutral"] };
+
+    function accessBadge(access) {
+        if (!access) { return null; }
+        var l = ACCESS_LABELS[access.status] || [access.status, "neutral"];
+        var b = badge(l[0], l[1]);
+        b.setAttribute("title", access.detail || "");
+        return b;
+    }
+
+    /* Warning shown on the deployment panel; a search that cannot see its data reports success with no results. */
+    function accessBox(access) {
+        if (!access || access.status === "met" || access.status === "not_applicable") { return null; }
+        if (access.status === "unverified") {
+            return stateBox("info", "Scheduler index access is not verified", access.detail);
+        }
+        return stateBox("warn", "The scheduler account may not see this search's data", access.detail +
+            " Enabling needs an audited override reason.");
+    }
+
+    function yesNo(value) { return value === true ? "yes" : (value === false ? "no" : "unknown"); }
+
+    /* Overview card for the account that runs deployed searches (D-063). */
+    function schedulerCard(s) {
+        var card = el("div", { "class": "ucm-card ucm-scheduler" }, el("h3", { text: "Scheduler account" }));
+        if (!s) { card.appendChild(el("div", { "class": "ucm-sub", text: "Not available." })); return card; }
+        var owner = s.owner ? el("span", { "class": "ucm-mono", text: s.owner }) : "not configured";
+        if (s.status === "no_owner") {
+            card.appendChild(stateBox("warn", "No scheduled owner is configured.",
+                "Deployed searches cannot be written until [deployment] scheduled_owner names a user with the ucm_scheduler role (local/ucm.conf)."));
+        } else if (s.status === "user_not_found") {
+            card.appendChild(stateBox("warn", "The scheduled owner was not found.", s.reason));
+        } else if (s.status !== "ok") {
+            card.appendChild(stateBox("info", "The scheduler account's roles could not be read.",
+                (s.reason || "") + " Index access is shown as not verified; this does not block deployment."));
+        }
+        var rows = [["Owner configured", owner]];
+        if (s.status === "ok") {
+            rows.push(["Roles found", (s.roles || []).length ? (s.roles || []).join(", ") : "none"]);
+            rows.push(["Can search internal indexes (_internal, _audit)", yesNo(s.internal_access)]);
+            rows.push(["Default indexes", String(s.default_indexes || 0)]);
+        }
+        rows.push(["Discovery scans internal indexes", yesNo(s.discovery_include_internal)]);
+        var list = el("dl", { "class": "ucm-kv" });
+        rows.forEach(function (r) { list.appendChild(el("dt", { text: r[0] })); list.appendChild(el("dd", {}, r[1])); });
+        card.appendChild(list);
+        if (s.status === "ok" && s.internal_access === false) {
+            card.appendChild(el("div", { "class": "ucm-sub", text: "Deployed searches that read _internal or _audit would run as this account, return no events and still report success. " +
+                "A role needs _* (or the index name) in srchIndexesAllowed; * does not include internal indexes." }));
+        }
+        if (s.has_filter) {
+            card.appendChild(el("div", { "class": "ucm-sub", text: "A search filter (srchFilter) applies to this account and can hide events even where an index is searchable." }));
+        }
+        if (s.has_disallowed) {
+            card.appendChild(el("div", { "class": "ucm-sub", text: "The account's roles disallow some indexes (srchIndexesDisallowed wins over allowed)." }));
+        }
+        if (s.discovery_include_internal === false) {
+            card.appendChild(el("div", { "class": "ucm-sub", text: "Discovery runs without internal indexes ([discovery] include_internal = false), so readiness shows internal indexes as not verified rather than present." }));
+        }
+        return card;
+    }
+
     return {
+        accessBadge: accessBadge, accessBox: accessBox, schedulerCard: schedulerCard,
         modal: modal, qualityBadges: qualityBadges, QUALITY_FLAGS: QUALITY_FLAGS, notify: notify, confirmAction: confirmAction, askText: askText,
         get: get, post: post, postRaw: postRaw, el: el, clear: clear, badge: badge,
         criticalityBadge: criticalityBadge, chips: chips, stateBox: stateBox, queryParams: queryParams,

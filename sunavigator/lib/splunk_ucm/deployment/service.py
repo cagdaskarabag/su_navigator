@@ -23,9 +23,10 @@ from ..content.reindex import StoredNormalizer
 from ..errors import ConflictError, NotFoundError, PermissionDenied, UcmError, UnsupportedOperation, ValidationError
 from ..model.canonical import UseCase
 from ..platform.search import SearchClient
+from ..readiness.principal import NOT_MET, SchedulerAccess, check_access, scan_spl
 from ..spl.analysis import analyze
 from ..spl.parser import high_cost, parse
-from ..spl.policy import classify, command_exists
+from ..spl.policy import classify, command_exists, expanded_pipeline
 from ..storage import collections as C
 from ..storage.collections import DOC_SCHEMA
 from ..storage.kvstore import DocumentStore
@@ -78,7 +79,9 @@ def deployment_key(catalog_key: str) -> str:
 class DeploymentService:
     def __init__(self, store: DocumentStore, audit: AuditService, search: SearchClient,
                  saved: SavedSearchClient, settings: Optional[DeploymentSettings] = None,
-                 control_runner: Optional[ControlTestRunner] = None):
+                 control_runner: Optional[ControlTestRunner] = None,
+                 access: Optional[SchedulerAccess] = None):
+        self.access = access
         self.store = store
         self.audit = audit
         self.search = search
@@ -223,13 +226,17 @@ class DeploymentService:
             self._acknowledge(rev, actor, acknowledge_commands)
         rev["submitted_by"] = actor
         rev["submitted_at"] = utc_now_iso()
+        access = self.scheduler_access(rev)
+        rev["scheduler_access"] = {"status": access["status"], "code": access["code"],
+                                   "detail": access["detail"][:500], "checked_at": utc_now_iso()}
         target = PENDING
         if not self.settings.require_approval:
             rev["approved_by"] = actor
             rev["approved_at"] = rev["submitted_at"]
             rev["approval"] = "not_required"
             target = APPROVED
-        self._transition(doc, actor, "submit", target, note)
+        self._transition(doc, actor, "submit", target, note,
+                         {"scheduler_access": access["status"], "scheduler_access_code": access["code"]})
         return self._decorate(doc)
 
     def approve(self, actor: str, content_id: str, note: str = "", acknowledge_commands: bool = False) -> Dict[str, Any]:
@@ -302,16 +309,47 @@ class DeploymentService:
         rev = self._deployed(doc)
         readiness = self.store.get(C.READINESS, doc["catalog_key"]) or {}
         state = readiness.get("state") or "not_assessed"
-        override = ""
+        access = self.scheduler_access(rev)
+        blocked_by: List[str] = []
         if state in self.settings.block_enable_states:
+            blocked_by.append("readiness is %s" % state)
+        if access["status"] == NOT_MET:
+            blocked_by.append(access["detail"].split(" A scheduled run")[0])
+        override = ""
+        if blocked_by:
             if len((override_reason or "").strip()) < MIN_OVERRIDE_REASON:
-                raise ConflictError("readiness is %s; enabling needs an override reason (at least %d characters)"
-                                    % (state, MIN_OVERRIDE_REASON), {"code": "readiness_gate", "readiness": state})
+                code = "readiness_gate" if state in self.settings.block_enable_states else "scheduler_access_gate"
+                raise ConflictError("%s; enabling needs an override reason (at least %d characters)"
+                                    % ("; ".join(blocked_by), MIN_OVERRIDE_REASON),
+                                    {"code": code, "readiness": state, "scheduler_access": access["status"]})
             override = override_reason.strip()[:500]
         catalog = self.store.get(C.CATALOG, doc["catalog_key"]) or {}
         return self._set_enabled(doc, actor, rev, True, "enable", {
             "readiness_state": state, "override_reason": override,
+            "scheduler_access": access["status"], "scheduler_access_code": access["code"],
             "provider_status": catalog.get("provider_status")})
+
+    def scheduler_access_for(self, doc: Optional[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+        """The check for the deployed revision, or the latest one before anything is deployed."""
+        if not doc:
+            return None
+        revs = doc.get("revisions") or []
+        number = doc.get("deployed_revision")
+        rev = next((r for r in revs if r.get("rev") == number), None) if number else (revs[-1] if revs else None)
+        if rev is None:
+            return None
+        out = self.scheduler_access(rev)
+        out["revision"] = rev.get("rev")
+        return out
+
+    def scheduler_access(self, rev: Optional[Dict[str, Any]]) -> Dict[str, Any]:
+        """Index access of the scheduled owner for a revision's SPL, read live."""
+        if not rev:
+            return check_access(None, None)
+        scan = rev.get("access_scan") or scan_spl(rev.get("spl") or "")
+        if self.access is None:
+            return check_access(None, scan)
+        return self.access.check(scan)
 
     def disable(self, actor: str, content_id: str, note: str = "") -> Dict[str, Any]:
         doc = self._require(content_id)
@@ -526,8 +564,10 @@ class DeploymentService:
         except (UnsupportedOperation, ValidationError) as exc:
             out["parse_error"] = exc.message[:500]
             out.update(self._policy(spl, None))
+            out["access_scan"] = scan_spl(spl)
             return out
         out.update(self._policy(spl, parsed))
+        out["access_scan"] = scan_spl(spl, expanded_pipeline(parsed) if parsed.ok else "")
         out["high_cost"] = high_cost(parsed.commands)
         out["commands"] = parsed.commands[:50]
         out["parse_ok"] = bool(parsed.ok)

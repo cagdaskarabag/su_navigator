@@ -6,6 +6,8 @@ issue a KV Store query per requirement.
 
 from typing import Any, Dict, List, Optional
 
+from .principal import PrincipalAccess
+
 from ..discovery.repositories import DiscoveryStateRepository
 from ..storage import collections as C
 from ..storage.kvstore import DocumentStore
@@ -19,6 +21,7 @@ class EnvironmentSnapshot:
     def __init__(self, sources: List[Dict[str, Any]], mappings: List[Dict[str, Any]],
                  discovery_state: Dict[str, Any], validations: Optional[List[Dict[str, Any]]] = None):
         self.discovery = discovery_state or {}
+        self.principal: Optional[PrincipalAccess] = None
         self.validations: Dict[str, Dict[str, Any]] = {}
         for v in validations or []:
             cid = v.get("content_id") or v.get("_key")
@@ -63,12 +66,16 @@ class EnvironmentSnapshot:
         mappings = store.query(C.SOURCE_MAPPINGS)
         validations = store.query(C.VALIDATION, fields=[
             "_key", "content_id", "parse_ok", "parse_error", "side_effects", "review_commands", "commands",
-            "field_samples", "sampled_at", "source_hash", "cim_parse_ok"])
+            "field_samples", "sampled_at", "source_hash", "cim_parse_ok", "access_scan"])
         return cls(sources, mappings, DiscoveryStateRepository(store).state(), validations)
 
     @property
     def discovered(self) -> bool:
         return bool(self.discovery.get("last_completed_at"))
+
+    @property
+    def include_internal(self) -> bool:
+        return bool(self.discovery.get("include_internal"))
 
     @property
     def discovered_at(self) -> str:

@@ -1,10 +1,10 @@
-# SUNavigator 0.8.6 — operator guide
+# SUNavigator 0.8.7 — operator guide
 
 **SUNavigator** (short for **Splunk use case navigator**) discovers, assesses,
 selects, validates and deploys monitoring use cases in Splunk.
 
 This is the install, usage and troubleshooting guide for **SUNavigator
-0.8.6**. It is written for a single Splunk Enterprise instance
+0.8.7**. It is written for a single Splunk Enterprise instance
 (search head + indexer on one host), including a local macOS install. Search
 head clusters and Splunk Cloud are **not** validated in this version.
 
@@ -24,6 +24,43 @@ Related documents (design, not how-to):
 
 The 0.8 line is a usability release. It adds no schema change and no new
 collections. An upgrade from 0.7.3 keeps your data.
+
+### 0.8.7
+
+- **The scheduler account's index access is checked (D-063).** Every use case with
+  SPL now has a requirement "runs as <scheduler account>: index access". It reads the
+  account's roles (own and imported, across all of its roles) and says **met**,
+  **not met** or **not verified**, with a plain sentence. Why it matters: a search
+  that runs as an account without access to its index does not fail. It runs, returns
+  nothing and is logged as `success`. Read the rules in §4.1 ("Scheduler account and
+  indexes").
+- **Enable is gated when the account cannot read the data.** Deployment shows a
+  warning when you submit, and **Enable** asks for an audited override reason
+  (at least 10 characters, the same step as for a blocked readiness state) when the
+  scheduler account cannot search an index the search reads. "Not verified" and a
+  failed role read never block.
+- **Overview card for the scheduler account:** owner configured, roles found,
+  whether it can search internal indexes, and whether discovery scans them.
+- **Internal indexes and `[discovery] include_internal`.** The default is `false`:
+  discovery does not scan `_internal`, `_audit` and the like. A use case that needs
+  one was shown as "index not defined"; it is now **not verified** ("internal indexes
+  are not scanned") because the index exists and was simply not looked at. Scores of
+  use cases that name only an internal index change accordingly. Setting
+  `include_internal = true` makes discovery list them (without changing who can
+  search them).
+- **"Operational" is now "Ran without error (not a statement about data)".** It means the
+  scheduler logged `status=success` for the search in the window, nothing more; a run
+  that returned no events is a success. The state name in the API is unchanged.
+- **Scheduled runs are proven as `ucm_scheduler` on the lab (issue #7).** A deployed
+  search enabled with a one-minute schedule ran as the scheduler account
+  (`scheduler.log`: `user=ucm_scheduler`, `status=success`) and kept its owner.
+- **Settings > Searches (issue #9) is explained.** The page's default Owner filter is
+  you; set Owner to **All** (§9.14). Not a defect.
+- The readiness engine version moved to `ucm.readiness/4`: every stored assessment is
+  recomputed by the next worker cycle (or press **Assess**). Role changes do not
+  trigger this by themselves; assess again after changing the scheduler's role.
+- No schema change, no migration, no new capability, route or setting. The build number
+  changed to 9.
 
 ### 0.8.6
 
@@ -240,7 +277,7 @@ commands (`delete`, `outputlookup`, `collect`, script, and similar). Deployed
 searches have **no email, webhook or script alert actions**; the default
 alert mode only writes to Splunk's Triggered Alerts.
 
-**Not in 0.8.6:** PDF export of coverage, a bundled regulation-control
+**Not in 0.8.7:** PDF export of coverage, a bundled regulation-control
 catalogue, validated SHC behaviour, Splunk Cloud vetting submission.
 
 ---
@@ -252,7 +289,7 @@ catalogue, validated SHC behaviour, Splunk Cloud vetting submission.
 | Splunk | Enterprise 10.x (validated on 10.2.9 in development; tested by operators on 10.4.3 Darwin arm64). Python 3.9 or 3.13 in Splunk. |
 | KV Store | Must reach `status: ready`. The app stores catalogue, inventory, readiness, selections, deployments and audit in KV collections. |
 | Role | First-time setup needs `admin` (or `sc_admin` on Cloud). |
-| Disk | The 0.8.6 package is a few megabytes. Category 9 of Fenre is about 120 records; the full Fenre corpus is tens of thousands of records. |
+| Disk | The 0.8.7 package is a few megabytes. Category 9 of Fenre is about 120 records; the full Fenre corpus is tens of thousands of records. |
 | Network | Optional. Remote sync needs HTTPS to `api.github.com` and `raw.githubusercontent.com`. Offline import needs none. |
 | Browser | Splunk Web. The app is a set of Simple XML views plus JavaScript under `/en-US/app/sunavigator/`. |
 
@@ -269,7 +306,7 @@ Placeholders used below:
 
 ```bash
 ./tools/package.sh
-# writes dist/sunavigator-0.8.6.tar.gz
+# writes dist/sunavigator-0.8.7.tar.gz
 ```
 
 The tarball has a single top-level folder `sunavigator/`
@@ -287,11 +324,11 @@ then fails in the UI with `500 Internal Server Error` even though splunkd is
 still unpacking. Use the CLI:
 
 ```bash
-$SPLUNK_HOME/bin/splunk install app /path/to/sunavigator-0.8.6.tar.gz \
+$SPLUNK_HOME/bin/splunk install app /path/to/sunavigator-0.8.7.tar.gz \
   -auth "$SPLUNK_USER:$SPLUNK_PASSWORD"
 # first install: omit -update
 # upgrade of an existing copy:
-$SPLUNK_HOME/bin/splunk install app /path/to/sunavigator-0.8.6.tar.gz \
+$SPLUNK_HOME/bin/splunk install app /path/to/sunavigator-0.8.7.tar.gz \
   -update 1 -auth "$SPLUNK_USER:$SPLUNK_PASSWORD"
 
 $SPLUNK_HOME/bin/splunk restart
@@ -413,6 +450,34 @@ The app refuses deploy, enable, disable, rollback and retire until this is set
 so grant it read access to the indexes your use cases search. Operators have
 no write access to the saved searches themselves: editing one in Splunk Web
 returns 403, and so does deleting it.
+
+**Scheduler account and indexes (0.8.7, D-063).** The account must be allowed to
+search every index its searches read, or the search runs, returns nothing and is
+logged as `success`. The app reads the account's roles and tells you:
+
+- The Overview card shows the owner, its roles and whether it can search internal
+  indexes. Each use case has a requirement "runs as <account>: index access".
+- Rules (measured on Splunk 10.2.9): `*` matches **only non-internal** indexes;
+  internal ones (`_internal`, `_audit`, `_introspection`, ...) need `_*` or the exact
+  name. A pattern that starts with `*` (such as `*audit`) never matches an internal
+  index. A disallowed index wins over an allowed one, across all of the account's roles.
+  A search with no `index=` reads the account's **default** indexes: with an empty
+  default list it sees nothing, and the built-in `user` role's default is `main`
+  only. Imported roles count; the app reads them already resolved.
+- A role that imports `user` (as `ucm_scheduler` does) therefore holds `*` and cannot
+  search `_internal` until you add `_internal` (or `_*`) to its **Indexes searched by
+  default / allowed** in **Settings > Roles**. Many Fenre use cases in categories 13 and
+  similar read `_internal`/`_audit`; ESCU searches mostly read data models.
+- The result is **not met** (gap) when the SPL names an index the account cannot search.
+  Submit shows a warning; **Enable** then needs an audited override reason (at least 10
+  characters; same dialog as a blocked readiness state). It is **not verified**, and never
+  blocks, when the search reads a data model, uses `tag=` or `eventtype=`, uses a macro
+  that could not be expanded, searches `index=*`, runs `map`/`savedsearch`/`loadjob`, or
+  when the roles cannot be read.
+- A search filter (`srchFilter`) on the account's roles is reported in the explanation;
+  the app does not evaluate it.
+- After you change the role, press **Assess** on the use case (or **Re-assess all**) to
+  refresh the stored result. Enable always reads the roles live.
 
 Capabilities are enforced on every POST in `/services/ucm/...`. A viewer
 receives HTTP 403 for sync, import, discovery, deploy, and so on.
@@ -615,6 +680,12 @@ Each card prints its own figures ("111 of 268 assessed") and calculation, so a
 percentage never stands alone. A percentage needs a denominator: with nothing
 assessed the card shows a dash, not 0%.
 
+**Scheduler account card (0.8.7).** Below the key figures: the configured
+`scheduled_owner`, the roles found for it, whether it can search internal indexes
+(yes or no), the number of default indexes, and whether discovery scans internal
+indexes. A note appears when the owner is not set, does not exist, cannot be read, or
+cannot search `_internal`. The card does not list index names or patterns.
+
 ![Overview dashboard with 120 imported use cases from category 9](images/03-overview.png)
 
 ### 6.2 Content Catalogue
@@ -783,6 +854,14 @@ only after you run validation on that use case (next section).
 
 A sourcetype whose newest event is older than `[readiness] stale_hours`
 (default 24) is treated as partial (stale), not fully met.
+
+**Internal indexes (`[discovery] include_internal`).** Discovery does not scan
+`_internal`, `_audit` and other `_` indexes unless `include_internal = true` (default
+`false`). A requirement on an internal index is then **not verified** ("internal
+indexes are not scanned"), not "index not defined" (0.8.7). A sourcetype that is not
+found gets the same note. Set it to `true` in `local/ucm.conf` if you want those
+indexes inventoried; that does not change who can search them. The scheduler
+requirement ("runs as ...: index access", §4) is separate and does not depend on it.
 
 ![Readiness overview: ready, partially ready and not ready counts with the most common unmet requirements](images/07-readiness.png)
 
@@ -971,7 +1050,7 @@ Levels (filters at the top):
 | Data ready | A mapped use case is readiness-ready. |
 | Deployed | A mapped use case has a saved search. |
 | Enabled | That search is enabled. |
-| Running successfully | Scheduler log in `_internal` shows a successful run in the selected window. |
+| Ran without error (not a statement about data) | Scheduler log in `_internal` shows a run with `status=success` in the selected window. A run that returned no events is also a success, so this does not show the search saw data (D-063). |
 
 Each percentage card states its figures and calculation (from 0.8.3):
 techniques at that level ÷ techniques in the framework. Levels are
@@ -987,13 +1066,13 @@ Most non-admin roles cannot. The UI then reports run status **not
 available**, not “no runs”. Tick **Include run status** only if your role
 can search `_internal`.
 
-Regulation controls have no bundled catalogue in 0.8.6; only controls that
+Regulation controls have no bundled catalogue in 0.8.7; only controls that
 appear on imported use cases are listed.
 
 **Export ATT&CK Navigator layer** (next to the legend) downloads the matrix
 as a Navigator layer (format 4.5) for the selected framework version and
 domain filter. Each covered technique's score is its level (1 = in
-catalogue … 4 = enabled, 5 = running successfully when run status is
+catalogue … 4 = enabled, 5 = ran without error when run status is
 included), with the same colours and a per-technique count comment. Open it
 in [ATT&CK Navigator](https://mitre-attack.github.io/attack-navigator/)
 with "Open existing layer" (D-050).
@@ -1112,7 +1191,7 @@ app. Do the steps in this order:
    $SPLUNK_HOME/bin/splunk restart
    ```
 
-4. **Install SUNavigator 0.8.6** as in §3.2. The first install omits
+4. **Install SUNavigator 0.8.7** as in §3.2. The first install omits
    `-update`, because `sunavigator` is a new app ID.
 5. **Re-create the GitHub token** if you use one (§3.6). It must be stored in
    realm `sunavigator`. The 0.7.0 token in realm `splunk_use_case_manager` is
@@ -1265,7 +1344,7 @@ tail -50 "$SPLUNK_HOME/var/log/splunk/sunavigator.log"
 ```
 
 On a search head cluster only the captain runs jobs (not validated in
-0.8.6). On a single instance `standalone = 1` is expected.
+0.8.7). On a single instance `standalone = 1` is expected.
 
 ### 9.4 Provider could not be reached
 
@@ -1351,6 +1430,11 @@ Readiness is in `block_enable_states` (default `blocked`). Enter an
 override reason (≥ 10 characters) when prompted, or fix the unmet critical
 requirement and re-assess first.
 
+Also blocked (0.8.7): the scheduler account cannot search an index the saved search
+reads. The message says which index and which roles. Either give the account's role
+the index (§4, "Scheduler account and indexes") and enable again, or enter an override
+reason (≥ 10 characters) to enable a search you accept will run without that data.
+
 ### 9.11 Coverage run status “not available”
 
 The role cannot search `index=_internal`. Use an admin account, grant
@@ -1389,14 +1473,18 @@ the REST search in step 1.
 SUNavigator, but **Settings → Searches, reports, and alerts** does not list it,
 even when filtered to the `sunavigator` app.
 
-**What we saw:** in the lab, the REST check in §6.6 returned the search, with
-`disabled = 1`, the expected cron, and owner `approver`. The Settings listing
-still did not show it.
+**Cause (issue #9, found in 0.8.7; not a defect in SUNavigator):** the Settings page
+filters by **Owner**, and its default is the signed-in user. Splunk Web sends
+`search=(eai:acl.owner="<you>") AND (eai:acl.app="sunavigator")`. Deployed searches are
+owned by `[deployment] scheduled_owner` (`ucm_scheduler`), so they are hidden until the
+filter is changed. This was captured on the 10.2.9 lab with a disabled search owned by
+`ucm_scheduler`, sharing `app`, in app `sunavigator`. Before 0.7.3 (D-051) the owner was the
+approver, so the same filter hid them from everyone else.
 
-**Fix:** treat the REST search in §6.6 and the Deployments page as the source
-of truth. Do not re-deploy only because the Settings page is empty. If REST also
-returns nothing, check **Deployments → Verify now** for drift or a missing
-search, and see §9.9.
+**Fix:** on the page, open the **Owner** drop-down and choose **All** (or the scheduler
+account) and the App filter **SUNavigator**; the search is listed. The REST search in
+§6.6 and the Deployments page remain the source of truth. If REST also returns nothing,
+check **Deployments → Verify now** for drift or a missing search, and see §9.9.
 
 ### 9.15 Logs to collect
 
@@ -1472,7 +1560,7 @@ Full table: [ARCHITECTURE.md §6](ARCHITECTURE.md).
 
 ---
 
-## 12. Known limitations (0.8.6)
+## 12. Known limitations (0.8.7)
 
 - Catalogue total counts are bounded by KV `max_rows_per_query` (50,000).
 - Catalogue search does not rank and does not search descriptions.
@@ -1481,8 +1569,19 @@ Full table: [ARCHITECTURE.md §6](ARCHITECTURE.md).
 - Coverage is computed on read (about 0.5 s at 20,000 use cases).
 - Search head clustering was validated on a local three-member cluster (D-055); Splunk Cloud is unvalidated.
 - Regulations: only controls present on imported records are shown.
-- The Settings → Searches listing did not show `SUN - …` searches in the lab
-  (§9.14). Use the REST search in §6.6.
+- Settings → Searches lists only your own searches by default; set Owner to All to
+  see `SUN - …` searches (§9.14).
+- **Scheduler index access (0.8.7, D-063):** the check reads index access only. It does
+  not evaluate search filters (`srchFilter`), search time-window limits or quotas, and
+  it cannot see inside macros that Splunk did not expand, data models, tags, event
+  types, `index=*`, `map`, `savedsearch` or `loadjob`; those are reported as not
+  verified, never as met. A role change does not mark stored assessments stale: press
+  **Assess**. Reading roles on a search head cluster or on Splunk Cloud has not been
+  validated; a failed read gives not verified and blocks nothing.
+- "Ran without error" on Coverage and Deployments means `status=success` in
+  `scheduler.log`. A search whose account cannot read its index also reports success.
+- Discovery scans internal indexes only with `[discovery] include_internal = true`;
+  otherwise a requirement on one is not verified (§6.4).
 - Default four-eyes blocks a single `admin` from approving their own draft.
 - Control tests (§6.6a) run on the lab with 2 deployed use cases. Other use
   cases with fixtures are unverified until deployed and run.
@@ -1514,7 +1613,7 @@ Full table: [ARCHITECTURE.md §6](ARCHITECTURE.md).
 
 ## 13. Quick start checklist
 
-1. `splunk install app sunavigator-0.8.6.tar.gz` then `splunk restart`.
+1. `splunk install app sunavigator-0.8.7.tar.gz` then `splunk restart`.
 2. `splunk show kvstore-status` → `ready` (macOS: §9.2 if stuck on `starting`).
 3. Open **SUNavigator → Administration**; all platform pills green.
 4. **Check provider for categories** → tick **9** → **Synchronize**, **or**

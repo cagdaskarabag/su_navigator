@@ -23,13 +23,14 @@ function ucmViewMain($, ucm) {
         clause: params.clause || "", gaps: params.gaps || ""
     };
     var LEVEL_LABEL = { catalogue: "In catalogue", ready: "Data ready", deployed: "Deployed", enabled: "Enabled",
-        operational: "Running successfully" };
+        operational: "Ran without error (not a statement about data)" };
     var LEVEL_HOW = {
         catalogue: "Techniques mapped by at least one active use case in the catalogue, whether or not it can run here.",
         ready: "Techniques with at least one use case that is ready, or already deployed or enabled (levels are cumulative).",
         deployed: "Techniques with at least one use case that has a deployed saved search, enabled or not, or a running one.",
         enabled: "Techniques with at least one use case whose saved search is enabled in Splunk.",
-        operational: "Techniques with an enabled saved search that also ran successfully in the chosen window."
+        operational: "Techniques with an enabled saved search whose last run in the chosen window finished with status success. " +
+            "This says the search ran without error. It is not a statement about data: a search that sees no events also succeeds."
     };
     var HEALTH_KIND = { operational: "ok", no_runs: "warn", unhealthy: "error", disabled: "info", unknown: "neutral" };
 
@@ -67,7 +68,7 @@ function ucmViewMain($, ucm) {
         var c = t.counts || {};
         return t.id + " " + t.name + "\nUse cases: " + (c.catalogue || 0) + " in catalogue, " + (c.ready || 0) + " ready, " +
             (c.deployed || 0) + " deployed, " + (c.enabled || 0) + " enabled" +
-            (c.operational ? ", " + c.operational + " running successfully" : "");
+            (c.operational ? ", " + c.operational + " ran without error" : "");
     }
 
     function cell(t, sub) {
@@ -96,7 +97,7 @@ function ucmViewMain($, ucm) {
             })));
         if (m.operational && !m.operational.available) {
             target.appendChild(ucm.stateBox("info", "Run status is not available.", m.operational.reason ||
-                "Your role cannot search the scheduler logs in index=_internal, so the Running successfully level is not shown."));
+                "Your role cannot search the scheduler logs in index=_internal, so the Ran without error level is not shown."));
         }
         target.appendChild(el("div", { "class": "ucm-toolbar" }, legend(m.levels || []),
             el("button", { "class": "btn", text: "Export ATT&CK Navigator layer", onclick: function () {
@@ -323,7 +324,7 @@ function ucmViewMain($, ucm) {
         persist();
         ucm.clear(root);
         root.appendChild(el("div", { "class": "ucm-header" }, el("h2", { text: "Coverage" }),
-            el("div", { "class": "ucm-sub", text: "How far the catalogue covers MITRE ATT&CK and regulatory frameworks: mapped in the catalogue, data ready, deployed, enabled and, optionally, running successfully." })));
+            el("div", { "class": "ucm-sub", text: "How far the catalogue covers MITRE ATT&CK and regulatory frameworks: mapped in the catalogue, data ready, deployed, enabled and, optionally, ran without error (not a statement about data)." })));
         var toolbar = el("div", { "class": "ucm-toolbar" });
         var matrixBox = el("div", { "class": "ucm-loading", text: "Loading matrix…" });
         var techniqueBox = el("div", {});

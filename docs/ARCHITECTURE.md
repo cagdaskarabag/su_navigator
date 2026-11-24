@@ -216,7 +216,7 @@ Downgrades are not supported (D-033).
 | `POST ucm/mappings` | `ucm_run_discovery` | Create or update a **local** mapping. |
 | `POST ucm/mappings/delete` | `ucm_run_discovery` | Delete a local mapping (auto mappings cannot be deleted). |
 | `GET ucm/readiness` | read | Filtered, paged readiness (`state, domain, criticality, category, q, sort, offset, count`). Each item carries the stored per-status `counts` and `unverified` (shown as requirement results, D-061). |
-| `GET ucm/readiness/summary` | read | Counts by state, most common unmet requirements, jobs, settings. |
+| `GET ucm/readiness/summary` | read | Counts by state, most common unmet requirements, jobs, settings, and `scheduler` (the scheduled owner's role and index-access summary, D-063). |
 | `GET ucm/readiness/usecase?id=` | read | Full readiness document with staleness. Also embedded in `GET ucm/usecase` as `readiness`. |
 | `POST ucm/readiness` | `ucm_run_discovery` | Queue a full re-assessment. |
 | `POST ucm/readiness/assess` | `ucm_run_discovery` | Assess one use case synchronously (`{"id": ...}`). |

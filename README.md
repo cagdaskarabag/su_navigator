@@ -3,7 +3,7 @@
 [![Version](https://img.shields.io/badge/version-0.8.x-blue.svg)](docs/OPERATOR_GUIDE.md#what-changed-in-08x)
 [![Splunk Compatibility](https://img.shields.io/badge/splunk-Enterprise%2010.x%20%7C%20Cloud%3A%20not%20validated-orange.svg)](docs/OPERATOR_GUIDE.md#2-requirements)
 [![Python Support](https://img.shields.io/badge/python-3.9%20%7C%203.13-brightgreen.svg)](docs/DECISIONS.md#d-005-stdlib-only-python-compatible-with-39313)
-[![Tests](https://img.shields.io/badge/unit%20tests-435%20passed-success.svg)](tests/)
+[![Tests](https://img.shields.io/badge/unit%20tests-504%20passed-success.svg)](tests/)
 [![AppInspect](https://img.shields.io/badge/Splunk%20AppInspect-Clean-brightgreen.svg)](docs/DECISIONS.md#d-019-packaging-constraints-from-appinspect)
 
 **SUNavigator** is a native Splunk application for Splunk Enterprise (Splunk Cloud: the package passes AppInspect, but runtime on a Cloud stack is not validated yet) that bridges the gap between external security detection catalogues and live production environments. It empowers SOC and detection engineering teams to **discover**, **assess**, **backlog**, **validate**, and **safely deploy** monitoring use cases with built-in four-eyes governance.
@@ -43,7 +43,7 @@ Content is ingested from pluggable detection providers, with out-of-the-box supp
 
 - 📥 **Curated Content Ingestion**: Synchronizes use cases from GitHub pinned to immutable commit hashes with per-record git blob SHA-1 verification. Each category is fetched and validated in full before anything is written (last-known-good), syncs are incremental, and records removed upstream are marked withdrawn. KV Store has no transactions: an interrupted write marks the category failed, and the next sync rewrites the affected records (D-009).
 - 🔍 **Safe Bounded Data Discovery**: Discovers active index and sourcetype pairs, event volume, and data freshness using constructed, bounded `tstats` queries—never running untrusted imported SPL. Preserves local source mappings without overwriting operator customizations.
-- 📊 **Evidence-Based Readiness Engine**: Evaluates whether required sourcetypes, fields, CIM data models, macros, and add-ons exist in your environment. Produces deterministic readiness scores (0–100) and enforces a veto when critical requirements are missing.
+- 📊 **Evidence-Based Readiness Engine**: Evaluates whether required sourcetypes, fields, CIM data models, macros, and add-ons exist in your environment. Produces deterministic readiness scores (0–100) and enforces a veto when critical requirements are missing. Since 0.8.7 it also checks that the scheduler account (`[deployment] scheduled_owner`) is allowed to search the indexes a use case reads, so a scheduled search does not run blind (D-063).
 - 🎯 **Operator Backlog & Syntax Validation**: Provides per-user selection, bookmarking, and triage. Validates SPL against Splunk's native search parser, inspects command syntax, and provides safe, bounded previews with `fieldsummary` sampling.
 - 🛡️ **Four-Eyes Guided Deployment**: Maker-checker inside the app: a draft is submitted by one operator, approved by a second (unless `allow_self_approval` is set), and deployed as a disabled saved search. Live activation is gated on environment readiness and audited. The deploying operator owns the saved search and can still edit it in Splunk directly; the app reports such edits as drift but cannot prevent them.
 - 🔄 **Drift Detection & Rollback**: Compares live saved searches against frozen deployment revisions. Automatically detects external modifications and provides one-click rollback to prior revisions or safe retirement.
@@ -127,7 +127,7 @@ Package the production `.tar.gz` bundle from this repository:
 git clone https://github.com/cagdaskarabag/sun_navigator.git
 cd sun_navigator
 ./tools/package.sh
-# Output: dist/sunavigator-0.8.6.tar.gz
+# Output: dist/sunavigator-0.8.7.tar.gz
 ```
 
 ### CLI Installation (Recommended)
@@ -135,7 +135,7 @@ cd sun_navigator
 Splunk Web's UI upload times out on packages over standard browser HTTP limits. Install via the Splunk CLI:
 
 ```bash
-$SPLUNK_HOME/bin/splunk install app dist/sunavigator-0.8.6.tar.gz \
+$SPLUNK_HOME/bin/splunk install app dist/sunavigator-0.8.7.tar.gz \
   -auth "$SPLUNK_USER:$SPLUNK_PASSWORD"
 
 $SPLUNK_HOME/bin/splunk restart
@@ -205,7 +205,7 @@ SUNavigator implements a safe, four-eyes deployment state machine:
 
 - **Separation of Duties (in the app)**: The operator who drafts/submits a detection cannot approve it unless `allow_self_approval = true` is explicitly configured. Splunk permissions still let the owner of a deployed saved search, or an admin, edit it outside the app; the drift check (`[deployment] verify_interval_minutes`) reports such changes.
 - **Disabled-First**: Newly deployed searches are always created in a `disabled = 1` state under the naming convention `SUN - <record_id> - <title>`.
-- **Gated Activation**: Enabling a search requires an assessment score above threshold. Enabling a blocked search requires an audited override reason.
+- **Gated Activation**: Enabling a search requires an assessment score above threshold. Enabling a blocked search, or one whose scheduler account cannot search the indexes it reads, requires an audited override reason.
 - **Continuous Drift Verification**: Periodic background jobs verify live saved search definitions against frozen KV Store deployment revisions to detect manual tampering.
 
 ---
@@ -240,7 +240,7 @@ sun_navigator/
 │   └── appserver/static/         # Simple XML JS modules and styles
 ├── tools/                        # Development, packaging, and bundle CLI tools
 ├── tests/                        # Automated test suites
-│   ├── unit/                     # 435 mocked unit tests (runs without Splunk)
+│   ├── unit/                     # 504 mocked unit tests (runs without Splunk)
 │   ├── fixtures/readiness/       # Readiness regression corpus and its baseline
 │   └── live/                     # Integration tests against live Splunk instances
 └── docs/                         # Specifications, ADRs, operator guide, and screenshots

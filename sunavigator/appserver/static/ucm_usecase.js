@@ -296,8 +296,12 @@ function ucmViewMain($, ucm) {
 
         if (action === "enable") {
             var rd = uc.readiness ? uc.readiness.state : "not_assessed";
-            if ((settings.block_enable_states || []).indexOf(rd) >= 0) {
-                ucm.askText("Override the readiness gate", "Readiness is " + rd + ". The override reason is audited.",
+            var access = dep.scheduler_access || {};
+            var readinessBlocked = (settings.block_enable_states || []).indexOf(rd) >= 0;
+            if (readinessBlocked || access.status === "not_met") {
+                var why = (readinessBlocked ? "Readiness is " + rd + ". " : "") +
+                    (access.status === "not_met" ? access.detail + " " : "") + "The override reason is audited.";
+                ucm.askText("Override the enable gate", why,
                     { label: "Override reason", minLength: 10, maxLength: 500, multiline: true }, "Enable",
                     function (reason) { body.override_reason = reason; acknowledgeThenSend(); });
                 return;
@@ -389,7 +393,8 @@ function ucmViewMain($, ucm) {
         var head = el("div", { "class": "ucm-readiness-head" }, el("strong", { text: "Deployment" }),
             dep ? ucm.badge(dep.state.replace("_", " "), STATE_KIND[dep.state] || "neutral") : ucm.badge("not deployed", "neutral"),
             dep ? ucm.badge("saved search: " + ((dep.live && dep.live.status) || "absent"), LIVE_KIND[(dep.live && dep.live.status) || "absent"]) : null,
-            dep && dep.content_changed ? ucm.badge("provider content changed since this revision", "warn") : null);
+            dep && dep.content_changed ? ucm.badge("provider content changed since this revision", "warn") : null,
+            dep ? ucm.accessBadge(view.scheduler_access) : null);
         var card = el("div", { "class": "ucm-card" }, head);
         if (!dep) {
             if (allowed.indexOf("draft") < 0) {
@@ -423,6 +428,8 @@ function ucmViewMain($, ucm) {
                 "The search sets earliest/latest itself, which overrides the schedule's " + latest.earliest + " → " +
                 latest.latest + " range. Remove it from the SPL unless the override is intended."));
         }
+        var accessNote = ucm.accessBox(view.scheduler_access);
+        if (accessNote) { card.appendChild(accessNote); }
         if (dep.last_error) { card.appendChild(ucm.stateBox("error", "Last error", dep.last_error)); }
         if (dep.control_test) { card.appendChild(controlTestBox(dep.control_test)); }
         var drift = (dep.live && dep.live.drift) || [];
@@ -452,7 +459,7 @@ function ucmViewMain($, ucm) {
             el("table", { "class": "ucm-table" }, el("thead", {}, el("tr", {}, ["Time (UTC)", "Actor", "Action", "State", "Rev", "Note"].map(function (t) {
                 return el("th", { text: t });
             }))), hist)));
-        card.appendChild(el("div", { "class": "ucm-sub", text: "Every deploy and rollback writes the saved search disabled. Enabling is a separate, audited step. The search runs as its owner." }));
+        card.appendChild(el("div", { "class": "ucm-sub", text: "Every deploy and rollback writes the saved search disabled. Enabling is a separate, audited step. The search runs as its owner. To see it in Settings > Searches, reports, and alerts, set Owner to All: that page lists only your own searches by default." }));
         return card;
     }
 

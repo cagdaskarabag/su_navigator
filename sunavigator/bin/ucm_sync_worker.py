@@ -88,7 +88,7 @@ def run(config_xml: str) -> int:
         ("sync", SyncWorker(store, config, remote_provider,
                             lambda: get_secret(transport, "github_token") or "", leader)),
         ("discovery", DiscoveryWorker(store, config, transport, leader)),
-        ("readiness", ReadinessWorker(store, config, leader)),
+        ("readiness", ReadinessWorker(store, config, leader, transport=transport)),
         ("deployment", DeploymentWorker(store, config, transport, leader)),
     ]
     for _ in range(_max_jobs(config_xml)):
