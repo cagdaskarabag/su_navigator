@@ -35,18 +35,41 @@ def weight(req: Dict[str, Any]) -> float:
     return LEVEL_WEIGHT.get(req.get("level", ""), 0.0) * CONFIDENCE_FACTOR.get(req.get("confidence", ""), 0.5)
 
 
+# Best first. An unverified alternative is better than a missing one: the group is not shown to fail.
+_GROUP_RANK = {MET: 0, PARTIAL: 1, UNVERIFIED: 2, UNKNOWN: 3, NOT_APPLICABLE: 4, NOT_MET: 5}
+
+
+def collapse_groups(results: List[Dict[str, Any]]) -> None:
+    """Mark all but the best member of each any-of group ``collapsed`` (D-041)."""
+    groups: Dict[tuple, List[Dict[str, Any]]] = {}
+    for r in results:
+        r.pop("collapsed", None)
+        if r.get("any_of"):
+            groups.setdefault((r["type"], tuple(r["any_of"])), []).append(r)
+    for members in groups.values():
+        best = min(members, key=lambda r: _GROUP_RANK.get(r["status"], 9))
+        for r in members:
+            if r is not best:
+                r["collapsed"] = True
+
+
 def score(results: List[Dict[str, Any]], settings: ScoringSettings) -> Dict[str, Any]:
+    collapse_groups(results)
     counts = {s: 0 for s in STATUSES}
     earned = scored = decided = 0.0
     blockers: List[Dict[str, Any]] = []
     gaps: List[Dict[str, Any]] = []
     for r in results:
+        if r.get("collapsed"):
+            continue
         status = r["status"]
         counts[status] = counts.get(status, 0) + 1
         w = weight(r)
         if status == NOT_MET and r["level"] in ("critical", "required"):
             ref = {"req_id": r["req_id"], "type": r["type"], "value": r["value"], "code": r["code"],
                    "level": r["level"]}
+            if r.get("any_of"):
+                ref["value"] = "any of " + ", ".join(r["any_of"])
             (blockers if r["level"] == "critical" else gaps).append(ref)
         if status in (UNVERIFIED, NOT_APPLICABLE) or w <= 0:
             continue

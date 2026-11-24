@@ -39,10 +39,18 @@ require([
 
     function evidenceText(res) {
         var parts = [res.detail || ""];
+        if (res.collapsed) {
+            parts.unshift("Alternative sourcetype; the group is judged by its best member.");
+        }
         if (res.via_mapping) {
             parts.push("Via " + res.via_mapping.origin + " mapping from " + res.via_mapping.value + ".");
         }
         return parts.join(" ");
+    }
+
+    function anyOf(r, res) {
+        var group = (res && res.any_of) || (r.attributes && r.attributes.any_of);
+        return group && group.length ? el("div", { "class": "ucm-sub", text: "any of: " + group.join(", ") }) : null;
     }
 
     function requirementsTable(reqs, readiness) {
@@ -59,7 +67,7 @@ require([
             var evidence = res ? evidenceText(res) : (r.notes || "");
             body.appendChild(el("tr", {},
                 el("td", { text: r.type }),
-                el("td", { "class": "ucm-mono", text: r.value }),
+                el("td", { "class": "ucm-mono" }, r.value, anyOf(r, res)),
                 el("td", {}, ucm.badge(r.level, r.level === "critical" ? "critical" : (r.level === "required" ? "high" : "neutral"))),
                 el("td", { text: r.source.replace("_", " ") }),
                 el("td", { text: r.confidence }),

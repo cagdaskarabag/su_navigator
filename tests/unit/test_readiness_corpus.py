@@ -191,6 +191,10 @@ def metrics(outcomes):
             out["requirements"] += 1
             r = results.get(key.lower())
             status = r["status"] if r else "absent"
+            if r and r.get("collapsed"):
+                # An any-of member is judged by its group's counted member.
+                status = next(o["status"] for o in doc["results"]
+                              if o.get("any_of") == r["any_of"] and not o.get("collapsed"))
             counted = bool(r) and r["level"] in COUNTED_LEVELS
             if status == "not_met" and counted:
                 if truth == "missing":
@@ -201,8 +205,9 @@ def metrics(outcomes):
                 out["unverified"][truth] += 1
             elif truth == "missing":
                 out["missing_not_flagged"] += 1
-            lines.append("    %-34s truth=%-11s status=%-12s level=%s" % (
-                key, truth, status, r["level"] if r else "-"))
+            shown = status if not (r and r.get("collapsed")) else "%s (group %s)" % (r["status"], status)
+            lines.append("    %-34s truth=%-11s status=%-22s level=%s%s" % (
+                key, truth, shown, r["level"] if r else "-", " any-of" if r and r.get("any_of") else ""))
         ready = doc["state"] == "ready"
         if case["ready"] and not ready:
             out["false_not_ready"].append(case["id"])

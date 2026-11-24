@@ -1,10 +1,10 @@
-# SUNavigator 0.7.2 — operator guide
+# SUNavigator 0.7.3 — operator guide
 
 **SUNavigator** (short for **Splunk use case navigator**) discovers, assesses,
 selects, validates and deploys monitoring use cases in Splunk.
 
 This is the install, usage and troubleshooting guide for **SUNavigator
-0.7.2**. It is written for a single Splunk Enterprise instance
+0.7.3**. It is written for a single Splunk Enterprise instance
 (search head + indexer on one host), including a local macOS install. Search
 head clusters and Splunk Cloud are **not** validated in this version.
 
@@ -20,7 +20,35 @@ Related documents (design, not how-to):
 
 ---
 
-## 0. What changed in 0.7.2
+## 0. What changed in 0.7.3
+
+0.7.3 makes readiness results trustworthy (no new features). An upgrade from
+0.7.2 keeps your data; the worker re-derives catalogue summaries once
+(migration `0002`). Existing readiness results show as stale
+(`engine_upgraded`) until the next assessment: run **Re-assess** or discovery.
+
+- **Fields the search creates are no longer reported missing.** A required
+  field that the search itself produces (`eval`, `stats … as`, `rename`,
+  `rex`, `spath output=`, `lookup … OUTPUT`, …) is shown as informational
+  (`derived_in_spl`), is not sampled, and does not lower the score. A field
+  the search reads before it produces it (`eval user=lower(user)`) is still a
+  raw-data requirement (D-040).
+- **Alternative sourcetypes.** `sourcetype=A OR sourcetype=B` and
+  `sourcetype IN (A, B)` in one search clause form an "any of" group: the use
+  case needs one of them. `join`, `append`, `multisearch` and subsearches
+  still need every sourcetype (D-041).
+- **Field sampling reads where the data is.** The sample covers the hour
+  (`[validation] sample_window_minutes`) before the newest event discovery saw
+  for each sourcetype, not the last 15 minutes, and only the requested fields.
+  A window with no events leaves a field unverified (`sample_empty`) instead
+  of absent (D-027).
+- The app state now records the installed version after an upgrade that adds
+  no migration (0.7.2 kept reporting 0.7.1).
+- A readiness regression corpus (`tests/fixtures/readiness`) checks these
+  cases on every change. On 0.7.2, 10 of its 11 ready cases were reported not
+  ready; on 0.7.3 all 17 cases are classified correctly.
+
+## 0.1 What changed in 0.7.2
 
 0.7.2 fixes evidence integrity and trust boundaries (no new features). A clean
 install is recommended; an upgrade within `sunavigator` keeps your data.
@@ -47,7 +75,7 @@ install is recommended; an upgrade within `sunavigator` keeps your data.
   scripts that wrote these collections with a non-admin account must use
   the REST API instead.
 
-## 0.1 What changed in 0.7.1
+## 0.2 What changed in 0.7.1
 
 0.7.1 renames the application from **Splunk Use Case Manager** (0.7.0 and
 earlier) to **SUNavigator**. The feature set is unchanged.
@@ -100,7 +128,7 @@ commands (`delete`, `outputlookup`, `collect`, script, and similar). Deployed
 searches have **no email, webhook or script alert actions**; the default
 alert mode only writes to Splunk's Triggered Alerts.
 
-**Not in 0.7.2:** PDF export of coverage, a bundled regulation-control
+**Not in 0.7.3:** PDF export of coverage, a bundled regulation-control
 catalogue, validated SHC behaviour, Splunk Cloud vetting submission.
 
 ---
@@ -112,7 +140,7 @@ catalogue, validated SHC behaviour, Splunk Cloud vetting submission.
 | Splunk | Enterprise 10.x (validated on 10.2.9 in development; tested by operators on 10.4.3 Darwin arm64). Python 3.9 or 3.13 in Splunk. |
 | KV Store | Must reach `status: ready`. The app stores catalogue, inventory, readiness, selections, deployments and audit in KV collections. |
 | Role | First-time setup needs `admin` (or `sc_admin` on Cloud). |
-| Disk | The 0.7.2 package is a few megabytes. Category 9 of Fenre is about 120 records; the full Fenre corpus is tens of thousands of records. |
+| Disk | The 0.7.3 package is a few megabytes. Category 9 of Fenre is about 120 records; the full Fenre corpus is tens of thousands of records. |
 | Network | Optional. Remote sync needs HTTPS to `api.github.com` and `raw.githubusercontent.com`. Offline import needs none. |
 | Browser | Splunk Web. The app is a set of Simple XML views plus JavaScript under `/en-US/app/sunavigator/`. |
 
@@ -129,7 +157,7 @@ Placeholders used below:
 
 ```bash
 ./tools/package.sh
-# writes dist/sunavigator-0.7.2.tar.gz
+# writes dist/sunavigator-0.7.3.tar.gz
 ```
 
 The tarball has a single top-level folder `sunavigator/`
@@ -147,11 +175,11 @@ then fails in the UI with `500 Internal Server Error` even though splunkd is
 still unpacking. Use the CLI:
 
 ```bash
-$SPLUNK_HOME/bin/splunk install app /path/to/sunavigator-0.7.2.tar.gz \
+$SPLUNK_HOME/bin/splunk install app /path/to/sunavigator-0.7.3.tar.gz \
   -auth "$SPLUNK_USER:$SPLUNK_PASSWORD"
 # first install: omit -update
 # upgrade of an existing copy:
-$SPLUNK_HOME/bin/splunk install app /path/to/sunavigator-0.7.2.tar.gz \
+$SPLUNK_HOME/bin/splunk install app /path/to/sunavigator-0.7.3.tar.gz \
   -update 1 -auth "$SPLUNK_USER:$SPLUNK_PASSWORD"
 
 $SPLUNK_HOME/bin/splunk restart
@@ -560,7 +588,7 @@ Most non-admin roles cannot. The UI then reports run status **not
 available**, not “no runs”. Tick **Include run status** only if your role
 can search `_internal`.
 
-Regulation controls have no bundled catalogue in 0.7.2; only controls that
+Regulation controls have no bundled catalogue in 0.7.3; only controls that
 appear on imported use cases are listed.
 
 ### 6.8 Dashboards
@@ -654,7 +682,7 @@ app. Do the steps in this order:
    $SPLUNK_HOME/bin/splunk restart
    ```
 
-4. **Install SUNavigator 0.7.2** as in §3.2. The first install omits
+4. **Install SUNavigator 0.7.3** as in §3.2. The first install omits
    `-update`, because `sunavigator` is a new app ID.
 5. **Re-create the GitHub token** if you use one (§3.6). It must be stored in
    realm `sunavigator`. The 0.7.0 token in realm `splunk_use_case_manager` is
@@ -807,7 +835,7 @@ tail -50 "$SPLUNK_HOME/var/log/splunk/sunavigator.log"
 ```
 
 On a search head cluster only the captain runs jobs (not validated in
-0.7.2). On a single instance `standalone = 1` is expected.
+0.7.3). On a single instance `standalone = 1` is expected.
 
 ### 9.4 Provider could not be reached
 
@@ -1014,7 +1042,7 @@ Full table: [ARCHITECTURE.md §6](ARCHITECTURE.md).
 
 ---
 
-## 12. Known limitations (0.7.2)
+## 12. Known limitations (0.7.3)
 
 - Catalogue total counts are bounded by KV `max_rows_per_query` (50,000).
 - Catalogue search does not rank and does not search descriptions.
@@ -1031,7 +1059,7 @@ Full table: [ARCHITECTURE.md §6](ARCHITECTURE.md).
 
 ## 13. Quick start checklist
 
-1. `splunk install app sunavigator-0.7.2.tar.gz` then `splunk restart`.
+1. `splunk install app sunavigator-0.7.3.tar.gz` then `splunk restart`.
 2. `splunk show kvstore-status` → `ready` (macOS: §9.2 if stuck on `starting`).
 3. Open **SUNavigator → Administration**; all platform pills green.
 4. **Check provider for categories** → tick **9** → **Synchronize**, **or**

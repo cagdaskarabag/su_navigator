@@ -1,6 +1,8 @@
 import datetime
 import unittest
 
+import helpers  # noqa: F401
+
 from splunk_ucm.api.app import CAP_RUN_DISCOVERY
 from splunk_ucm.audit import AuditService
 from splunk_ucm.config import AppConfig
@@ -140,6 +142,54 @@ class ScoringTest(unittest.TestCase):
     def test_confidence_weights(self):
         out = score([scored(MET, confidence="high"), scored(NOT_MET, level="recommended", confidence="low")], self.S)
         self.assertEqual(out["score"], 80)
+
+
+class SourcetypeGroupTest(unittest.TestCase):
+    S = ScoringTest.S
+    ENV = snap([pair("itsm", "snow:incident")])
+
+    def assess(self, spl):
+        from splunk_ucm.readiness.service import ReadinessSettings, assess_use_case
+        from unit.test_normalizer import FenreNormalizerTest
+        FenreNormalizerTest.setUpClass()
+        uc = FenreNormalizerTest("test_deterministic").normalize("9.1.1", lambda r: r.update(spl=spl, requiredFields=[], splunkbaseApps=[],
+                                                        cimModels=[], premiumApps=[]))
+        doc = assess_use_case(uc, self.ENV, ReadinessSettings())
+        return doc, {r["value"]: r for r in doc["results"] if r["type"] == "sourcetype"}
+
+    def test_or_and_in_with_one_present_are_met(self):
+        for spl in ("index=itsm (sourcetype=snow:incident OR sourcetype=snow:sc_req_item) | stats count",
+                    'index=itsm sourcetype IN ("snow:incident", "snow:sc_req_item") | stats count'):
+            doc, st = self.assess(spl)
+            self.assertEqual(st["snow:sc_req_item"]["any_of"], ["snow:incident", "snow:sc_req_item"], spl)
+            self.assertTrue(st["snow:sc_req_item"]["collapsed"])
+            self.assertEqual((st["snow:sc_req_item"]["status"], st["snow:incident"]["status"]), (NOT_MET, MET))
+            self.assertEqual(doc["gaps"], [], spl)
+
+    def test_join_append_multisearch_stay_all_of(self):
+        for spl in ("index=itsm sourcetype=snow:incident | join n [search index=x sourcetype=snow:sc_req_item]",
+                    "index=itsm sourcetype=snow:incident | append [search index=x sourcetype=snow:sc_req_item]",
+                    "| multisearch [search sourcetype=snow:incident] [search sourcetype=snow:sc_req_item]"):
+            doc, st = self.assess(spl)
+            self.assertNotIn("any_of", st["snow:sc_req_item"], spl)
+            self.assertEqual([g["value"] for g in doc["gaps"]], ["snow:sc_req_item"], spl)
+
+    def test_group_with_no_member_present_is_one_gap(self):
+        doc, st = self.assess("index=ot (sourcetype=modbus:traffic OR sourcetype=dnp3:traffic) | stats count")
+        self.assertEqual([g["value"] for g in doc["gaps"]], ["any of modbus:traffic, dnp3:traffic"])
+
+    def test_alternative_to_a_sole_sourcetype_is_recommended(self):
+        doc, st = self.assess("index=a sourcetype=snow:incident OR sourcetype=x:y "
+                              "| append [search sourcetype=snow:incident]")
+        self.assertEqual((st["x:y"]["level"], st["snow:incident"]["level"]), ("recommended", "required"))
+        self.assertNotIn("any_of", st["x:y"])
+
+    def test_unverified_member_beats_missing_one(self):
+        results = [dict(scored(NOT_MET), req_id="a", value="a", any_of=["a", "b"]),
+                   dict(scored(UNVERIFIED), req_id="b", value="b", any_of=["a", "b"])]
+        out = score(results, self.S)
+        self.assertEqual(out["gaps"], [])
+        self.assertTrue(results[0]["collapsed"])
 
 
 def discovered_store():

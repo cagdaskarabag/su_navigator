@@ -323,9 +323,18 @@ class FenreNormalizer(Normalizer):
             for v in primary.sourcetypes:
                 if v.negated:
                     continue
-                add(Requirement(_req_id("sourcetype", v.value), "sourcetype", v.value, "required",
-                                "derived_spl", "low" if v.wildcard else "medium",
-                                "extracted from SPL" + (" (wildcard)" if v.wildcard else "")))
+                note = "extracted from SPL" + (" (wildcard)" if v.wildcard else "")
+                group = next((g for g in primary.sourcetype_groups if v.value in g), None)
+                level, attrs = "required", {}
+                if group and v.value not in primary.sole_sourcetypes:
+                    sole = [g for g in group if g in primary.sole_sourcetypes]
+                    if sole:
+                        level, note = "recommended", note + "; alternative to " + ", ".join(sole)
+                    else:
+                        attrs = {"any_of": group}
+                        note += "; any of " + ", ".join(group)
+                add(Requirement(_req_id("sourcetype", v.value), "sourcetype", v.value, level,
+                                "derived_spl", "low" if v.wildcard else "medium", note, attrs))
             for v in primary.indexes:
                 if v.negated:
                     continue

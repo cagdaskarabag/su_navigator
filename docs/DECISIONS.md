@@ -536,3 +536,24 @@ as drift.
   records, so the next readiness run uses the new requirements.
 * Corpus delta: false `not_met` from derived fields 19 → 0; ready cases
   falsely not ready 9 → 2 (the two OR / IN sourcetype cases, T-07).
+
+## D-041 Alternative sourcetypes in one search clause are an any-of group
+*0.7.3 (T-07, finding F-03). Readiness engine `ucm.readiness/2`.*
+* An event has one sourcetype, so several positive sourcetype constraints in
+  one search clause (`sourcetype=A OR sourcetype=B`, `sourcetype IN (A, B)`,
+  also inside `tstats … where`) can only be alternatives. Clauses in
+  subsearches, `join`, `append` and `multisearch` are separate: each of their
+  sourcetypes is needed (all-of).
+* The normalizer gives each member the attribute `any_of: [A, B]`. If a member
+  is also the only sourcetype of another clause, it stays required on its own
+  and the other members become `recommended` ("alternative to …").
+* Scoring collapses a group to its best member (met > partial > unverified >
+  unknown > not_applicable > not_met). The others are marked `collapsed` and
+  are left out of the score, counts and gaps. A group with no member present is
+  one gap, "any of A, B".
+* Static analysis only: groups built by macros, eventtypes or tags are not
+  recognised. `NOT sourcetype IN (…)` is not detected as negated (existing
+  limitation of the analyser).
+* Corpus delta: OR / IN cases falsely not ready 2 → 0; every metric is now 0.
+  The none-present OR case scores 50 instead of 33 (still `partially_ready`,
+  not ready).

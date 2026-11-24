@@ -5,7 +5,7 @@
     "requirements": 74,
     "false_not_met": {
       "derived": 0,
-      "alternative": 2,
+      "alternative": 0,
       "present": 0
     },
     "true_not_met": 8,
@@ -16,10 +16,7 @@
       "alternative": 0,
       "missing": 1
     },
-    "false_not_ready": [
-      "90.1.7",
-      "90.1.8"
-    ],
+    "false_not_ready": [],
     "false_ready": []
   }
 }

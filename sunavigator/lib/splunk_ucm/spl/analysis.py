@@ -91,6 +91,10 @@ class SplAnalysis:
     warnings: List[str] = dataclasses.field(default_factory=list)
     # name -> {"command": first producing command, "read_before": the name is read earlier}
     produced_fields: Dict[str, Dict[str, object]] = dataclasses.field(default_factory=dict)
+    # Positive sourcetypes that are alternatives within one search clause (D-041).
+    # A value that is also the only sourcetype of another clause is in ``sole_sourcetypes``.
+    sourcetype_groups: List[List[str]] = dataclasses.field(default_factory=list)
+    sole_sourcetypes: List[str] = dataclasses.field(default_factory=list)
 
     def positive(self, attr: str) -> List[str]:
         return _uniq(v.value for v in getattr(self, attr) if not v.negated)
@@ -292,6 +296,14 @@ def analyze(spl: str) -> SplAnalysis:
     buckets: Dict[str, List[ExtractedValue]] = {
         "index": result.indexes, "sourcetype": result.sourcetypes, "source": result.sources,
     }
+    by_segment: Dict[int, List[str]] = {}
+
+    def segment_of(pos: int) -> int:
+        for i, (s, e, _) in enumerate(segments):
+            if s <= pos < e:
+                return i
+        return -1
+
     for m in _KV.finditer(masked):
         field = m.group(1).lower()
         op = m.group(2)
@@ -302,6 +314,8 @@ def analyze(spl: str) -> SplAnalysis:
         negated = op == "!=" or bool(_NOT_BEFORE.search(prefix))
         if field in buckets:
             buckets[field].append(ExtractedValue(value, "*" in value, negated))
+            if field == "sourcetype" and not negated:
+                by_segment.setdefault(segment_of(m.start()), []).append(value)
         elif field == "eventtype" and not negated:
             result.eventtypes.append(value)
         elif field == "tag" and not negated:
@@ -313,9 +327,19 @@ def analyze(spl: str) -> SplAnalysis:
             item = item.strip().strip('"')
             if item:
                 buckets[field].append(ExtractedValue(item, "*" in item))
+                if field == "sourcetype":
+                    by_segment.setdefault(segment_of(m.start()), []).append(item)
     for m in _DATAMODEL_ARG.finditer(masked):
         result.datamodels.append(m.group(1) + ("." + m.group(2) if m.group(2) else ""))
 
+    for idx in sorted(by_segment):
+        values = _uniq(by_segment[idx])
+        if len(values) > 1:
+            if values not in result.sourcetype_groups:
+                result.sourcetype_groups.append(values)
+        else:
+            result.sole_sourcetypes.append(values[0])
+    result.sole_sourcetypes = _uniq(result.sole_sourcetypes)
     result.datamodels = _uniq(result.datamodels)
     result.eventtypes = _uniq(result.eventtypes)
     result.tags = _uniq(result.tags)

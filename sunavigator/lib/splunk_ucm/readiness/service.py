@@ -55,10 +55,13 @@ def assess_use_case(uc: UseCase, snap: EnvironmentSnapshot, settings: ReadinessS
     for req in _requirements(uc):
         r = dataclasses.asdict(req)
         ev = evaluate(r, snap, settings.evaluation, uc.content_id, uc.key)
-        results.append({
+        row = {
             "req_id": req.req_id, "type": req.type, "value": req.value, "level": req.level,
             "source": req.source, "confidence": req.confidence, **ev,
-        })
+        }
+        if req.attributes.get("any_of"):
+            row["any_of"] = list(req.attributes["any_of"])
+        results.append(row)
     summary = score(results, settings.scoring)
     return {
         "_key": uc.key, "doc_schema": DOC_SCHEMA, "content_id": uc.content_id,
