@@ -80,6 +80,38 @@ class ClassifyTest(unittest.TestCase):
         self.assertEqual(classify("index=main | `run_model`", p, exists=lambda n: False).unknown, ["apply"])
 
 
+COMMAND_TABLE = [
+    ("read_only", c) for c in (
+        "stats", "eval", "where", "table", "fields", "rename", "rex", "spath", "lookup", "inputlookup",
+        "tstats", "mstats", "datamodel", "timechart", "chart", "eventstats", "streamstats", "dedup", "sort",
+        "head", "tail", "top", "rare", "bin", "fillnull", "makemv", "mvexpand", "transaction", "join",
+        "append", "appendcols", "appendpipe", "union", "multisearch", "foreach", "iplocation", "metadata",
+        "dbinspect", "fieldsummary", "makeresults", "tojson", "fromjson", "xyseries", "untable", "convert",
+        "addtotals", "predict", "localize", "regex", "search", "return", "format", "geostats", "walklex",
+    )
+] + [
+    ("side_effect", c) for c in (
+        "outputlookup", "outputcsv", "collect", "mcollect", "meventcollect", "tscollect", "sendemail",
+        "sendalert", "delete", "script", "run", "sendresults", "summaryindex", "dbxoutput", "runshellscript",
+        "deletemodel", "dump", "crawl", "outputtelemetry",
+    )
+] + [
+    ("indirect", c) for c in ("map", "savedsearch", "loadjob", "rest", "dbxquery", "dbxlookup", "dbxinputs")
+] + [
+    ("unknown", c) for c in ("apply", "fit", "summary", "cyberchef", "ldapsearch", "relative_entropy")
+]
+
+
+class CommandTableTest(unittest.TestCase):
+    def test_classification_table(self):
+        self.assertGreaterEqual(len(COMMAND_TABLE), 60)
+        for expected, cmd in COMMAND_TABLE:
+            p = classify("| makeresults | %s x" % cmd)
+            got = ("side_effect" if cmd in p.side_effects else "indirect" if cmd in p.indirect
+                   else "unknown" if cmd in p.unknown else "read_only")
+            self.assertEqual(got, expected, cmd)
+
+
 class CommandExistsTest(unittest.TestCase):
     class Client:
         def __init__(self, known):

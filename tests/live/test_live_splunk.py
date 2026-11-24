@@ -143,6 +143,29 @@ class LiveOneshotContractTest(unittest.TestCase):
         finally:
             t.request("DELETE", base + "/" + name)
 
+    def test_map_probe_is_refused_and_writes_nothing(self):
+        import json as _json
+        from splunk_ucm.audit import AuditService
+        from splunk_ucm.errors import ValidationError
+        from splunk_ucm.platform.search import SearchClient
+        from splunk_ucm.storage.repositories import encode_raw
+        from splunk_ucm.validation.service import ValidationService
+        from unit.test_discovery import loaded_catalog
+        t = transport()
+        lookup = "sun_t02_probe_%s.csv" % uuid.uuid4().hex[:6]
+        store = loaded_catalog()
+        doc = store.get(C.CONTENT, "fenre_UC-9.1.1")
+        raw = _json.loads(doc["raw_json"])
+        raw["spl"] = '| makeresults | map search="| makeresults | outputlookup %s"' % lookup
+        doc["raw_json"] = encode_raw(raw)
+        store.upsert(C.CONTENT, doc)
+        svc = ValidationService(store, AuditService(store), SearchClient(t))
+        with self.assertRaises(ValidationError) as cm:
+            svc.preview("fenre:UC-9.1.1", "live")
+        self.assertEqual(cm.exception.details["indirect"], ["map"])
+        status, _ = t.request("GET", "/servicesNS/nobody/sunavigator/data/lookup-table-files/" + lookup, None, None)
+        self.assertEqual(status, 404)
+
     def test_event_search_truncation(self):
         from splunk_ucm.platform.search import SearchClient
         cut = SearchClient(transport()).preview("search index=_internal", max_count=5, earliest="-24h")
