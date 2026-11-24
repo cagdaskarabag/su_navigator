@@ -42,6 +42,7 @@ DEFAULT_CONF = os.path.join(ROOT, "sunavigator", "default", "ucm.conf")
 EVENT_SPAN = 7 * 86400
 _UNITS = {"s": 1, "m": 60, "h": 3600, "d": 86400, "w": 604800}
 _PAIR = re.compile(r'index=(\S+) sourcetype="([^"]+)"')
+_FIELDS = re.compile(r"\| fields sun_sample_marker ([^|]*)\| fieldsummary")
 
 
 def load_corpus():
@@ -117,8 +118,11 @@ class CorpusSearch:
         last = self.now - pair["last_age"]
         if self._time(earliest) > last or self._time(latest) < last - EVENT_SPAN:
             return SearchResult([], [], False)
-        fields = list(pair["fields"]) + ["_time", "host", "source", "sourcetype"]
-        rows = [{"field": f, "count": "50", "values": '[{"value":"v","count":50}]'} for f in fields]
+        held = set(pair["fields"]) | {"host", "source", "sourcetype"}
+        wanted = _FIELDS.search(search)
+        names = re.findall(r'"([^"]+)"', wanted.group(1)) if wanted else sorted(held)
+        rows = [{"field": "sun_sample_marker", "count": "50", "values": "[]"}] if wanted else []
+        rows += [{"field": f, "count": "50", "values": '[{"value":"v","count":50}]'} for f in names if f in held]
         return SearchResult(rows[:max_count], [], len(rows) > max_count)
 
 

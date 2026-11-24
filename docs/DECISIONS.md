@@ -263,6 +263,22 @@ imported pipeline is never used for sampling. Presence updates readiness
 `unverified`. `spl_validity` is injected at assessment time for use cases
 that have primary SPL (not stored in the provider record).
 
+**Amendment (T-06).** The sample is
+`| search index=… sourcetype="…" | head N | eval sun_sample_marker=1 | fields sun_sample_marker "<f1>" … | fieldsummary`.
+- The time window is the `[validation] sample_window_minutes` (default 60)
+  that ends at the newest event discovery recorded for the pair, so a
+  sourcetype that last sent data hours ago is sampled where its events are.
+  A pair without a recorded last event falls back to `[validation] earliest/latest`.
+- `fields` restricts the summary to the requested fields (names validated
+  against `[\w.\-]{1,100}`), so the result has at most one row per field and
+  cannot be truncated by unrelated fields. `fields` hides `_time` from
+  `fieldsummary`; the marker field counts the sampled events instead.
+- A field is `not_met` (`sampled_absent`) only when at least one pair returned
+  a complete sample that held events. A window with no events gives
+  `unverified` / `sample_empty`, like `sample_truncated` and `sample_failed`.
+Measured on 10.2.9: an idle test sourcetype three hours old reads
+`sample_empty` with the old 15-minute window and `present` with the anchored one.
+
 ## D-028 Deployed searches are owned by the deploying user
 **Context.** Saved searches created through `/servicesNS/nobody/<app>/saved/searches`
 are owned by the caller (verified on 10.2.9). Changing the owner to `nobody`

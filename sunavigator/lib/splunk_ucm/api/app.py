@@ -171,6 +171,7 @@ class Context:
             preview_timeout=cfg.get_int("validation", "preview_timeout_seconds", 30, 5, 120),
             sample_events=cfg.get_int("validation", "sample_events", 200, 10, 1000),
             sample_timeout=cfg.get_int("validation", "sample_timeout_seconds", 30, 5, 120),
+            sample_window_minutes=cfg.get_int("validation", "sample_window_minutes", 60, 1, 10080),
             extra_safe_commands=parse_extra_safe(cfg.get("spl", "extra_safe_commands", "")))
         return ValidationService(self.records(), self.audit, SearchClient(self.user_transport),
                                  settings, self.readiness_service())

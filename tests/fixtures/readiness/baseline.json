@@ -6,7 +6,7 @@
     "false_not_met": {
       "derived": 19,
       "alternative": 2,
-      "present": 2
+      "present": 0
     },
     "true_not_met": 8,
     "missing_not_flagged": 0,
@@ -25,7 +25,6 @@
       "90.1.6",
       "90.1.7",
       "90.1.8",
-      "90.1.14",
       "90.1.17"
     ],
     "false_ready": []

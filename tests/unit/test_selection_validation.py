@@ -24,8 +24,8 @@ class FakeParser:
         self.ok = ok
         self.commands = commands or ["search", "stats"]
         self.error = error
-        self.field_rows = field_rows or [
-            {"field": "_time", "count": "12", "values": "[]"},
+        self.field_rows = field_rows if field_rows is not None else [
+            {"field": "sun_sample_marker", "count": "12", "values": "[]"},
             {"field": "host", "count": "12", "values": '[{"value":"idx","count":12}]'},
         ]
         self.preview_rows = preview_rows or [{"host": "h1", "count": "1"}]
@@ -50,6 +50,7 @@ class FakeParser:
 
     def oneshot(self, search, timeout=30, max_count=50, earliest="", latest=""):
         self.oneshot_calls.append(search)
+        self.oneshot_windows = getattr(self, "oneshot_windows", []) + [(earliest, latest)]
         if not search.startswith("|"):
             raise ValidationError("only generating searches are permitted")
         if self.field_error:
@@ -189,6 +190,40 @@ class FieldSampleCompletenessTest(unittest.TestCase):
         res = evaluate({"type": "field", "value": "user"}, snap, EvaluationSettings(), "c", "k")
         self.assertEqual((res["status"], res["code"]), (UNVERIFIED, "sample_truncated"))
         self.assertIn("truncated", res["detail"])
+
+    def test_empty_sample_is_not_absence(self):
+        self.search.field_rows = []
+        out = self.sample()
+        self.assertEqual((out["user"]["sampled"], out["user"]["reason"]), (False, "sample_empty"))
+        self.assertEqual(out["host"]["reason"], "sample_empty")
+        snap = EnvironmentSnapshot([], [], {"last_completed_at": "t"}, [{
+            "_key": "k", "content_id": "c", "field_samples": [out["user"]]}])
+        res = evaluate({"type": "field", "value": "user"}, snap, EvaluationSettings(), "c", "k")
+        self.assertEqual((res["status"], res["code"]), (UNVERIFIED, "sample_empty"))
+
+    def test_events_without_requested_fields_show_absence(self):
+        self.search.field_rows = [{"field": "sun_sample_marker", "count": "40", "values": "[]"}]
+        out = self.sample()
+        self.assertEqual((out["user"]["sampled"], out["user"]["present"]), (True, False))
+
+    def test_window_ends_at_the_pairs_newest_event(self):
+        from splunk_ucm.discovery.keys import source_key
+        self.store.upsert(C.ENVIRONMENT_SOURCES, {
+            "_key": source_key("pair", "wineventlog", "st_a"), "kind": "pair", "status": "active",
+            "index": "wineventlog", "sourcetype": "st_a", "window_count": 10, "last_time": 1795000000})
+        self.sample()
+        self.assertEqual(self.search.oneshot_windows[-1], (str(1795000000 - 3600), "1795000001"))
+
+    def test_window_falls_back_without_last_time(self):
+        self.sample()
+        self.assertEqual(self.search.oneshot_windows[-1], ("-15m", "now"))
+
+    def test_summary_is_restricted_to_requested_fields(self):
+        self.svc._sample(["host", "Authentication.user", "bad field", "sun_sample_marker"], ["st_a"])
+        spl = self.search.oneshot_calls[-1]
+        self.assertIn('| eval sun_sample_marker=1 | fields sun_sample_marker "host" "Authentication.user" '
+                      '| fieldsummary', spl)
+        self.assertNotIn("bad field", spl)
 
     def test_failed_sample_is_not_absence(self):
         from splunk_ucm.errors import UnsupportedOperation

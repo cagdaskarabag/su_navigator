@@ -434,7 +434,8 @@ the same page, with `ucm_run_discovery`:
 
 - **Validate** — Splunk's search parser, in the `sunavigator` namespace, plus optional field sample
   (`fieldsummary` over discovered index/sourcetype pairs, not the imported
-  pipeline).
+  pipeline). The sample reads the hour (`[validation] sample_window_minutes`)
+  before the newest event discovery saw for each pair.
 - **Preview** — dispatches the imported SPL only after a successful parse
   and a side-effect gate. Time range is forced to `[validation] earliest/latest`
   (default `-15m` → `now`) and `preview_max_events` (default 50). Event
@@ -860,8 +861,10 @@ run found more index/sourcetype pairs than `[discovery] max_pairs`
 (default 5000). Pairs beyond the limit are not in the inventory, and that run
 marked nothing missing. Raise `max_pairs` (at most 20000) in
 `local/ucm.conf`, or narrow the window, and run discovery again. Fields
-shown as `sample_truncated` or `sample_failed` are unverified, not absent;
-run **Validate** again once the sourcetype has data.
+shown as `sample_truncated`, `sample_failed` or `sample_empty` are
+unverified, not absent. `sample_empty` means the sampled window held no
+events: run discovery again so the newest event time is current, then
+**Validate**.
 
 ### 9.8 No Approve button on a pending deployment
 

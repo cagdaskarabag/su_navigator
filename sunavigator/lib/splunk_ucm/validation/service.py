@@ -30,13 +30,16 @@ from ..util import utc_now_iso
 
 _SOURCETYPE = re.compile(r"^[\w:.\-]{1,100}$")
 _FIELD = re.compile(r"^[\w.\-]{1,100}$")
+SAMPLE_MARKER = "sun_sample_marker"
 
 
 class ValidationSettings:
     def __init__(self, earliest: str = "-15m", latest: str = "now", preview_max: int = 50,
                  preview_timeout: int = 30, sample_events: int = 200, sample_timeout: int = 30,
-                 max_pairs: int = 3, extra_safe_commands: Sequence[str] = ()):
+                 max_pairs: int = 3, extra_safe_commands: Sequence[str] = (),
+                 sample_window_minutes: int = 60):
         self.extra_safe_commands = tuple(extra_safe_commands)
+        self.sample_window_minutes = sample_window_minutes
         self.earliest = earliest
         self.latest = latest
         self.preview_max = preview_max
@@ -44,6 +47,13 @@ class ValidationSettings:
         self.sample_events = sample_events
         self.sample_timeout = sample_timeout
         self.max_pairs = max_pairs
+
+
+def _count(row: Dict[str, Any]) -> int:
+    try:
+        return int(float(row.get("count") or 0))
+    except (TypeError, ValueError):
+        return 0
 
 
 def _time(value: str, name: str) -> str:
@@ -194,8 +204,18 @@ class ValidationService:
         doc["unknown_commands"] = policy.unknown
         doc["review_commands"] = policy.review
 
+    def _window(self, last_time: Any) -> Tuple[str, str]:
+        """Sample the hour (``sample_window_minutes``) before the pair's newest event seen by
+        discovery, so idle sourcetypes are sampled where their events are."""
+        try:
+            last = int(last_time)
+        except (TypeError, ValueError):
+            return self.settings.earliest, self.settings.latest
+        return str(last - self.settings.sample_window_minutes * 60), str(last + 1)
+
     def _sample(self, fields: List[str], sourcetypes: List[str]) -> List[Dict[str, Any]]:
-        pairs: List[Tuple[str, str]] = []
+        fields = [f for f in fields if _FIELD.match(f) and f != SAMPLE_MARKER]
+        pairs: List[Tuple[str, str, Any]] = []
         for st in sourcetypes:
             if not _SOURCETYPE.match(st):
                 continue
@@ -203,13 +223,13 @@ class ValidationService:
                     C.ENVIRONMENT_SOURCES,
                     {"kind": "pair", "status": "active", "sourcetype": st},
                     sort=[("window_count", -1)], limit=self.settings.max_pairs,
-                    fields=["index", "sourcetype"]):
+                    fields=["index", "sourcetype", "last_time"]):
                 idx = row.get("index") or ""
                 try:
                     validate_index_name(idx)
                 except ValidationError:
                     continue
-                pairs.append((idx, st))
+                pairs.append((idx, st, row.get("last_time")))
             if len(pairs) >= self.settings.max_pairs:
                 break
         if not pairs:
@@ -217,29 +237,31 @@ class ValidationService:
                     for f in fields]
         counts: Dict[str, int] = {f: 0 for f in fields}
         observed: Dict[str, Dict[str, Any]] = {}
-        complete = truncated = 0
-        for index, st in pairs[: self.settings.max_pairs]:
-            spl = '| search index=%s sourcetype="%s" | head %d | fieldsummary maxvals=5' % (
-                index, st.replace('"', ""), self.settings.sample_events)
+        complete = truncated = empty = 0
+        wanted = " ".join('"%s"' % f for f in fields)
+        for index, st, last_time in pairs[: self.settings.max_pairs]:
+            spl = '| search index=%s sourcetype="%s" | head %d | eval %s=1 | fields %s %s | fieldsummary maxvals=5' % (
+                index, st.replace('"', ""), self.settings.sample_events, SAMPLE_MARKER, SAMPLE_MARKER, wanted)
+            earliest, latest = self._window(last_time)
             try:
                 result = self.search.oneshot(
-                    spl, timeout=float(self.settings.sample_timeout),
-                    max_count=max(50, len(fields) * 20),
-                    earliest=self.settings.earliest, latest=self.settings.latest)
+                    spl, timeout=float(self.settings.sample_timeout), max_count=len(fields) + 2,
+                    earliest=earliest, latest=latest)
             except (UnsupportedOperation, ValidationError):
                 continue
+            events = sum(_count(r) for r in result.rows if r.get("field") == SAMPLE_MARKER)
             if result.truncated:
                 truncated += 1
+            elif events == 0:
+                empty += 1
+                continue
             else:
                 complete += 1
             for row in result.rows:
                 name = str(row.get("field") or "")
                 if name not in counts:
                     continue
-                try:
-                    n = int(float(row.get("count") or 0))
-                except (TypeError, ValueError):
-                    n = 0
+                n = _count(row)
                 counts[name] += n
                 if n and name not in observed:
                     values = row.get("values") or "[]"
@@ -260,9 +282,9 @@ class ValidationService:
         for f in fields:
             hit = observed.get(f)
             if counts[f] == 0 and not complete:
-                # Only a complete sample can show a field is absent.
-                out.append({"field": f, "present": False, "sampled": False,
-                            "reason": "sample_truncated" if truncated else "sample_failed"})
+                # Only a complete sample that held events can show a field is absent.
+                reason = "sample_truncated" if truncated else ("sample_empty" if empty else "sample_failed")
+                out.append({"field": f, "present": False, "sampled": False, "reason": reason})
                 continue
             out.append({
                 "field": f, "present": counts[f] > 0, "sampled": True, "count": counts[f],

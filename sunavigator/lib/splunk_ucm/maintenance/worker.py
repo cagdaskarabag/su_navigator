@@ -41,7 +41,7 @@ class MaintenanceWorker:
     def run_once(self) -> Dict[str, Any]:
         if self.is_leader() is False:
             return {"action": "skipped", "reason": "not_shc_captain"}
-        if self.migrations.pending():
+        if self.migrations.outdated():
             results = self.migrations.run()
             for r in results:
                 self.audit.record("system", "app.migration", "app", r["id"], details=r["details"])

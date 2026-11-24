@@ -159,6 +159,15 @@ class MigrationTest(unittest.TestCase):
         state = store.get(C.SYNC_STATE, STATE_KEY)
         self.assertEqual((state["previous_app_version"], state["app_version"]), ("0.4.0", __version__))
 
+    def test_worker_records_upgrade_without_pending_migrations(self):
+        store = InMemoryStore()
+        store.upsert(C.SYNC_STATE, {"_key": STATE_KEY, "doc_type": "app_state", "applied": [m[0] for m in MIGRATIONS],
+                                    "app_version": "0.4.0"})
+        worker = MaintenanceWorker(store, AppConfig({}), lambda: None, lambda: NOW, lambda: EPOCH)
+        self.assertEqual(worker.run_once(), {"action": "ran", "job": "migrations", "applied": []})
+        self.assertEqual(store.get(C.SYNC_STATE, STATE_KEY)["app_version"], __version__)
+        self.assertFalse(worker.migrations.outdated())
+
 
 class RetentionTest(unittest.TestCase):
     def seed(self):

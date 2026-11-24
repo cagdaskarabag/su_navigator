@@ -290,6 +290,8 @@ def eval_spl_validity(req, snap: EnvironmentSnapshot, settings: EvaluationSettin
 _UNSAMPLED_DETAIL = {
     "sample_truncated": "The sample result was truncated, so absence of this field is not evidence.",
     "sample_failed": "The sample search failed for every matching sourcetype.",
+    "sample_empty": "The sample window before the newest discovered event held no events, so absence of this "
+                    "field is not evidence.",
 }
 
 

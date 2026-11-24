@@ -45,6 +45,9 @@ class MigrationRunner:
         applied = set(self.state().get("applied") or [])
         return [mid for mid, _, _ in MIGRATIONS if mid not in applied]
 
+    def outdated(self) -> bool:
+        return bool(self.pending()) or self.state().get("app_version") != __version__
+
     def run(self) -> List[Dict[str, Any]]:
         state = self.state()
         applied = list(state.get("applied") or [])

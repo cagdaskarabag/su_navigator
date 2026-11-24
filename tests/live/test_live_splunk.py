@@ -166,6 +166,50 @@ class LiveOneshotContractTest(unittest.TestCase):
         status, _ = t.request("GET", "/servicesNS/nobody/sunavigator/data/lookup-table-files/" + lookup, None, None)
         self.assertEqual(status, 404)
 
+    def test_idle_sourcetype_sampled_at_its_newest_event(self):
+        """Indexes three events three hours old into main under a unique test sourcetype."""
+        from datetime import datetime, timezone
+        from splunk_ucm.audit import AuditService
+        from splunk_ucm.discovery.keys import source_key
+        from splunk_ucm.platform.search import SearchClient
+        from splunk_ucm.storage.kvstore import InMemoryStore
+        from splunk_ucm.validation.service import ValidationService
+        t = transport()
+        st = "sun:idle:" + uuid.uuid4().hex[:8]
+        stamp = datetime.fromtimestamp(time.time() - 3 * 3600, timezone.utc).strftime("%Y-%m-%dT%H:%M:%S+00:00")
+        for i in range(3):
+            import urllib.parse
+            import urllib.request
+            query = urllib.parse.urlencode({"index": "main", "sourcetype": st, "host": "sun-live"})
+            req = urllib.request.Request(URL + "/services/receivers/simple?" + query, method="POST",
+                                         data=("%s user=u%d action=login" % (stamp, i)).encode(),
+                                         headers={"Authorization": t._auth})
+            with urllib.request.urlopen(req, context=t._ctx, timeout=60) as resp:  # nosec - test target
+                self.assertEqual(resp.status, 200)
+        client = SearchClient(t)
+        last = None
+        for _ in range(30):
+            rows = client.oneshot('| tstats max(_time) as last where index=main sourcetype="%s"' % st,
+                                  earliest="-1d").rows
+            if rows and rows[0].get("last"):
+                last = int(float(rows[0]["last"]))
+                break
+            time.sleep(2)
+        self.assertIsNotNone(last, "test events were not indexed")
+        self.assertLess(last, time.time() - 2 * 3600)
+        store = InMemoryStore()
+        pair = {"_key": source_key("pair", "main", st), "kind": "pair", "status": "active",
+                "index": "main", "sourcetype": st, "window_count": 3}
+        svc = ValidationService(store, AuditService(store), client)
+        store.upsert(C.ENVIRONMENT_SOURCES, pair)
+        out = {r["field"]: r for r in svc._sample(["user", "action", "sun_no_such_field"], [st])}
+        self.assertEqual(out["user"]["reason"], "sample_empty")
+        store.upsert(C.ENVIRONMENT_SOURCES, dict(pair, last_time=last))
+        out = {r["field"]: r for r in svc._sample(["user", "action", "sun_no_such_field"], [st])}
+        self.assertEqual((out["user"]["present"], out["user"]["count"]), (True, 3))
+        self.assertTrue(out["action"]["present"])
+        self.assertEqual((out["sun_no_such_field"]["sampled"], out["sun_no_such_field"]["present"]), (True, False))
+
     def test_event_search_truncation(self):
         from splunk_ucm.platform.search import SearchClient
         cut = SearchClient(transport()).preview("search index=_internal", max_count=5, earliest="-24h")
@@ -214,7 +258,11 @@ class LiveWritePathTest(unittest.TestCase):
                            body={"kind": "sourcetype", "value": "sun_live_st", "canonical_value": "WinEventLog"})
         self.assertEqual(status, 200, body)
         status, body = api(self.analyst, "POST", "readiness", body={})
-        self.assertEqual(status, 202, body)
+        if status == 400:
+            # The worker may have queued a readiness job after an earlier sync; the write itself was allowed.
+            self.assertIn("already queued or running", body["error"]["message"])
+        else:
+            self.assertEqual(status, 202, body)
         status, body = api(self.analyst, "POST", "readiness/assess", body={"id": uc})
         self.assertIn(status, (200, 400), body)
 

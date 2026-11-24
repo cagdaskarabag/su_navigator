@@ -65,13 +65,18 @@ job_timeout_seconds = <integer>
 
 [validation]
 earliest = <relative-time>
-* Forced earliest bound for preview and field sampling. Default -15m.
+* Forced earliest bound for preview, and for field sampling of a pair discovery
+* recorded no last event time for. Default -15m.
 latest = <relative-time>
 preview_max_events = <integer>
 preview_timeout_seconds = <integer>
 sample_events = <integer>
 * Events read per index/sourcetype pair for fieldsummary. Default 200.
 sample_timeout_seconds = <integer>
+sample_window_minutes = <integer 1-10080>
+* Field sampling reads the window of this length that ends at the newest event discovery
+* saw for each index/sourcetype pair, so idle sourcetypes are sampled where their events
+* are. A window with no events leaves fields unverified rather than absent. Default 60.
 
 [spl]
 extra_safe_commands = <comma-separated command names>
