@@ -167,10 +167,11 @@ class MigrationTest(unittest.TestCase):
         store.upsert(C.SYNC_STATE, {"_key": STATE_KEY, "doc_type": "app_state", "app_version": "0.7.1",
                                     "applied": [MIGRATIONS[0][0]]})
         runner = MigrationRunner(store, lambda: "t")
-        self.assertEqual(runner.pending(), ["0002_normalizer_" + NORMALIZER_VERSION])
+        self.assertEqual(runner.pending(), ["0002_normalizer_" + NORMALIZER_VERSION, "0003_catalog_facets_v2"])
         results = runner.run()
         self.assertEqual(results[0]["details"]["reindexed"], store.count(C.CATALOG))
         self.assertEqual(store.count(C.CATALOG, {"normalizer_version": NORMALIZER_VERSION}), store.count(C.CATALOG))
+        self.assertEqual(store.get(C.SYNC_STATE, "catalog::facets")["facets_version"], 2)
         self.assertEqual(runner.run(), [])
 
     def test_fresh_install_marks_not_needed(self):

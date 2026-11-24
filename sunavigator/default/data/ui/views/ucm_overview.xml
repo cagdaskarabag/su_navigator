@@ -1,6 +1,14 @@
-<dashboard version="1.1" theme="light" stylesheet="ucm.css">
+<dashboard version="1.1" theme="light" script="ucm_overview.js" stylesheet="ucm.css">
   <label>Overview</label>
   <description>Content imported into this Splunk deployment. Figures come from the local catalogue, not from the remote provider.</description>
+  <row>
+    <panel>
+      <title>Key figures</title>
+      <html>
+        <div id="ucm-overview-kpis" class="ucm-root"><div class="ucm-loading">Loading…</div></div>
+      </html>
+    </panel>
+  </row>
   <row>
     <panel>
       <single>

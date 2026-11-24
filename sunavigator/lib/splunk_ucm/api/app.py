@@ -15,7 +15,7 @@ from .. import APP_NAME
 from ..audit import AuditService
 from ..catalog.derived import get_facets
 from ..catalog.detail import UseCaseDetailService
-from ..catalog.query import CatalogFilter, CatalogQueryService
+from ..catalog.query import DEFAULT_MAX_JOIN_KEYS, CatalogFilter, CatalogQueryService
 from ..config import AppConfig, load_config
 from ..content.importer import BundleImportService
 from ..content.fenre.provider import check_ref_name, parse_allowed_refs
@@ -237,12 +237,14 @@ def get_catalog(ctx: Context, req: Request) -> Response:
         q=req.arg("q").strip(), domains=req.args("domain"), category_keys=req.args("category"),
         criticality=req.args("criticality"), difficulty=req.args("difficulty"),
         sourcetype=req.arg("sourcetype").strip(), mitre=req.arg("mitre").strip().upper(),
-        quality=req.args("quality"), review=req.args("review"), regulation=req.arg("regulation").strip(),
+        quality=req.args("quality"), review=req.args("review"), regulation=req.args("regulation"),
+        availability=req.args("availability"), bookmarked=req.arg("bookmarked") == "1",
         provider_status=req.arg("status", "active"), sort=req.arg("sort", "id"),
         offset=_int(req.arg("offset"), 0, "offset"), count=_int(req.arg("count"), 25, "count"),
         with_total=req.arg("total", "1") != "0")
     max_page = ctx.config.get_int("catalog", "max_page_size", 100, 10, 500)
-    return Response(200, CatalogQueryService(ctx.store, max_page).search(f))
+    join_keys = ctx.config.get_int("catalog", "max_join_keys", DEFAULT_MAX_JOIN_KEYS, 1, 5000)
+    return Response(200, CatalogQueryService(ctx.store, max_page, max_join_keys=join_keys).search(f, ctx.user))
 
 
 def get_catalog_facets(ctx: Context, req: Request) -> Response:

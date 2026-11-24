@@ -140,6 +140,59 @@ define(["jquery", "splunk.util"], function ($, splunkUtil) {
         window.history.replaceState(null, "", window.location.pathname + (query ? "?" + query : ""));
     }
 
+    /* "n of d" as a percentage; null when there is nothing to divide by. Values under 10% keep one decimal. */
+    function percent(n, d) {
+        if (!d) { return null; }
+        var p = 100 * n / d;
+        return (p > 0 && p < 10 ? p.toFixed(1) : String(Math.round(p))) + "%";
+    }
+
+    /*
+     * One KPI card. Every card states the figures it is made of (detail) and how it is calculated (how),
+     * so that a percentage never stands alone. A null value renders as a dash with the reason in detail.
+     */
+    function kpiCard(k) {
+        var value = k.value === null || k.value === undefined ? "–" : k.value;
+        return el("div", { "class": "ucm-card ucm-kpi", title: k.how },
+            el("div", { "class": "ucm-sub", text: k.label }),
+            el("div", { "class": "ucm-big", text: value }),
+            el("div", { "class": "ucm-sub", text: k.detail || "" }),
+            el("div", { "class": "ucm-sub ucm-kpi-how", text: k.how }));
+    }
+
+    function kpiStrip(list) {
+        return el("div", { "class": "ucm-cards ucm-kpis" }, list.map(kpiCard));
+    }
+
+    /*
+     * The readiness KPIs shared by Overview and Readiness so both pages use the same terms and figures.
+     * activeTotal is the number of active use cases in the catalogue (null when it could not be read);
+     * summary is the readiness/summary response.
+     */
+    function readinessKpis(activeTotal, summary) {
+        var by = (summary && summary.by_state) || {};
+        var assessed = 0;
+        ["ready", "partially_ready", "not_ready", "blocked", "insufficient_evidence"].forEach(function (s) { assessed += by[s] || 0; });
+        var ready = by.ready || 0;
+        var partial = by.partially_ready || 0;
+        var known = activeTotal !== null && activeTotal !== undefined;
+        return [
+            { label: "Assessed", value: known ? percent(assessed, activeTotal) : null,
+                detail: known ? assessed + " of " + activeTotal + " active use cases" : assessed + " assessed; catalogue size unavailable",
+                how: "Use cases with a stored readiness result ÷ active use cases in the catalogue. Not assessed means no result is stored yet." },
+            { label: "Ready", value: percent(ready, assessed),
+                detail: ready + " of " + assessed + " assessed" + (assessed ? "" : " (nothing assessed yet)"),
+                how: "Use cases whose readiness state is ready ÷ assessed use cases. Ready means no blockers, a score at or above the ready threshold and enough coverage. Not verified requirements are left out." },
+            { label: "Ready or partially ready", value: percent(ready + partial, assessed),
+                detail: (ready + partial) + " of " + assessed + " assessed",
+                how: "Use cases in state ready or partially ready ÷ assessed use cases." },
+            { label: "Not ready, blocked or insufficient evidence",
+                value: percent(assessed - ready - partial, assessed),
+                detail: (assessed - ready - partial) + " of " + assessed + " assessed",
+                how: "Assessed use cases that are neither ready nor partially ready ÷ assessed use cases." }
+        ];
+    }
+
     function pager(offset, count, total, hasMore, onPage) {
         var from = total === 0 ? 0 : offset + 1;
         var to = offset + count;
@@ -488,7 +541,7 @@ define(["jquery", "splunk.util"], function ($, splunkUtil) {
         criticalityBadge: criticalityBadge, chips: chips, stateBox: stateBox, queryParams: queryParams,
         setQueryParams: setQueryParams, pager: pager, debounce: debounce, shortSha: shortSha,
         readinessBadge: readinessBadge, statusBadge: statusBadge, helpHeader: helpHeader, legend: legend,
-        selectAll: selectAll, rawGet: rawGet, splCommands: splCommands, splPolicy: splPolicy,
+        selectAll: selectAll, percent: percent, readinessKpis: readinessKpis, kpiCard: kpiCard, kpiStrip: kpiStrip, rawGet: rawGet, splCommands: splCommands, splPolicy: splPolicy,
         searchableSpl: searchableSpl, searchGuard: searchGuard, SIDE_EFFECT_COMMANDS: SIDE_EFFECT_COMMANDS,
         INDIRECT_COMMANDS: INDIRECT_COMMANDS, READINESS_HELP: READINESS_HELP, STATUS_HELP: STATUS_HELP,
         STATUSES: ["met", "partial", "not_met", "unknown", "unverified", "not_applicable"],

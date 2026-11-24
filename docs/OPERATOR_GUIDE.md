@@ -1,10 +1,10 @@
-# SUNavigator 0.8.2 — operator guide
+# SUNavigator 0.8.3 — operator guide
 
 **SUNavigator** (short for **Splunk use case navigator**) discovers, assesses,
 selects, validates and deploys monitoring use cases in Splunk.
 
 This is the install, usage and troubleshooting guide for **SUNavigator
-0.8.2**. It is written for a single Splunk Enterprise instance
+0.8.3**. It is written for a single Splunk Enterprise instance
 (search head + indexer on one host), including a local macOS install. Search
 head clusters and Splunk Cloud are **not** validated in this version.
 
@@ -24,6 +24,24 @@ Related documents (design, not how-to):
 
 The 0.8 line is a usability release. It adds no schema change and no new
 collections. An upgrade from 0.7.3 keeps your data.
+
+### 0.8.3
+
+- **Catalogue filters.** Every facet takes several values: domain, category
+  (grouped under its domain), criticality, difficulty, review status, quality
+  flag and regulation. The new **Availability** facet filters by the readiness
+  state from the last assessment, plus *not assessed*. **Only my bookmarks**
+  shows the use cases you bookmarked (a per-row **Bookmark** button sets it;
+  other users' bookmarks are never included). Facet counts are for the whole
+  catalogue, not for the other filters you have chosen (D-059). Filters are in
+  the page URL, so a filtered view can be bookmarked or shared.
+- **Key figures.** Overview, Readiness and Coverage show percentage cards. Each
+  card states the figures it is made of and how it is calculated (§6.1, §6.4,
+  §6.7).
+- No schema change. On the first background run after the upgrade a migration
+  recomputes the stored catalogue facets (new counts per domain, category,
+  criticality and difficulty); until then the facet request computes them on
+  demand.
 
 ### 0.8.2
 
@@ -176,7 +194,7 @@ commands (`delete`, `outputlookup`, `collect`, script, and similar). Deployed
 searches have **no email, webhook or script alert actions**; the default
 alert mode only writes to Splunk's Triggered Alerts.
 
-**Not in 0.8.2:** PDF export of coverage, a bundled regulation-control
+**Not in 0.8.3:** PDF export of coverage, a bundled regulation-control
 catalogue, validated SHC behaviour, Splunk Cloud vetting submission.
 
 ---
@@ -188,7 +206,7 @@ catalogue, validated SHC behaviour, Splunk Cloud vetting submission.
 | Splunk | Enterprise 10.x (validated on 10.2.9 in development; tested by operators on 10.4.3 Darwin arm64). Python 3.9 or 3.13 in Splunk. |
 | KV Store | Must reach `status: ready`. The app stores catalogue, inventory, readiness, selections, deployments and audit in KV collections. |
 | Role | First-time setup needs `admin` (or `sc_admin` on Cloud). |
-| Disk | The 0.8.2 package is a few megabytes. Category 9 of Fenre is about 120 records; the full Fenre corpus is tens of thousands of records. |
+| Disk | The 0.8.3 package is a few megabytes. Category 9 of Fenre is about 120 records; the full Fenre corpus is tens of thousands of records. |
 | Network | Optional. Remote sync needs HTTPS to `api.github.com` and `raw.githubusercontent.com`. Offline import needs none. |
 | Browser | Splunk Web. The app is a set of Simple XML views plus JavaScript under `/en-US/app/sunavigator/`. |
 
@@ -205,7 +223,7 @@ Placeholders used below:
 
 ```bash
 ./tools/package.sh
-# writes dist/sunavigator-0.8.2.tar.gz
+# writes dist/sunavigator-0.8.3.tar.gz
 ```
 
 The tarball has a single top-level folder `sunavigator/`
@@ -223,11 +241,11 @@ then fails in the UI with `500 Internal Server Error` even though splunkd is
 still unpacking. Use the CLI:
 
 ```bash
-$SPLUNK_HOME/bin/splunk install app /path/to/sunavigator-0.8.2.tar.gz \
+$SPLUNK_HOME/bin/splunk install app /path/to/sunavigator-0.8.3.tar.gz \
   -auth "$SPLUNK_USER:$SPLUNK_PASSWORD"
 # first install: omit -update
 # upgrade of an existing copy:
-$SPLUNK_HOME/bin/splunk install app /path/to/sunavigator-0.8.2.tar.gz \
+$SPLUNK_HOME/bin/splunk install app /path/to/sunavigator-0.8.3.tar.gz \
   -update 1 -auth "$SPLUNK_USER:$SPLUNK_PASSWORD"
 
 $SPLUNK_HOME/bin/splunk restart
@@ -517,6 +535,20 @@ Dashboard (`ucm_overview`, linked from Home and the nav). Counts and recent
 sync jobs come from lookups over KV collections. Empty until content is
 imported.
 
+**Key figures** (from 0.8.3) at the top of the page:
+
+| Card | Calculation |
+| --- | --- |
+| Assessed | Use cases with a stored readiness result ÷ active use cases in the catalogue. |
+| Ready | Use cases in state *ready* ÷ assessed use cases. |
+| Ready or partially ready | Use cases in state *ready* or *partially ready* ÷ assessed use cases. |
+| Not ready, blocked or insufficient evidence | Assessed use cases that are neither of the above ÷ assessed use cases. |
+| Deployed | Deployments whose workflow state is *deployed*; the card also shows how many are enabled in Splunk and how many deployments exist. |
+
+Each card prints its own figures ("111 of 268 assessed") and calculation, so a
+percentage never stands alone. A percentage needs a denominator: with nothing
+assessed the card shows a dash, not 0%.
+
 ![Overview dashboard with 120 imported use cases from category 9](images/03-overview.png)
 
 ### 6.2 Content Catalogue
@@ -527,12 +559,30 @@ default max 100 rows).
 | Filter | Matches |
 | --- | --- |
 | Search | Case-insensitive substring on a precomputed field: id, title, sourcetypes, tags, MITRE ids and the first 1,500 characters of the description. All terms must match. |
-| Domain, category, criticality, difficulty | Exact facets from the canonical model. |
+| Domain, category, criticality, difficulty | Exact facets from the canonical model. Tick several values per facet: a use case matches when it has **any** of the ticked values of that facet, and all facets must match (AND between facets, OR within one). Categories are listed under their first domain. |
 | Sourcetype (exact) | Exact sourcetype string. |
 | MITRE ATT&CK ID | Technique id such as `T1110`. |
-| Review status | Provider review status (for example `verified`, `draft`). Counts come from `GET /services/ucm/catalog/facets`. |
-| Regulation | Use cases mapped to one regulation (for example FedRAMP), with counts. |
-| Quality flag | Use cases carrying one quality flag (below). |
+| Review status | Provider review status (for example `verified`, `draft`). |
+| Regulation | Use cases mapped to any of the ticked regulations (for example FedRAMP). |
+| Quality flag | Use cases carrying any of the ticked quality flags (below). |
+| Availability | Readiness state from the last assessment: *ready*, *partially ready*, *not ready*, *blocked*, *insufficient evidence*, or *not assessed* (no readiness result is stored for the use case). This is evidence from the data inventory, not proof that the data is populated (§6.4). |
+| Only my bookmarks | Use cases you bookmarked. The server reads your own selections only; it never takes a user name from the page. A bookmark is one of your four selection intents (bookmark, select, defer, reject), and each use case has one intent per user, so **Select** on a bookmarked row replaces the bookmark. |
+
+The number in brackets next to each value is the count for the **whole
+catalogue**, not for the filters you already chose. The count in the result
+header is for the current filters. Counts come from facets stored after every
+sync, import and reindex (`GET /services/ucm/catalog/facets`) and from the
+readiness summary.
+
+Availability and bookmarks come from other collections than the catalogue, so
+the server joins them by key. Up to `[catalog] max_join_keys` (default 2000)
+keys go to the KV Store in one request; a larger set is filtered inside the app
+instead. Both give the same result. If a filter would need more than about
+50,000 catalogue rows the page asks you to narrow the other filters first.
+
+Your filters are in the page URL (`?domain=security,identity&availability=ready`).
+Selected filters appear as removable chips above the table, with **Clear all
+filters**.
 
 Quality flags appear as amber badges next to the review status, in the
 catalogue and on the use-case page (D-046):
@@ -561,7 +611,7 @@ verbatim under **Provenance → Other provider fields**.
 **Select** on a row writes a per-user backlog intent. Sync never overwrites
 another user's selections.
 
-![Content Catalogue with search, filter drop-downs and per-row Select buttons](images/05-content-catalogue.png)
+![Content Catalogue with search, filter drop-downs and per-row Select buttons (screenshot from before 0.8.3)](images/05-content-catalogue.png)
 
 ### 6.2a The use-case page and the interactive search
 
@@ -648,6 +698,11 @@ content sync), the worker auto-assesses every imported use case
 | Not ready | Below partial, or a required/critical miss. |
 | Blocked | A **critical** requirement is unmet (veto). Enable of a deployed search in this state needs an audited override. |
 | Insufficient evidence | Too little of the weighted requirements have a decided status (default min coverage 50%). |
+
+From 0.8.3 the page opens with four percentage cards (assessed, ready, ready
+or partially ready, and the rest), the same ones as on Overview. Each card
+shows its figures and its calculation; percentages are of the *assessed* use
+cases, except **Assessed**, which is of the active catalogue.
 
 Click **Re-assess all** to queue a full run. Open a use case for per-
 requirement evidence. Field presence and SPL parse results are filled in
@@ -842,6 +897,12 @@ Levels (filters at the top):
 | Enabled | That search is enabled. |
 | Running successfully | Scheduler log in `_internal` shows a successful run in the selected window. |
 
+Each percentage card states its figures and calculation (from 0.8.3):
+techniques at that level ÷ techniques in the framework. Levels are
+cumulative: a use case that is deployed or enabled also counts for *Data
+ready*, whatever its readiness state is now, so the percentages never rise from
+left to right.
+
 Sub-technique mappings also count toward the parent. Revoked techniques are
 remapped where the bundled STIX says so (for example T1562 → T1685).
 
@@ -850,7 +911,7 @@ Most non-admin roles cannot. The UI then reports run status **not
 available**, not “no runs”. Tick **Include run status** only if your role
 can search `_internal`.
 
-Regulation controls have no bundled catalogue in 0.8.2; only controls that
+Regulation controls have no bundled catalogue in 0.8.3; only controls that
 appear on imported use cases are listed.
 
 **Export ATT&CK Navigator layer** (next to the legend) downloads the matrix
@@ -975,7 +1036,7 @@ app. Do the steps in this order:
    $SPLUNK_HOME/bin/splunk restart
    ```
 
-4. **Install SUNavigator 0.8.2** as in §3.2. The first install omits
+4. **Install SUNavigator 0.8.3** as in §3.2. The first install omits
    `-update`, because `sunavigator` is a new app ID.
 5. **Re-create the GitHub token** if you use one (§3.6). It must be stored in
    realm `sunavigator`. The 0.7.0 token in realm `splunk_use_case_manager` is
@@ -1128,7 +1189,7 @@ tail -50 "$SPLUNK_HOME/var/log/splunk/sunavigator.log"
 ```
 
 On a search head cluster only the captain runs jobs (not validated in
-0.8.2). On a single instance `standalone = 1` is expected.
+0.8.3). On a single instance `standalone = 1` is expected.
 
 ### 9.4 Provider could not be reached
 
@@ -1335,7 +1396,7 @@ Full table: [ARCHITECTURE.md §6](ARCHITECTURE.md).
 
 ---
 
-## 12. Known limitations (0.8.2)
+## 12. Known limitations (0.8.3)
 
 - Catalogue total counts are bounded by KV `max_rows_per_query` (50,000).
 - Catalogue search does not rank and does not search descriptions.
@@ -1358,7 +1419,7 @@ Full table: [ARCHITECTURE.md §6](ARCHITECTURE.md).
 
 ## 13. Quick start checklist
 
-1. `splunk install app sunavigator-0.8.2.tar.gz` then `splunk restart`.
+1. `splunk install app sunavigator-0.8.3.tar.gz` then `splunk restart`.
 2. `splunk show kvstore-status` → `ready` (macOS: §9.2 if stuck on `starting`).
 3. Open **SUNavigator → Administration**; all platform pills green.
 4. **Check provider for categories** → tick **9** → **Synchronize**, **or**

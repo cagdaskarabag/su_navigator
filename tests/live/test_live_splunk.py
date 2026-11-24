@@ -510,6 +510,33 @@ class LiveApiTest(unittest.TestCase):
         self.assertEqual(status, 200)
         self.assertTrue(page["items"])
 
+    def test_availability_filter_matches_readiness_counts(self):
+        status, summary = api(self.admin, "GET", "readiness/summary")
+        self.assertEqual(status, 200, summary)
+        for state, count in summary["by_state"].items():
+            status, body = api(self.viewer, "GET", "catalog", {"availability": state, "count": "1"})
+            self.assertEqual(status, 200, body)
+            self.assertEqual(body["total"], count, state)
+        status, body = api(self.viewer, "GET", "catalog", {"availability": "not_assessed", "count": "1"})
+        status_all, every = api(self.viewer, "GET", "catalog", {"count": "1"})
+        self.assertEqual(body["total"], max(0, every["total"] - sum(summary["by_state"].values())))
+        status, body = api(self.viewer, "GET", "catalog", {"availability": "bogus"})
+        self.assertEqual((status, body["error"]["message"]), (400, "invalid availability"))
+
+    def test_bookmark_filter_is_per_user(self):
+        mine, theirs = "fenre:UC-9.1.1", "fenre:UC-9.1.2"
+        try:
+            self.assertEqual(api(self.viewer, "POST", "selections", body={"id": mine, "intent": "bookmark"})[0], 200)
+            self.assertEqual(api(self.admin, "POST", "selections", body={"id": theirs, "intent": "bookmark"})[0], 200)
+            _, v = api(self.viewer, "GET", "catalog", {"bookmarked": "1", "count": "50"})
+            _, a = api(self.admin, "GET", "catalog", {"bookmarked": "1", "count": "50", "user": self.VIEWER})
+            self.assertEqual([i["content_id"] for i in v["items"]], [mine])
+            self.assertNotIn(mine, [i["content_id"] for i in a["items"]])
+            self.assertIn(theirs, [i["content_id"] for i in a["items"]])
+        finally:
+            api(self.viewer, "POST", "selections/delete", body={"id": mine})
+            api(self.admin, "POST", "selections/delete", body={"id": theirs})
+
     def test_selection_and_spl_validation(self):
         status, body = api(self.viewer, "POST", "selections",
                            body={"id": "fenre:UC-13.1.1", "intent": "select", "priority": 70})

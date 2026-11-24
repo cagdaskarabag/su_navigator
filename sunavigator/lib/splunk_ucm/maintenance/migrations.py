@@ -8,6 +8,7 @@ the next worker run.
 from typing import Any, Callable, Dict, List, Tuple
 
 from .. import __version__
+from ..catalog.derived import facets_outdated, refresh_derived
 from ..catalog.summary import SUMMARY_VERSION
 from ..content.fenre.normalizer import NORMALIZER_VERSION
 from ..content.reindex import ReindexService
@@ -36,6 +37,8 @@ MIGRATIONS: List[Tuple[str, Callable[[DocumentStore], bool], Callable[[DocumentS
     ("0001_catalog_summary_v%d" % SUMMARY_VERSION, lambda s: _outdated_summaries(s) > 0, _reindex_summaries),
     # Derived-field requirements (D-040); readiness re-normalizes on its next run.
     ("0002_normalizer_%s" % NORMALIZER_VERSION, lambda s: _outdated_normalizer(s) > 0, _reindex_summaries),
+    # Catalogue facet counts per domain, category, criticality and difficulty (D-059).
+    ("0003_catalog_facets_v2", lambda s: facets_outdated(s) and s.count(C.CATALOG) > 0, refresh_derived),
 ]
 
 

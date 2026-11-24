@@ -24,6 +24,13 @@ function ucmViewMain($, ucm) {
     };
     var LEVEL_LABEL = { catalogue: "In catalogue", ready: "Data ready", deployed: "Deployed", enabled: "Enabled",
         operational: "Running successfully" };
+    var LEVEL_HOW = {
+        catalogue: "Techniques mapped by at least one active use case in the catalogue, whether or not it can run here.",
+        ready: "Techniques with at least one use case that is ready, or already deployed or enabled (levels are cumulative).",
+        deployed: "Techniques with at least one use case that has a deployed saved search, enabled or not, or a running one.",
+        enabled: "Techniques with at least one use case whose saved search is enabled in Splunk.",
+        operational: "Techniques with an enabled saved search that also ran successfully in the chosen window."
+    };
     var HEALTH_KIND = { operational: "ok", no_runs: "warn", unhealthy: "error", disabled: "info", unknown: "neutral" };
 
     function select(options, value, onchange, emptyLabel) {
@@ -81,12 +88,11 @@ function ucmViewMain($, ucm) {
             var p = 100 * n / tot.techniques;
             return (p > 0 && p < 10 ? p.toFixed(1) : Math.round(p)) + "%";
         };
-        target.appendChild(el("div", { "class": "ucm-cards" }, ["catalogue", "ready", "deployed", "enabled"]
+        target.appendChild(el("div", { "class": "ucm-cards ucm-kpis" }, ["catalogue", "ready", "deployed", "enabled"]
             .concat(m.operational && m.operational.available ? ["operational"] : []).map(function (l) {
                 var n = tot.covered[l] || 0;
-                return el("div", { "class": "ucm-card" }, el("div", { "class": "ucm-sub", text: LEVEL_LABEL[l] }),
-                    el("div", { "class": "ucm-big", text: pct(n) }),
-                    el("div", { "class": "ucm-sub", text: n + " of " + tot.techniques + " techniques" }));
+                return ucm.kpiCard({ label: LEVEL_LABEL[l], value: pct(n), detail: n + " of " + tot.techniques + " techniques",
+                    how: LEVEL_HOW[l] + " Percentage = techniques at this level ÷ techniques in the framework." });
             })));
         if (m.operational && !m.operational.available) {
             target.appendChild(ucm.stateBox("info", "Run status is not available.", m.operational.reason ||

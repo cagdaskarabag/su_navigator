@@ -46,6 +46,10 @@ index = <string>
 
 [catalog]
 max_page_size = <integer>
+max_join_keys = <integer>
+* Longest key list the catalogue sends to the KV Store when the availability or bookmark
+  filter joins readiness or selections. Longer lists are filtered inside the app instead.
+  Measured limit 8000 keys of 44 characters; default 2000, range 1-5000.
 
 [discovery]
 earliest = <relative-time>

@@ -12,9 +12,11 @@ from ..util import utc_now_iso
 from .quality import FLAG_ORDER, ordered
 
 FACETS_KEY = "catalog::facets"
+# 2 adds global counts per domain, category, criticality and difficulty (D-059).
+FACETS_VERSION = 2
 _PAGE = 5000
 _FIELDS = ["_key", "spl_hash", "quality_flags", "provider_status", "review_status", "frameworks",
-           "regulation_labels"]
+           "regulation_labels", "domains", "category_key", "criticality", "difficulty"]
 
 
 def _scan(store: DocumentStore) -> List[Dict[str, Any]]:
@@ -59,9 +61,21 @@ def compute_facets(rows: List[Dict[str, Any]]) -> Dict[str, Any]:
     review: Dict[str, int] = {}
     regulations: Dict[str, Dict[str, Any]] = {}
     quality = {f: 0 for f in FLAG_ORDER}
+    domains: Dict[str, int] = {}
+    categories: Dict[str, int] = {}
+    criticality: Dict[str, int] = {}
+    difficulty: Dict[str, int] = {}
+    active = 0
     for row in rows:
         if not _active(row):
             continue
+        active += 1
+        for d in row.get("domains") or []:
+            domains[d] = domains.get(d, 0) + 1
+        for field, counts in (("category_key", categories), ("criticality", criticality),
+                              ("difficulty", difficulty)):
+            if row.get(field):
+                counts[row[field]] = counts.get(row[field], 0) + 1
         status = row.get("review_status") or "unknown"
         review[status] = review.get(status, 0) + 1
         labels = row.get("regulation_labels") or {}
@@ -74,6 +88,12 @@ def compute_facets(rows: List[Dict[str, Any]]) -> Dict[str, Any]:
             if flag in quality:
                 quality[flag] += 1
     return {
+        "facets_version": FACETS_VERSION,
+        "active": active,
+        "domains": domains,
+        "categories": categories,
+        "criticality": criticality,
+        "difficulty": difficulty,
         "review_statuses": [{"id": k, "count": review[k]} for k in sorted(review)],
         "regulations": sorted(regulations.values(), key=lambda r: (r["label"].lower(), r["id"])),
         "quality_flags": [{"id": f, "count": quality[f]} for f in FLAG_ORDER],
@@ -91,6 +111,12 @@ def refresh_derived(store: DocumentStore) -> Dict[str, int]:
 
 def get_facets(store: DocumentStore) -> Dict[str, Any]:
     doc = store.get(C.SYNC_STATE, FACETS_KEY)
-    if doc is None:
+    if doc is None or (doc.get("facets_version") or 0) < FACETS_VERSION:
         doc = dict(compute_facets(_scan(store)), computed_at=None)
-    return {k: doc.get(k) for k in ("review_statuses", "regulations", "quality_flags", "computed_at")}
+    return {k: doc.get(k) for k in ("review_statuses", "regulations", "quality_flags", "domains", "categories",
+                                    "criticality", "difficulty", "active", "computed_at")}
+
+
+def facets_outdated(store: DocumentStore) -> bool:
+    doc = store.get(C.SYNC_STATE, FACETS_KEY)
+    return doc is None or (doc.get("facets_version") or 0) < FACETS_VERSION

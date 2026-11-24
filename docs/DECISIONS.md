@@ -1036,3 +1036,70 @@ as drift.
   server-side row cap; results exist only in the page; no export.
 * Not done: a custom time range, editing the SPL before running it, running the
   deployed (approved) revision, or saving results.
+
+## D-059 Catalogue facets, bookmarks, readiness availability and KPI cards
+
+*0.8.3 (OD-5, OD-6).*
+
+* Context: the catalogue offered single-value drop-downs, no bookmark filter and
+  no way to ask "which use cases can I run here". Readiness lives in `uc_readiness`
+  and selections in `uc_selections`, not in `uc_catalog`.
+* Decision: filter by readiness without a schema change (Option A, a bounded join
+  by key). `CatalogQueryService` reads the keys that match from `uc_readiness`
+  (state `$in` the chosen states) and, for `bookmarked=1`, from the caller's own
+  `uc_selections` rows with intent `bookmark`. It intersects the sets and sends
+  `{"_key": {"$in": [...]}}` together with the other filters, so KV Store still
+  sorts, pages and counts. The user comes from `ctx.user` (the session), never
+  from a request parameter; a `user=` parameter is ignored (unit test and lab
+  check). `not_assessed` is "in the catalogue selection but without a readiness
+  row", computed against the same base filter, so withdrawn entries (which have
+  no readiness) are not counted as not assessed.
+* Measurements (Splunk 10.2.9 lab, KV Store, 44-character keys like
+  `escu_UC-<uuid>`):
+  * Lab catalogue: 2,357 documents in `uc_catalog` (268 active, 2,089 withdrawn),
+    268 readiness rows. `availability=ready` with 111 keys: 0.03 s end to end
+    through the app REST endpoint.
+  * Key-set limit, direct against a synthetic 20,000-document collection:
+    `_key $in` works with 100, 250, 500, 1,000, 1,500, 2,000, 3,000, 5,000 and
+    8,000 keys (median 8 ms to 36 ms; request line up to 432 KB), and splunkd
+    answers HTTP 414 at 10,000 keys (540 KB). The limit is the URL, since KV
+    Store queries are GET requests. In-app (through `splunk.rest`) the `$in` path
+    was exercised at 250, 1,000 and 2,000 keys (0.03 to 0.06 s) and the scan path
+    at 2,001 and 5,000; a run with `max_join_keys` raised to 5,000 returned
+    correctly in 0.04 s but the lab could not show which path served it.
+  * Reading all keys: a keys-only query of 20,000 documents takes 0.08 s; 13,306
+    keys matching a state query 0.06 s.
+  * KV Store refuses `limit` above `max_rows_per_query` (50,000). A first
+    version asked for 50,001 in the scan path; the lab caught it and a test with a
+    store that enforces the limit now covers it.
+* Limits chosen: `[catalog] max_join_keys` default 2,000 (4x below the measured
+  8,000, range 1 to 5,000). Above it the service does not fail: it reads the
+  matching catalogue keys in order (keys only, at most 49,999), keeps those in
+  the allowed set and fetches only the requested page by `_key $in` (at most 101
+  keys). Both paths are tested to return the same items, order, total and
+  `has_more` for every sort and page. Above 49,999 catalogue rows for one filter
+  the request is refused with "narrow the other filters first". Option B (a
+  readiness field on `uc_catalog`) was not needed and not built.
+* Facet counts are global, not filter-aware. A filter-aware count needs one
+  count query per facet value (about 55 for the current facets). Measured on the
+  20,000-document collection: 55 counts took 1.8 s (32 ms each) because the
+  store counts by reading matching keys. Global counts come from facets stored
+  after every sync, import and reindex (`catalog::facets`, now version 2 with
+  counts per domain, category, criticality and difficulty); the Availability
+  counts come from `readiness/summary`. The page says so in words. A migration
+  (`0003_catalog_facets_v2`) writes the new facets once; until then
+  `catalog/facets` computes them from a catalogue scan.
+* Bookmark semantics: a bookmark is the `bookmark` intent. The collection keeps
+  one row per user and use case, so choosing **Select** on a bookmarked use case
+  replaces the bookmark. The catalogue offers **Bookmark** only when the user has
+  no selection on the row, so it cannot overwrite a select, defer or reject.
+* Grouped browse: categories are listed under their first domain with the
+  catalogue-wide domain count; a category with several domains appears once.
+* KPIs: percentage cards carry their figures and their calculation in text
+  (Overview, Readiness, Coverage). Readiness cards are built by one shared
+  function so both pages use the same terms. Percentages are of assessed use
+  cases, except Assessed (of active catalogue); with no denominator the card
+  shows a dash.
+* Not done (OD-6): export of any kind. Not done by design: filter-aware counts, a
+  Sankey, "bookmark" meaning anything beyond the caller's own intent.
+

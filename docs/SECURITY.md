@@ -145,6 +145,17 @@ Residual risks: imported SPL is untrusted content and can be expensive
 see events on screen that they may view in Splunk anyway. There is no app-side
 rate limit or audit for this path.
 
+## Catalogue bookmark and availability filters (D-059)
+
+`GET ucm/catalog?bookmarked=1` reads the caller's own `uc_selections` rows
+(`user` equal to the session user from `ctx.user`, intent `bookmark`). The
+handler takes no user name from the request: a `user=` parameter is ignored,
+and a unit test and a lab check with a second user confirm that one user's
+bookmarks never appear for another. The availability filter reads readiness
+states, which are app-shared metadata (D-044) any app user can already read
+through `ucm/readiness`. Neither filter adds a collection, a capability or an
+ACL change.
+
 ## Control tests write to Splunk (D-054)
 
 A control test sends fixture events to the test index in `[controltest] index`

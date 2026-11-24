@@ -20,6 +20,7 @@ function ucmViewMain($, ucm) {
     var state = { state: params.state || "", domain: params.domain || "", criticality: params.criticality || "",
         q: params.q || "", sort: params.sort || "score", offset: parseInt(params.offset || "0", 10) || 0 };
     var pollTimer = null;
+    var activeTotal = null;
     var COLUMNS = [
         ["Use case"], ["Criticality"],
         ["State", "Overall readiness from the requirement checks. Hover a state badge for its rule."],
@@ -97,7 +98,8 @@ function ucmViewMain($, ucm) {
                     el("td", { text: x.g.use_cases + " use cases" }));
             }))));
         }
-        return el("div", {}, cards, el("div", { "class": "ucm-cards" }, info, gaps));
+        return el("div", {}, ucm.kpiStrip(ucm.readinessKpis(activeTotal, data)), cards,
+            el("div", { "class": "ucm-cards" }, info, gaps));
     }
 
     function renderTable(data) {
@@ -188,10 +190,12 @@ function ucmViewMain($, ucm) {
     function poll() {
         clearTimeout(pollTimer);
         ucm.get("readiness/summary").done(function (summary) {
-            render(summary);
-            loadTable();
-            var running = (summary.jobs || []).some(function (j) { return j.status === "queued" || j.status === "running"; });
-            if (running) { pollTimer = setTimeout(poll, 5000); }
+            ucm.get("catalog", { count: 1 }).done(function (c) { activeTotal = c.total; }).always(function () {
+                render(summary);
+                loadTable();
+                var running = (summary.jobs || []).some(function (j) { return j.status === "queued" || j.status === "running"; });
+                if (running) { pollTimer = setTimeout(poll, 5000); }
+            });
         }).fail(function (err) {
             ucm.clear(root).appendChild(ucm.stateBox("error", "Could not load readiness.", err.message));
         });

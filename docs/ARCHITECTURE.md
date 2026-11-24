@@ -170,8 +170,8 @@ Downgrades are not supported (D-033).
 
 | Method & path | Capability (role) | Purpose |
 |---|---|---|
-| `GET ucm/catalog` | read collections | Filtered, paged catalogue (`q, domain, category, criticality, difficulty, sourcetype, mitre, status, quality, review, regulation, sort, offset, count`). |
-| `GET ucm/catalog/facets` | read | Review statuses, regulations and quality flags in the active catalogue, with counts. |
+| `GET ucm/catalog` | read collections | Filtered, paged catalogue (`q, domain, category, criticality, difficulty, sourcetype, mitre, status, quality, review, regulation, availability, bookmarked, sort, offset, count`). Facet parameters take several comma-separated values (OR within a facet, AND between facets). `availability` is a readiness state or `not_assessed`; `bookmarked=1` uses the caller's own bookmark selections (user from the session). Both are joined by `_key` (D-059). |
+| `GET ucm/catalog/facets` | read | Review statuses, regulations, quality flags and counts per domain, category, criticality and difficulty in the active catalogue (stored `catalog::facets` v2, whole-catalogue counts). |
 | `GET ucm/usecase?id=` | read | Canonical detail (normalized on read) + provenance. |
 | `GET ucm/categories` | read | Category list with sync state. |
 | `GET ucm/sync` | read | Provider state + recent jobs. |

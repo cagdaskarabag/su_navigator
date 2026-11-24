@@ -15,7 +15,7 @@ FakeNode.prototype.removeChild = function (c) {
 FakeNode.prototype.addEventListener = function (type, fn) { (this.listeners[type] = this.listeners[type] || []).push(fn); };
 FakeNode.prototype.dispatch = function (type) {
     var self = this;
-    (this.listeners[type] || []).forEach(function (fn) { fn.call(self, { type: type, target: self }); });
+    (this.listeners[type] || []).forEach(function (fn) { fn.call(self, { type: type, target: self, preventDefault: function () {} }); });
 };
 
 function FakeText(text) { FakeNode.call(this); this.data = text; }
@@ -121,7 +121,9 @@ function runView(file, rootId, routes, opts) {
     global.document.getElementById = function (id) { return id === rootId ? root : null; };
     global.document.querySelectorAll = function () { return []; };
     var windowListeners = {};
-    global.window = { location: { search: opts.search || "" },
+    var urls = [];
+    global.window = { location: { search: opts.search || "", pathname: "/view" },
+        history: { replaceState: function (a, b, url) { urls.push(url); } }, scrollTo: function () {},
         addEventListener: function (t, f) { (windowListeners[t] = windowListeners[t] || []).push(f); } };
     var $ = Object.assign(function () { throw new Error("jQuery call not stubbed"); }, jq, {
         when: function () {
@@ -140,7 +142,7 @@ function runView(file, rootId, routes, opts) {
         captured = fn;
     };
     new Function("require", src + "\n;return ucmViewMain;")(fakeRequire)($, ucm);
-    return { root: root, ucm: ucm, calls: calls, windowListeners: windowListeners };
+    return { root: root, ucm: ucm, calls: calls, windowListeners: windowListeners, urls: urls };
 }
 
 module.exports = { loadAmd: loadAmd, FakeElement: FakeElement, jq: jq, runView: runView };
