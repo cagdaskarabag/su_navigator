@@ -15,7 +15,7 @@ docs and a commit. Status: ✅ done · 🟡 partial · ⬜ not started.
    commit, blob-SHA verification, retry/backoff, host allowlist, size caps).
 3. Schema-subset validator + safety checks (D-007).
 4. Fenre normalizer + SPL static analysis for derived requirements (D-013).
-5. KV Store repositories; `SyncService` (category-atomic, incremental,
+5. KV Store repositories; `SyncService` (category-level staging, incremental,
    last-known-good, withdrawn marking, history).
 6. Offline bundle provider + `POST ucm/import`; CLI bundle builder.
 7. REST API (catalog, detail, categories, sync, manifest, import, reindex,

@@ -58,11 +58,18 @@ detail is produced by the versioned normalizer on read. `uc_catalog` holds a
 compact canonical summary with all filterable fields. Avoids duplicating ~200 MB
 of text and allows re-normalisation after normalizer upgrades without refetching.
 
-## D-009 Category-level atomic sync, last-known-good
-A category is fetched, validated and staged completely before any write. On
-failure the previous content of that category is untouched; the job ends
-`partial`/`failed`; provider state (`last_good_commit`) only advances when all
-requested categories succeed. Records that disappear upstream are marked
+## D-009 Category-level, last-known-good sync
+A category is fetched, validated and staged completely before any write. A
+fetch or validation failure leaves the previous content of that category
+untouched; the job ends `partial`/`failed`; provider state (`last_good_ref`)
+only advances when all requested categories succeed.
+*Correction (T-09).* The write phase is not atomic: KV Store has no
+transactions, and `batch_save` writes in chunks. Content is written before the
+catalogue, and the category's `tree_sha` only advances after a successful
+write. If a write fails part-way, the category is marked failed and some
+records may already carry new content; the catalogue still holds the old blob
+SHAs for the rest, so the next sync fetches and rewrites them. Tested with
+writes interrupted in either collection (`test_interrupted_write_self_heals_on_next_sync`). Records that disappear upstream are marked
 `withdrawn`, never deleted (local state may reference them).
 
 ## D-010 Sync runs in a background worker, not in REST requests
@@ -140,7 +147,7 @@ which re-normalizes stored content on the next sync without downloads
 
 ## D-018 Partial bundles never withdraw records
 **Context.** A bundle built for selected records (`--records`) lists only part
-of a category; the category-atomic sync would have marked every other record
+of a category; the category-level sync would have marked every other record
 `withdrawn`.
 **Decision.** The bundle builder sets `"partial": true` when records are
 filtered; `ProviderManifest.partial` disables withdrawal. Full-category
@@ -310,6 +317,11 @@ as drift.
 * The submitter cannot approve their own revision unless
   `allow_self_approval = true`; `require_approval = false` auto-approves on
   submit (recorded as `approval: not_required`).
+* *Scope (T-09).* Four eyes applies to the app's workflow. The deployed saved
+  search is owned by the deploying operator (D-028), who, like any admin, can
+  edit it in Splunk directly. The verifier reports such edits as drift; it
+  does not prevent them. Restricting saved-search write access is a
+  deployment-level control outside the app.
 * Every deploy and rollback writes the search **disabled**; enabling is a
   separate action. Enabling while readiness is in `block_enable_states`
   (default `blocked`) needs an override reason of at least 10 characters,

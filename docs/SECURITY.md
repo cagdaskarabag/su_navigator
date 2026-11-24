@@ -62,6 +62,9 @@ routes and dashboard preview, so a new route without a check fails the build
   `sc_admin`. The REST handler writes it with the system token after checking
   `ucm_deploy` (or `ucm_run_discovery` for drafts), so approvals cannot be
   forged through the KV REST API (verified live: an operator gets 403).
+  Four eyes covers the app's workflow only: the deploying operator owns the
+  saved search and can edit it in Splunk directly. Such edits show as drift
+  (D-029); restrict saved-search write access if that matters.
 - `uc_frameworks` and `uc_dashboards`: readable by all app users, writable
   only by `admin` / `sc_admin`; written by the REST handler with the system
   token after the capability check (verified live: viewer and operator get

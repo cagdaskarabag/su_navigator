@@ -91,6 +91,55 @@ class SyncServiceTest(unittest.TestCase):
         self.assertEqual(job["status"], S.JOB_SUCCEEDED)
         self.assertEqual(self.catalog("fenre_UC-9.1.1")["title"], "new title")
 
+    def interrupt_writes(self, collection, after_docs):
+        """The next write to ``collection`` stores ``after_docs`` documents, then fails like splunkd would."""
+        from splunk_ucm.errors import StorageError
+        real = self.store.batch_save
+        state = {"armed": True}
+
+        def batch_save(coll, docs):
+            if state["armed"] and coll == collection:
+                state["armed"] = False
+                real(coll, docs[:after_docs])
+                raise StorageError("splunkd returned HTTP 503", 503)
+            return real(coll, docs)
+        self.store.batch_save = batch_save
+        return lambda: setattr(self.store, "batch_save", real)
+
+    def assert_consistent(self):
+        for row in self.store.query(C.CATALOG):
+            content = self.store.get(C.CONTENT, row["_key"])
+            self.assertIsNotNone(content, row["_key"])
+            self.assertEqual(content["source_hash"], row["source_hash"], row["_key"])
+
+    def test_interrupted_write_self_heals_on_next_sync(self):
+        self.run_sync()
+        for rid in ("9.1.1", "9.1.2"):
+            path = helpers.record_path(rid, self.gh.files)
+            rec = json.loads(self.gh.files[path])
+            rec["title"] = "revised " + rid
+            self.gh.put(path, rec)
+        for collection, after in ((C.CONTENT, 1), (C.CATALOG, 1)):
+            restore = self.interrupt_writes(collection, after)
+            job = self.run_sync()
+            restore()
+            self.assertEqual(job["status"], S.JOB_PARTIAL, collection)
+            upstream = [json.loads(self.gh.files[helpers.record_path(r, self.gh.files)])["title"]
+                        for r in ("9.1.1", "9.1.2")]
+            self.assertNotEqual([self.catalog("fenre_UC-%s" % r)["title"] for r in ("9.1.1", "9.1.2")], upstream)
+            self.assertNotEqual(self.svc.state.provider_state("fenre")["last_attempt_status"], S.JOB_SUCCEEDED)
+            job = self.run_sync()
+            self.assertEqual(job["status"], S.JOB_SUCCEEDED, collection)
+            upstream = [json.loads(self.gh.files[helpers.record_path(r, self.gh.files)])["title"]
+                        for r in ("9.1.1", "9.1.2")]
+            self.assertEqual([self.catalog("fenre_UC-%s" % r)["title"] for r in ("9.1.1", "9.1.2")], upstream)
+            self.assert_consistent()
+            for rid in ("9.1.1", "9.1.2"):
+                path = helpers.record_path(rid, self.gh.files)
+                rec = json.loads(self.gh.files[path])
+                rec["title"] = rec["title"] + " again"
+                self.gh.put(path, rec)
+
     def test_invalid_ratio_fails_category_atomically(self):
         self.run_sync()
         path = helpers.record_path("9.1.2", self.gh.files)

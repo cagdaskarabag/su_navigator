@@ -41,11 +41,11 @@ Content is ingested from pluggable detection providers, with out-of-the-box supp
 
 ## Key Capabilities
 
-- 📥 **Curated Content Ingestion**: Synchronizes use cases from GitHub pinned to immutable commit hashes with per-record git blob SHA-1 verification. Supports atomic, category-level transactions, incremental sync, and automatic withdrawal of removed upstream rules.
+- 📥 **Curated Content Ingestion**: Synchronizes use cases from GitHub pinned to immutable commit hashes with per-record git blob SHA-1 verification. Each category is fetched and validated in full before anything is written (last-known-good), syncs are incremental, and records removed upstream are marked withdrawn. KV Store has no transactions: an interrupted write marks the category failed, and the next sync rewrites the affected records (D-009).
 - 🔍 **Safe Bounded Data Discovery**: Discovers active index and sourcetype pairs, event volume, and data freshness using constructed, bounded `tstats` queries—never running untrusted imported SPL. Preserves local source mappings without overwriting operator customizations.
 - 📊 **Evidence-Based Readiness Engine**: Evaluates whether required sourcetypes, fields, CIM data models, macros, and add-ons exist in your environment. Produces deterministic readiness scores (0–100) and enforces a veto when critical requirements are missing.
 - 🎯 **Operator Backlog & Syntax Validation**: Provides per-user selection, bookmarking, and triage. Validates SPL against Splunk's native search parser, inspects command syntax, and provides safe, bounded previews with `fieldsummary` sampling.
-- 🛡️ **Four-Eyes Guided Deployment**: Enforces separation of duties (maker-checker). A draft is submitted by one operator, reviewed and approved by a second operator, and deployed as a disabled saved search. Live activation is gated on environment readiness and strictly audited.
+- 🛡️ **Four-Eyes Guided Deployment**: Maker-checker inside the app: a draft is submitted by one operator, approved by a second (unless `allow_self_approval` is set), and deployed as a disabled saved search. Live activation is gated on environment readiness and audited. The deploying operator owns the saved search and can still edit it in Splunk directly; the app reports such edits as drift but cannot prevent them.
 - 🔄 **Drift Detection & Rollback**: Compares live saved searches against frozen deployment revisions. Automatically detects external modifications and provides one-click rollback to prior revisions or safe retirement.
 - 🗺️ **Framework & Regulation Coverage**: Maps catalogue holdings and deployed detections against MITRE ATT&CK® Enterprise 20.1 and ICS 20.1 technique matrices, as well as compliance obligations, with execution run-status tracking.
 - 📈 **Dynamic Domain Dashboards**: Generates Simple XML monitoring dashboards from vetted templates without embedding arbitrary upstream SPL.
@@ -76,7 +76,7 @@ Content is ingested from pluggable detection providers, with out-of-the-box supp
 │   Background Sync Worker      │◄───────┤ Data Inventory Discovery      │
 │  (ucm_sync_worker modular in) │        │ (Bounded tstats, active pairs)│
 └───────────────┬───────────────┘        └───────────────┬───────────────┘
-                │ Atomic category upserts                │ Telemetry facts
+                │ Category upserts (last-known-good)     │ Telemetry facts
                 ▼                                        ▼
 ┌────────────────────────────────────────────────────────────────────────┐
 │                      KV Store State Collections                        │
@@ -195,7 +195,7 @@ SUNavigator implements a safe, four-eyes deployment state machine:
                                         └── Retire                    └── Retire
 ```
 
-- **Separation of Duties**: The operator who drafts/submits a detection cannot approve it unless `allow_self_approval = true` is explicitly configured.
+- **Separation of Duties (in the app)**: The operator who drafts/submits a detection cannot approve it unless `allow_self_approval = true` is explicitly configured. Splunk permissions still let the owner of a deployed saved search, or an admin, edit it outside the app; the drift check (`[deployment] verify_interval_minutes`) reports such changes.
 - **Disabled-First**: Newly deployed searches are always created in a `disabled = 1` state under the naming convention `SUN - <record_id> - <title>`.
 - **Gated Activation**: Enabling a search requires an assessment score above threshold. Enabling a blocked search requires an audited override reason.
 - **Continuous Drift Verification**: Periodic background jobs verify live saved search definitions against frozen KV Store deployment revisions to detect manual tampering.
@@ -232,7 +232,7 @@ sun_navigator/
 │   └── appserver/static/         # Simple XML JS modules and styles
 ├── tools/                        # Development, packaging, and bundle CLI tools
 ├── tests/                        # Automated test suites
-│   ├── unit/                     # 261 mocked unit tests (runs without Splunk)
+│   ├── unit/                     # 262 mocked unit tests (runs without Splunk)
 │   ├── fixtures/readiness/       # Readiness regression corpus and its baseline
 │   └── live/                     # Integration tests against live Splunk instances
 └── docs/                         # Specifications, ADRs, operator guide, and screenshots
