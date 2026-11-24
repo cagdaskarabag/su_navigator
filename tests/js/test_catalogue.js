@@ -144,6 +144,105 @@ var tests = {
     }
 };
 
+var TWO = { providers: { fenre: 7, escu: 3 }, waves: { crawl: 4, walk: 2, run: 1 },
+    analytic_stories: [{ id: "Brute Force", count: 2 }], data_sources: [{ id: "Sysmon EventID 1", count: 3 }],
+    summary: { version: 6, outdated: 0 }, active: 10 };
+var TWO_CATS = { categories: [
+    { _key: "fenre_cat-9", category_id: "9", name: "Authentication", domains: ["security"], provider: "fenre" },
+    { _key: "escu_cat-endpoint", category_id: "1", name: "Endpoint", domains: ["endpoint", "security"], provider: "escu" },
+    { _key: "escu_cat-unassigned", category_id: "7", name: "Unassigned", domains: ["security"], provider: "escu" }] };
+function two(extra) {
+    return open({ categories: TWO_CATS, "catalog/facets": Object.assign({}, FACETS, TWO, extra || {}) });
+}
+function texts(v, cls) {
+    return v.root.find(function (n) { return n.getAttribute("class") === cls; }).map(function (n) { return n.textContent; });
+}
+
+Object.assign(tests, {
+    "provider, wave, story and data source filters are sent comma separated and restored from the URL": function () {
+        var v = two();
+        click(box(v, "provider", "escu"), true);
+        click(box(v, "provider", "fenre"), true);
+        click(box(v, "wave", "crawl"), true);
+        click(box(v, "story", "Brute Force"), true);
+        click(box(v, "data_source", "Sysmon EventID 1"), true);
+        var p = lastParams(v);
+        assert.strictEqual(p.provider, "escu,fenre");
+        assert.strictEqual(p.wave, "crawl");
+        assert.strictEqual(p.story, "Brute Force");
+        assert.strictEqual(p.data_source, "Sysmon EventID 1");
+        var url = v.urls[v.urls.length - 1];
+        assert.ok(/provider=escu,fenre/.test(url) && /wave=crawl/.test(url), url);
+        var w = two() && open({ categories: TWO_CATS, "catalog/facets": Object.assign({}, FACETS, TWO) },
+            { search: "?provider=escu&wave=walk,run&exclude_quality=unreviewed" });
+        var q = lastParams(w);
+        assert.deepStrictEqual([q.provider, q.wave, q.exclude_quality], ["escu", "walk,run", "unreviewed"]);
+        assert.ok(box(w, "provider", "escu").checked && box(w, "wave", "run").checked);
+    },
+    "provider facet lists the providers with their counts": function () {
+        var t = two().root.textContent;
+        assert.ok(/Fenre \(7\)/.test(t) && /ESCU \(3\)/.test(t), t);
+        assert.ok(/crawl \(4\)/.test(t) && /walk \(2\)/.test(t));
+        assert.ok(/Brute Force \(2\)/.test(t) && /Sysmon EventID 1 \(3\)/.test(t));
+    },
+    "categories name their provider only when both providers are present": function () {
+        var both = two().root.textContent;
+        assert.ok(/Fenre \u00b7 9\. Authentication/.test(both), both);
+        assert.ok(/ESCU \u00b7 Endpoint/.test(both) && !/ESCU \u00b7 1\. Endpoint/.test(both), "ESCU ids are not shown as numbers");
+        assert.ok(/ESCU \u00b7 Unassigned/.test(both));
+        var one = open({ categories: TWO_CATS, "catalog/facets": Object.assign({}, FACETS, { providers: { escu: 3 } }) }).root.textContent;
+        assert.ok(/Endpoint/.test(one) && !/ESCU \u00b7 Endpoint/.test(one));
+    },
+    "the category filter value stays the unchanged category id": function () {
+        var v = two();
+        click(box(v, "category", "escu_cat-unassigned"), true);
+        assert.strictEqual(lastParams(v).category, "escu_cat-unassigned");
+        assert.ok(/category: ESCU \u00b7 Unassigned/.test(v.root.textContent));
+    },
+    "rows carry a provider badge": function () {
+        var v = open({ catalog: { items: [Object.assign({ provider: "escu" }, ITEMS[0])], total: 1, offset: 0, count: 25, has_more: false } });
+        assert.deepStrictEqual(texts(v, "ucm-badge ucm-badge-provider"), ["ESCU"]);
+    },
+    "a long story list gets a find box that only hides rows": function () {
+        var many = []; for (var i = 0; i < 20; i++) { many.push({ id: "Story " + i, count: i + 1 }); }
+        var v = two({ analytic_stories: many });
+        var finder = v.root.find(function (n) { return n.getAttribute("class") === "ucm-facet-find"; })[0];
+        assert.ok(finder);
+        finder.value = "story 1";
+        finder.dispatch("input");
+        var hidden = v.root.find(function (n) { return n.tagName === "LABEL" && n.getAttribute("hidden") !== null; });
+        assert.ok(hidden.length > 0 && hidden.length < 20);
+        assert.strictEqual(catalogCalls(v).length, 1, "finding does not query the server");
+    },
+    "hiding a quality flag is a separate filter and off by default": function () {
+        var v = two({ quality_flags: [{ id: "ai_reviewed", count: 3 }] });
+        assert.ok(!("exclude_quality" in lastParams(v)));
+        var group = v.root.find(function (n) { return n.tagName === "DETAILS" && /^Hide quality flag/.test(n.textContent); })[0];
+        var hide = group.find(function (n) { return n.tagName === "INPUT" && n.getAttribute("value") === "ai_reviewed"; })[0];
+        click(hide, true);
+        assert.strictEqual(lastParams(v).exclude_quality, "ai_reviewed");
+        assert.ok(!("quality" in lastParams(v)));
+        assert.ok(/hide quality flag: ai reviewed|exclude_quality|Hide quality flag/i.test(v.root.textContent));
+    },
+    "an old summary shows the Reindex hint and an empty wave filter explains itself": function () {
+        var old = { summary: { version: 6, outdated: 8 } };
+        var v = open({ categories: TWO_CATS, "catalog/facets": Object.assign({}, FACETS, TWO, old),
+            catalog: { items: [], total: 0, offset: 0, count: 25, has_more: false } }, { search: "?wave=crawl" });
+        var t = v.root.textContent;
+        assert.ok(/Reindex needed/.test(t) && /8 of 10/.test(t), t);
+        assert.ok(/cannot match this filter yet/.test(t));
+        var fresh = open({ categories: TWO_CATS, "catalog/facets": Object.assign({}, FACETS, TWO),
+            catalog: { items: [], total: 0, offset: 0, count: 25, has_more: false } }, { search: "?wave=crawl" });
+        assert.ok(!/Reindex needed/.test(fresh.root.textContent) && /No use cases match/.test(fresh.root.textContent));
+    },
+    "a provider filter alone never claims a Reindex is needed for it": function () {
+        var v = open({ categories: TWO_CATS, "catalog/facets": Object.assign({}, FACETS, TWO, { summary: { version: 6, outdated: 8 } }),
+            catalog: { items: [], total: 0, offset: 0, count: 25, has_more: false } }, { search: "?provider=escu" });
+        assert.ok(!/cannot match this filter yet/.test(v.root.textContent));
+        assert.ok(/The provider filter and the other filters work/.test(v.root.textContent));
+    }
+});
+
 var failed = 0;
 Object.keys(tests).forEach(function (name) {
     try { tests[name](); console.log("ok   " + name); } catch (e) { failed++; console.log("FAIL " + name + ": " + (e.stack || e.message)); }

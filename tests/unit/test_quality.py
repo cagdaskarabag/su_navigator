@@ -84,7 +84,7 @@ class DuplicateSplTest(unittest.TestCase):
         return sorted(d["_key"] for d in self.store.query(C.CATALOG, {"quality_flags": "duplicate_spl"}))
 
     def test_shared_hash_is_flagged_and_cleared(self):
-        self.assertEqual(refresh_derived(self.store), {"duplicate_groups": 1, "updated": 2})
+        self.assertEqual(refresh_derived(self.store), {"duplicate_groups": 1, "twin_groups": 0, "updated": 2})
         self.assertEqual(self.flagged(), ["fenre_UC-9.1.1", "fenre_UC-9.1.2"])
         self.assertEqual(refresh_derived(self.store)["updated"], 0)
         doc = self.store.get(C.CATALOG, "fenre_UC-9.1.2")

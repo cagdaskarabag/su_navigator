@@ -25,15 +25,23 @@ function ucmViewMain($, ucm) {
             how: "Deployments whose workflow state is deployed. Enabled is the number of those whose saved search is enabled in Splunk at the last check." };
     }
 
+    var hint = el("div", {});
+
     function render(activeTotal, summary, deployments) {
         var kpis = ucm.readinessKpis(activeTotal, summary);
         if (deployments) { kpis.push(deploymentKpi(deployments)); }
-        ucm.clear(root).appendChild(el("div", {},
+        ucm.clear(root).appendChild(el("div", {}, hint,
             ucm.kpiStrip(kpis),
             el("div", { "class": "ucm-sub", text: "These figures come from the stored catalogue, readiness and deployment records. " +
                 "Open Readiness for the per-use-case detail behind them." }),
             summary && summary.scheduler ? ucm.schedulerCard(summary.scheduler) : null));
     }
+
+    ucm.get("catalog/facets").done(function (f) {
+        var note = ucm.reindexHint(f && f.summary, f && f.active,
+            el("div", {}, el("a", { href: "ucm_content_admin", text: "Open Content Administration to run Reindex" })));
+        if (note) { hint.appendChild(note); }
+    });
 
     $.when(ucm.get("catalog", { count: 1 }), ucm.get("readiness/summary")).done(function (catalog, summary) {
         var activeTotal = catalog.total;

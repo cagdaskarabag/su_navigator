@@ -17,7 +17,12 @@ function ucmViewMain($, ucm) {
     var root = document.getElementById("ucm-catalogue");
     var PAGE = 25;
     var initial = ucm.queryParams();
-    var MULTI = ["domain", "category", "criticality", "difficulty", "availability", "review", "quality", "regulation"];
+    var MULTI = ["provider", "domain", "category", "wave", "criticality", "difficulty", "availability", "review", "quality",
+        "exclude_quality", "regulation", "story", "data_source"];
+    var FILTER_NAMES = { story: "analytic story", data_source: "data source", exclude_quality: "hide quality flag" };
+    var NUMBERED_PROVIDERS = ["fenre"];
+    var WAVES = ["crawl", "walk", "run"];
+    var LONG_LISTS = ["story", "data_source"];
     var TEXT = ["q", "sourcetype", "mitre"];
     var AVAILABILITY = ucm.READINESS_STATES.concat(["not_assessed"]);
     var state = { sort: initial.sort || "id", offset: parseInt(initial.offset || "0", 10) || 0,
@@ -26,7 +31,7 @@ function ucmViewMain($, ucm) {
     TEXT.forEach(function (k) { state[k] = initial[k] || ""; });
     var categories = [];
     var facets = { review_statuses: [], regulations: [], quality_flags: [], domains: {}, categories: {}, criticality: {},
-        difficulty: {}, active: 0 };
+        difficulty: {}, providers: {}, waves: {}, analytic_stories: [], data_sources: [], summary: null, active: 0 };
     var assessment = null;
     var selections = {};
     var requestSeq = 0;
@@ -41,6 +46,30 @@ function ucmViewMain($, ucm) {
     function options(key) {
         function fromMap(values, map) {
             return values.map(function (v) { return { value: v, label: v, count: (map || {})[v] || 0 }; });
+        }
+        function fromList(list, selected) {
+            var out = (list || []).map(function (r) { return { value: r.id, label: r.id, count: r.count }; });
+            selected.forEach(function (v) {
+                if (!out.some(function (o) { return o.value === v; })) { out.push({ value: v, label: v, count: 0 }); }
+            });
+            return out;
+        }
+        if (key === "provider") {
+            var ids = Object.keys(facets.providers || {});
+            categories.forEach(function (c) { if (c.provider && ids.indexOf(c.provider) < 0) { ids.push(c.provider); } });
+            state.provider.forEach(function (p) { if (ids.indexOf(p) < 0) { ids.push(p); } });
+            return ids.sort().map(function (p) {
+                return { value: p, label: ucm.providerLabel(p), count: (facets.providers || {})[p] || 0 };
+            });
+        }
+        if (key === "wave") { return fromMap(WAVES, facets.waves); }
+        if (key === "story") { return fromList(facets.analytic_stories, state.story); }
+        if (key === "data_source") { return fromList(facets.data_sources, state.data_source); }
+        if (key === "exclude_quality") {
+            return Object.keys(ucm.QUALITY_FLAGS).map(function (k) {
+                var f = (facets.quality_flags || []).filter(function (q) { return q.id === k; })[0];
+                return { value: k, label: ucm.QUALITY_FLAGS[k][0], count: f ? f.count : 0, title: ucm.QUALITY_FLAGS[k][1] };
+            });
         }
         if (key === "domain") { return fromMap(ucm.DOMAINS, facets.domains); }
         if (key === "criticality") { return fromMap(ucm.CRITICALITY, facets.criticality); }
@@ -71,13 +100,32 @@ function ucmViewMain($, ucm) {
         return [];
     }
 
+    function providersPresent() {
+        var ids = Object.keys(facets.providers || {}).filter(function (p) { return facets.providers[p] > 0; });
+        if (!ids.length) {
+            categories.forEach(function (c) { if (c.provider && ids.indexOf(c.provider) < 0) { ids.push(c.provider); } });
+        }
+        return ids;
+    }
+
+    /* "Fenre · 9. Identity & Access Management", "ESCU · Endpoint": the provider is named only when the catalogue holds several. */
+    function categoryLabel(cat, qualify) {
+        var numbered = cat.category_id && (!qualify || NUMBERED_PROVIDERS.indexOf(cat.provider) >= 0);
+        var plain = (numbered ? cat.category_id + ". " : "") + cat.name;
+        return qualify && cat.provider ? ucm.providerLabel(cat.provider) + " \u00b7 " + plain : plain;
+    }
+
     function categoryGroups() {
         var groups = {};
-        categories.forEach(function (cat) {
+        var qualify = providersPresent().length > 1;
+        categories.slice().sort(function (a, b) {
+            var pa = a.provider || "", pb = b.provider || "";
+            return pa < pb ? -1 : pa > pb ? 1 : (parseInt(a.category_id, 10) || 0) - (parseInt(b.category_id, 10) || 0);
+        }).forEach(function (cat) {
             var key = cat._key || cat.key;
             var domain = (cat.domains && cat.domains[0]) || "other";
-            (groups[domain] = groups[domain] || []).push({ value: key,
-                label: (cat.category_id ? cat.category_id + ". " : "") + cat.name, count: (facets.categories || {})[key] || 0 });
+            (groups[domain] = groups[domain] || []).push({ value: key, label: categoryLabel(cat, qualify),
+                count: (facets.categories || {})[key] || 0 });
         });
         var order = ucm.DOMAINS.concat(Object.keys(groups).filter(function (d) { return ucm.DOMAINS.indexOf(d) < 0; }));
         return order.filter(function (d) { return groups[d]; }).map(function (d) {
@@ -128,7 +176,21 @@ function ucmViewMain($, ucm) {
                 g.items.forEach(function (o) { body.appendChild(checkbox(key, o)); });
             });
         } else {
-            options(key).forEach(function (o) { body.appendChild(checkbox(key, o)); });
+            var rows = options(key).map(function (o) { return { option: o, node: checkbox(key, o) }; });
+            if (LONG_LISTS.indexOf(key) >= 0 && rows.length > 12) {
+                var finder = el("input", { type: "text", "class": "ucm-facet-find", placeholder: "Filter this list…",
+                    "aria-label": "Filter the " + label + " list", maxlength: "100" });
+                finder.addEventListener("input", function () {
+                    var needle = finder.value.trim().toLowerCase();
+                    rows.forEach(function (r) {
+                        var show = !needle || r.option.label.toLowerCase().indexOf(needle) >= 0 || state[key].indexOf(r.option.value) >= 0;
+                        if (show) { r.node.removeAttribute("hidden"); } else { r.node.setAttribute("hidden", "hidden"); }
+                    });
+                });
+                body.appendChild(finder);
+            }
+            rows.forEach(function (r) { body.appendChild(r.node); });
+            if (!rows.length) { body.appendChild(el("div", { "class": "ucm-sub", text: "No values yet." })); }
         }
         function update() {
             var n = state[key].length;
@@ -173,6 +235,17 @@ function ucmViewMain($, ucm) {
             box, " Only my bookmarks");
     }
 
+    function summaryOutdated() {
+        var sm = facets.summary;
+        return sm && sm.outdated > 0 ? sm : null;
+    }
+
+    function reindexHint() {
+        return ucm.reindexHint(facets.summary, facets.active,
+            el("div", {}, el("a", { href: "ucm_content_admin", text: "Open Content Administration" }),
+                el("span", { "class": "ucm-sub", text: " (Reindex needs the ucm_content_manager role)" })));
+    }
+
     function toolbar() {
         return el("div", {},
             el("div", { "class": "ucm-toolbar" },
@@ -180,16 +253,24 @@ function ucmViewMain($, ucm) {
                 textInput("sourcetype", "Sourcetype (exact)", "e.g. WinEventLog:Security"),
                 textInput("mitre", "MITRE ATT&CK id", "e.g. T1110"),
                 sortSelect(), bookmarkToggle()),
+            reindexHint(),
             el("div", { "class": "ucm-facets" },
+                facetGroup("provider", "Provider", "Where the use case comes from. A twin has the same primary SPL in another provider."),
                 facetGroup("domain", "Domain"),
-                facetGroup("category", "Category", "Grouped by domain; a category is listed under its first domain."),
+                facetGroup("category", "Category", "Grouped by domain; a category is listed under its first domain. " +
+                    "Category ids are the providers' own: Fenre numbers 1 to 25, ESCU categories are Endpoint, Network, Threat, " +
+                    "Identity, Access, Audit and Unassigned. Use Analytic story or Data source to find ESCU detections in Unassigned."),
+                facetGroup("wave", "Maturity wave", "Fenre rollout order: crawl first, then walk, then run. ESCU has no wave."),
                 facetGroup("criticality", "Criticality"),
                 facetGroup("difficulty", "Difficulty"),
                 facetGroup("availability", "Availability",
                     "Readiness state from the last assessment. Not assessed means no result is stored yet."),
                 facetGroup("review", "Review status"),
                 facetGroup("quality", "Quality flag"),
-                facetGroup("regulation", "Regulation")),
+                facetGroup("exclude_quality", "Hide quality flag", "Leaves out use cases that carry the flag. Nothing is hidden by default."),
+                facetGroup("regulation", "Regulation"),
+                facetGroup("story", "Analytic story", "ESCU analytic stories. Fenre use cases have none."),
+                facetGroup("data_source", "Data source", "ESCU data sources, as named by the content update. Fenre use cases have none.")),
             el("div", { "class": "ucm-sub", text: "Counts next to each value are for the whole catalogue, not for the other filters you chose." }),
             activeBar);
     }
@@ -197,7 +278,7 @@ function ucmViewMain($, ucm) {
     function activeFilters() {
         var out = [];
         MULTI.forEach(function (k) {
-            state[k].forEach(function (v) { out.push({ key: k, value: v, label: k + ": " + labelFor(k, v) }); });
+            state[k].forEach(function (v) { out.push({ key: k, value: v, label: (FILTER_NAMES[k] || k) + ": " + labelFor(k, v) }); });
         });
         TEXT.forEach(function (k) { if (state[k]) { out.push({ key: k, label: k + ": " + state[k], text: true }); } });
         if (state.bookmarked) { out.push({ key: "bookmarked", label: "only my bookmarks", flag: true }); }
@@ -260,7 +341,7 @@ function ucmViewMain($, ucm) {
     function row(item) {
         var href = "ucm_usecase?id=" + encodeURIComponent(item._key);
         return el("tr", {},
-            el("td", { "class": "ucm-mono", text: item.record_id }),
+            el("td", { "class": "ucm-mono" }, ucm.providerBadge(item.provider), " ", item.record_id),
             el("td", { "class": "ucm-title" },
                 el("a", { href: href, text: item.title }),
                 el("div", { "class": "ucm-sub", text: item.summary || "" })),
@@ -279,6 +360,12 @@ function ucmViewMain($, ucm) {
         ucm.clear(results);
         if (!data.items.length) {
             var filtered = activeFilters().length > 0;
+            var degraded = summaryOutdated() && (state.wave.length || state.story.length || state.data_source.length);
+            if (degraded) {
+                results.appendChild(ucm.stateBox("warn", "Some use cases cannot match this filter yet",
+                    "Use cases summarised before 0.9.0 carry no wave, analytic story or data source until Reindex runs " +
+                    "(" + summaryOutdated().outdated + " of " + (facets.active || 0) + " are affected)."));
+            }
             results.appendChild(filtered
                 ? ucm.stateBox("empty", state.bookmarked && activeFilters().length === 1
                     ? "You have not bookmarked any use case yet." : "No use cases match these filters.",

@@ -26,6 +26,7 @@ table.ucm-table tr:hover td { background: #fafbfc; }
 .ucm-badge-ok { background: #2e7d32; color: #fff; }
 .ucm-badge-warn { background: #f2c94c; color: #2b3033; }
 .ucm-badge-error { background: #b3261e; color: #fff; }
+.ucm-badge-provider { background: #1f4e79; color: #fff; }
 .ucm-badge-info { background: #dbe8f4; color: #1f4e79; }
 .ucm-more { color: #5c6773; font-size: 11px; }
 
@@ -118,6 +119,8 @@ textarea.ucm-modal-input { min-height: 72px; resize: vertical; }
 .ucm-facet > summary { cursor: pointer; padding: 5px 8px; color: #1f4e79; }
 .ucm-facet-body { padding: 4px 10px 8px; max-height: 320px; overflow: auto; border-top: 1px solid #e3e8ee; }
 .ucm-facet-group { font-size: 11px; color: #5c6773; text-transform: uppercase; letter-spacing: .03em; margin: 8px 0 2px; }
+.ucm-check[hidden], .ucm-plan-panel[hidden] { display: none !important; }
+.ucm-facet-find { width: 100%; box-sizing: border-box; margin: 2px 0 6px; }
 .ucm-check { display: block; margin: 2px 0; cursor: pointer; }
 .ucm-check input { margin-right: 4px; }
 .ucm-bookmark-filter { align-self: flex-end; margin-bottom: 6px; }
@@ -132,3 +135,10 @@ textarea.ucm-modal-input { min-height: 72px; resize: vertical; }
 .ucm-lint-list { margin: 8px 0 0 0; padding: 0; list-style: none; }
 .ucm-lint-item { padding: 6px 0; border-top: 1px solid rgba(92, 68, 0, 0.2); }
 .ucm-lint-dismiss { padding: 0; margin-top: 2px; }
+
+.ucm-plan { border: 1px solid #c3cbd4; border-radius: 3px; background: #fff; padding: 8px 12px; }
+.ucm-plan-status { display: flex; flex-wrap: wrap; gap: 4px 14px; align-items: center; margin-bottom: 6px; }
+.ucm-plan-status .ucm-plan-item { display: inline-flex; align-items: center; gap: 4px; }
+.ucm-plan-panel { margin-top: 10px; border-top: 1px solid #e3e8ee; padding-top: 6px; }
+.ucm-lineage { margin: 8px 0; }
+.ucm-lineage li { margin: 3px 0; }

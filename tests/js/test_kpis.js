@@ -47,8 +47,17 @@ var tests = {
         var t = v.root.textContent;
         assert.ok(/Assessed100%268 of 268 active use cases/.test(t), t);
         assert.ok(/Deployed2/.test(t) && /1 enabled; 5 deployments recorded/.test(t), t);
-        assert.deepStrictEqual(v.calls.map(function (c) { return c.path; }).sort(), ["catalog", "deployments", "readiness/summary"]);
+        assert.deepStrictEqual(v.calls.map(function (c) { return c.path; }).sort(), ["catalog", "catalog/facets", "deployments", "readiness/summary"]);
         assert.strictEqual(v.calls.filter(function (c) { return c.method !== "GET"; }).length, 0);
+    },
+    "overview shows the Reindex hint only for an old catalogue summary": function () {
+        var base = { catalog: { total: 10 }, "readiness/summary": { by_state: by({ ready: 5 }) }, deployments: { items: [], summary: { total: 0, by_state: {}, by_live: {} } } };
+        var old = runView("ucm_overview.js", "ucm-overview-kpis", Object.assign({ "catalog/facets": { active: 10, summary: { version: 6, outdated: 10 } } }, base));
+        assert.ok(/Reindex needed/.test(old.root.textContent) && /10 of 10/.test(old.root.textContent), old.root.textContent);
+        var fresh = runView("ucm_overview.js", "ucm-overview-kpis", Object.assign({ "catalog/facets": { active: 10, summary: { version: 6, outdated: 0 } } }, base));
+        assert.ok(!/Reindex needed/.test(fresh.root.textContent));
+        var failing = runView("ucm_overview.js", "ucm-overview-kpis", Object.assign({ "catalog/facets": new Error("x") }, base));
+        assert.ok(/Assessed/.test(failing.root.textContent) && !/Reindex needed/.test(failing.root.textContent));
     },
     "overview still shows readiness KPIs when deployments fail": function () {
         var v = runView("ucm_overview.js", "ucm-overview-kpis", {

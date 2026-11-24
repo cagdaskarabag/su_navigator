@@ -97,7 +97,7 @@ class DetailAndReindexTest(unittest.TestCase):
     def test_reindex_rebuilds_catalog_from_content_only(self):
         self.store.collections[C.CATALOG] = {}
         result = ReindexService(self.store).reindex()
-        self.assertEqual(result, {"reindexed": 10, "skipped": 0, "duplicate_groups": 0, "updated": 0})
+        self.assertEqual(result, {"reindexed": 10, "skipped": 0, "duplicate_groups": 0, "twin_groups": 0, "updated": 0})
         self.assertEqual(self.store.count(C.CATALOG), 10)
         self.assertEqual(self.store.get(C.CATALOG, "fenre_UC-9.1.1")["title"], "Brute-Force Login Detection")
 

@@ -19,11 +19,20 @@ def sort_key_for(record_id: str) -> str:
     return ".".join(parts)
 
 
-# Bump when catalog_summary gains or changes fields; the upgrade migration
-# re-derives older summaries from stored raw records (no network).
-SUMMARY_VERSION = 5
+# Bump when catalog_summary gains or changes fields. Reindex re-derives older summaries from the
+# stored raw records (no network). 6 adds wave, analytic_stories and data_sources (D-066); that
+# bump is not applied by an automatic migration, see maintenance/migrations.py.
+SUMMARY_VERSION = 6
+MAX_FACET_ITEMS = 30
+MAX_FACET_ITEM_CHARS = 200
 # Description text kept in search_text; KV regex search scans this field.
 SEARCH_DESCRIPTION_CHARS = 1500
+
+
+def _facet_values(values) -> list:
+    """Facet values travel comma separated in a request, so a comma inside a name becomes a space."""
+    cleaned = (" ".join(v.replace(",", " ").split()) for v in values if isinstance(v, str))
+    return dedupe(truncate(v, MAX_FACET_ITEM_CHARS) for v in cleaned if v)[:MAX_FACET_ITEMS]
 
 
 def catalog_summary(uc: UseCase) -> Dict[str, Any]:
@@ -68,6 +77,9 @@ def catalog_summary(uc: UseCase) -> Dict[str, Any]:
         "difficulty": uc.difficulty,
         "monitoring_types": uc.monitoring_types,
         "pillar": uc.pillar,
+        "wave": uc.wave,
+        "analytic_stories": _facet_values(uc.analytic_stories),
+        "data_sources": _facet_values(uc.data_sources),
         "products": uc.products,
         "tags": uc.tags,
         "sourcetypes": sourcetypes,

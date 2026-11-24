@@ -28,12 +28,12 @@ FakeSearchManager.prototype.data = function (kind, params) {
 var SEARCH_CAP = { entry: [{ content: { capabilities: ["search", "rest_properties_get"] } }] };
 var NO_SEARCH_CAP = { entry: [{ content: { capabilities: ["rest_properties_get"] } }] };
 
-function open(uc, extra) {
+function open(uc, extra, more) {
     FakeSearchManager.instances.length = 0;
     var routes = { usecase: uc, "RAW services/authentication/current-context": SEARCH_CAP };
     Object.assign(routes, extra || {});
     return runView("ucm_usecase.js", "ucm-usecase", routes,
-        { search: "?id=" + encodeURIComponent(uc.content_id), amd: { "splunkjs/mvc/searchmanager": FakeSearchManager } });
+        Object.assign({ search: "?id=" + encodeURIComponent(uc.content_id), amd: { "splunkjs/mvc/searchmanager": FakeSearchManager } }, more || {}));
 }
 function button(v, label) {
     var b = v.root.find(function (n) { return n.tagName === "BUTTON" && n.textContent === label; });
@@ -335,6 +335,114 @@ var tests = {
         assert.ok(!/innerHTML|outerHTML|insertAdjacentHTML|document\.write/.test(src));
     }
 };
+
+function twin(over) {
+    return Object.assign({ content_id: "escu:UC-aaaa", provider: "escu", record_id: "aaaa", title: "Defender disabled",
+        category_name: "Endpoint", criticality: "high", review_status: "unreviewed", key: "escu_UC-aaaa",
+        authority: { role: "detection", label: "Detection content source" } }, over || {});
+}
+function planPanel(v) { return v.root.find(function (n) { return n.getAttribute("id") === "ucm-plan-panel"; })[0]; }
+function planToggle(v) { return v.root.find(function (n) { return n.tagName === "BUTTON" && n.getAttribute("aria-controls") === "ucm-plan-panel"; })[0]; }
+
+Object.assign(tests, {
+    "the deployment form is collapsed behind Plan deployment and the state stays visible": function () {
+        var v = open(fixture("fenre_plain"));
+        var panel = planPanel(v), toggle = planToggle(v);
+        assert.ok(panel && toggle);
+        assert.notStrictEqual(panel.getAttribute("hidden"), null, "collapsed on load");
+        assert.strictEqual(toggle.textContent, "Plan deployment");
+        assert.strictEqual(toggle.getAttribute("aria-expanded"), "false");
+        assert.ok(hasText(v, /Selection/) && /not selected/.test(v.root.textContent) && /not deployed/.test(v.root.textContent),
+            "selected / pending / deployed state is outside the collapsed panel");
+        var inside = panel.textContent;
+        assert.ok(/Your selection/.test(inside) && /Deployment/.test(inside));
+    },
+    "Plan deployment expands and collapses the same controls and works as a button": function () {
+        var v = open(fixture("fenre_plain"));
+        var toggle = planToggle(v);
+        assert.strictEqual(toggle.tagName, "BUTTON");
+        assert.strictEqual(toggle.getAttribute("type"), "button");
+        toggle.dispatch("click");
+        assert.strictEqual(planPanel(v).getAttribute("hidden"), null);
+        assert.strictEqual(toggle.getAttribute("aria-expanded"), "true");
+        assert.strictEqual(toggle.textContent, "Hide deployment plan");
+        assert.ok(v.root.find(function (n) { return n.tagName === "BUTTON" && /Select/.test(n.textContent); }).length > 0);
+        toggle.dispatch("click");
+        assert.notStrictEqual(planPanel(v).getAttribute("hidden"), null);
+    },
+    "the jump links and a deep link open the plan": function () {
+        var v = open(fixture("fenre_plain"));
+        var link = v.root.find(function (n) { return n.tagName === "A" && n.getAttribute("href") === "#ucm-sec-deployment"; })[0];
+        assert.ok(link);
+        link.dispatch("click");
+        assert.strictEqual(planPanel(v).getAttribute("hidden"), null);
+        var w = open(fixture("fenre_plain"), {}, { hash: "#ucm-sec-selection" });
+        assert.strictEqual(planPanel(w).getAttribute("hidden"), null);
+        var other = open(fixture("fenre_plain"), {}, { hash: "#ucm-sec-spl" });
+        assert.notStrictEqual(planPanel(other).getAttribute("hidden"), null);
+    },
+    "a deployed use case shows its deployment state without expanding": function () {
+        var v = open(fixture("fenre_deployed"));
+        assert.notStrictEqual(planPanel(v).getAttribute("hidden"), null);
+        assert.ok(/retired/.test(v.root.textContent.replace(planPanel(v).textContent, "")), "state outside the panel");
+    },
+    "the plan comes after the content sections": function () {
+        var v = open(fixture("fenre_plain"));
+        var t = v.root.textContent;
+        assert.ok(t.indexOf("References") < t.indexOf("Plan deployment", t.indexOf("Jump to") + 200));
+    },
+    "a twin is linked in both directions with the provider role and the deploy-once note": function () {
+        var fen = fixture("fenre_plain");
+        fen.spl_twins = [twin()];
+        fen.authority = { role: "compliance", label: "Compliance and mapping context" };
+        var v = open(fen);
+        var t = v.root.textContent;
+        assert.ok(/Same detection in ESCU: escu:UC-aaaa/.test(t), t);
+        assert.ok(/deploying both creates two saved searches/.test(t));
+        assert.ok(/Detection content source/.test(t) && /compliance and mapping context/.test(t));
+        var a = v.root.find(function (n) { return n.tagName === "A" && n.getAttribute("href") === "ucm_usecase?id=escu_UC-aaaa"; });
+        assert.strictEqual(a.length, 1);
+        var esc = fixture("escu_macros");
+        esc.spl_twins = [twin({ content_id: "fenre:UC-10.4.24", provider: "fenre", key: "fenre_UC-10.4.24",
+            authority: { role: "compliance", label: "Compliance and mapping context" } })];
+        esc.authority = { role: "detection", label: "Detection content source" };
+        var w = open(esc);
+        assert.ok(/Same detection in Fenre: fenre:UC-10.4.24/.test(w.root.textContent));
+    },
+    "the lineage wording claims only an identical primary SPL": function () {
+        var fen = fixture("fenre_plain");
+        fen.spl_twins = [twin()];
+        var box = open(fen).root.find(function (n) { return n.getAttribute("class") === "ucm-lineage"; })[0];
+        var t = box.textContent;
+        assert.ok(/identical after whitespace is normalised/.test(t));
+        assert.ok(/can still differ/.test(t));
+        assert.ok(!/same author|derived from|copied from|equivalent/i.test(t));
+    },
+    "without a twin there is no lineage box": function () {
+        var v = open(fixture("fenre_plain"));
+        assert.ok(!/Same detection in/.test(v.root.textContent));
+        assert.ok(!/also exists in another provider/.test(v.root.textContent));
+    },
+    "same-provider duplicates keep their own warning": function () {
+        var fen = fixture("fenre_plain");
+        fen.spl_duplicates = ["fenre:UC-1.1.1"];
+        var t = open(fen).root.textContent;
+        assert.ok(/identical in other use cases of this provider/.test(t) && /fenre:UC-1\.1\.1/.test(t));
+        assert.ok(!/Same detection in/.test(t));
+    },
+    "the header carries a provider badge and a provider qualified category": function () {
+        var uc = fixture("escu_macros");
+        var v = open(uc);
+        assert.ok(v.root.find(function (n) { return /ucm-badge-provider/.test(n.getAttribute("class") || ""); }).length >= 1);
+        assert.ok(/ESCU ›/.test(v.root.textContent));
+    },
+    "ESCU stories and data sources are listed": function () {
+        var uc = fixture("escu_macros");
+        uc.analytic_stories = ["Brute Force"]; uc.data_sources = ["Sysmon EventID 1"];
+        var t = open(uc).root.textContent;
+        assert.ok(/Brute Force/.test(t) && /Sysmon EventID 1/.test(t));
+    }
+});
 
 var failed = 0;
 Object.keys(tests).forEach(function (name) {

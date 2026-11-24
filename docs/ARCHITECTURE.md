@@ -146,7 +146,7 @@ All collections are app-scoped (`nobody` owner) and replicated in SHC.
 
 | Collection | Key | Shared/user | Written by | Contents |
 |---|---|---|---|---|
-| `uc_catalog` | `fenre_UC-1.1.1` | shared | sync | Canonical summary + filter fields (`domains`, `category_key`, `criticality`, `criticality_rank`, `difficulty`, `sourcetypes`, `indexes`, `datamodels`, `addons`, `addon_ids` (name / Splunkbase id pairs), `mitre_ids`, `provider_status`, `search_text`, `sort_key`). ~1–2 KB. |
+| `uc_catalog` | `fenre_UC-1.1.1` | shared | sync | Canonical summary + filter fields (`domains`, `category_key`, `criticality`, `criticality_rank`, `difficulty`, `sourcetypes`, `indexes`, `datamodels`, `addons`, `addon_ids` (name / Splunkbase id pairs), `mitre_ids`, `provider_status`, `search_text`, `sort_key`; since 0.9.0 (summary version 6) `wave`, `analytic_stories` and `data_sources`, which are absent from older summaries; `provider` and the derived `quality_flags` entries `duplicate_spl` and `provider_twin` are used as filters). ~1–2 KB. |
 | `uc_content` | same | shared | sync | `raw_json` (verbatim record as JSON text; KV Store forbids `$`/`.` in keys, e.g. `$schema`), `provenance`, `normalizer_version`, `source_hash`. ~10–80 KB. |
 | `uc_categories` | `fenre_cat-01` | shared | sync | Category metadata, `tree_sha`, `selected`, counts, `last_synced_at`. |
 | `uc_sync_state` | `provider::fenre` / `job::<uuid>` | shared | REST (system token), worker | Provider state (pin, last-good commit/version, schema version) and job records (status, counts, errors). Retain last 200 jobs. |
@@ -175,7 +175,12 @@ prevented by these guards, not by an atomic claim. The captain gate was validate
 Upgrades: every document carries `schema_version`; the normalizer version is
 stored per content document so a newer app can re-derive catalogue summaries
 from `raw_json` without network access (`POST /ucm/catalog/reindex`, WP1).
-Catalogue summaries also carry `summary_version`.
+Catalogue summaries also carry `summary_version` (6 since 0.9.0, D-066). A new summary version
+is **not** applied by an upgrade: migration 0001 is pinned to `0001_catalog_summary_v5`, and the
+migration `0004_catalog_facets_v3` writes only the facets document, which reports
+`summary: {version, outdated}`. The operator presses Reindex (`POST /ucm/catalog/reindex`), which
+rewrites the summaries, sets the derived flags and stores the facets. Until then a filter on a
+field an old summary lacks skips those documents, never errors.
 
 App state (`uc_sync_state`, D-033):
 
@@ -196,15 +201,15 @@ Downgrades are not supported (D-033).
 
 | Method & path | Capability (role) | Purpose |
 |---|---|---|
-| `GET ucm/catalog` | read collections | Filtered, paged catalogue (`q, domain, category, criticality, difficulty, sourcetype, mitre, status, quality, review, regulation, availability, bookmarked, sort, offset, count`). Facet parameters take several comma-separated values (OR within a facet, AND between facets). `availability` is a readiness state or `not_assessed`; `bookmarked=1` uses the caller's own bookmark selections (user from the session). Both are joined by `_key` (D-059). |
-| `GET ucm/catalog/facets` | read | Review statuses, regulations, quality flags and counts per domain, category, criticality and difficulty in the active catalogue (stored `catalog::facets` v2, whole-catalogue counts). |
-| `GET ucm/readiness/recommendations` | read collections | Up to 10 recommended use cases for the calling user, with draft-score parts, reasons, flags, the formula and one of four empty states (D-060). Read-only. |
+| `GET ucm/catalog` | read collections | Filtered, paged catalogue (`q, domain, category, criticality, difficulty, sourcetype, mitre, status, quality, review, regulation, availability, bookmarked, sort, offset, count`). Facet parameters take several comma-separated values (OR within a facet, AND between facets). `availability` is a readiness state or `not_assessed`; `bookmarked=1` uses the caller's own bookmark selections (user from the session). Both are joined by `_key` (D-059). `provider`, `wave`, `story` and `data_source` are `$in` clauses on summary fields, so they take the same join or scan path (D-066); `exclude_quality` is one `quality_flags $ne` clause per flag (`$nin` and `$nor` are invalid on the KV Store). |
+| `GET ucm/catalog/facets` | read | Review statuses, regulations, quality flags and counts per domain, category, criticality and difficulty in the active catalogue (stored `catalog::facets` v3, whole-catalogue counts) plus, since 0.9.0, `providers`, `waves`, `analytic_stories`, `data_sources` and `summary: {version, outdated}`. |
+| `GET ucm/readiness/recommendations` | read collections | Up to 10 recommended use cases for the calling user (`exclude_quality` leaves out flagged use cases; off by default), with draft-score parts, reasons, flags, the formula and one of four empty states (D-060). Read-only. |
 | `GET ucm/usecase?id=` | read | Canonical detail (normalized on read) + provenance. |
 | `GET ucm/categories` | read | Category list with sync state. |
 | `GET ucm/sync` | read | Provider state + recent jobs. |
 | `POST ucm/sync` | `ucm_manage_content` | Queue a sync job (`categories`, optional `ref`). |
 | `POST ucm/import` | `ucm_manage_content` | Import an offline bundle (JSON body). |
-| `POST ucm/catalog/reindex` | `ucm_manage_content` | Re-derive summaries from stored raw records, then duplicate-SPL flags and facets. |
+| `POST ucm/catalog/reindex` | `ucm_manage_content` | Re-derive summaries from stored raw records, then duplicate-SPL and cross-provider twin flags and facets. |
 | `GET ucm/provider/manifest` | `ucm_manage_content` | Resolve the remote manifest (optional `ref`) without importing. |
 | `GET ucm/platform` | read | Capability report. |
 | `GET ucm/audit` | `ucm_manage_content` or `ucm_admin` | Recent audit events (`limit`, `prefix`). |

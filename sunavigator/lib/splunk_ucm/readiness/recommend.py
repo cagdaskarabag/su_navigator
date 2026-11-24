@@ -17,6 +17,8 @@ measured, and are returned with every response.
 
 from typing import Any, Dict, Iterable, List, Optional, Sequence, Set
 
+from ..catalog.quality import QUALITY_FLAGS
+from ..errors import ValidationError
 from ..frameworks.coverage import CoverageService
 from ..model.canonical import CRITICALITY_RANK
 from ..storage import collections as C
@@ -69,14 +71,19 @@ class RecommendationService:
         self.store = store
 
     def recommend(self, user: str, discovery_completed_at: Optional[str] = None,
-                  limit: int = MAX_ITEMS) -> Dict[str, Any]:
+                  limit: int = MAX_ITEMS, exclude_quality: Sequence[str] = ()) -> Dict[str, Any]:
+        """``exclude_quality`` (D-066) leaves out use cases that carry any of the given quality flags.
+        Empty by default: the list is then exactly what it was before the option existed."""
         limit = max(1, min(MAX_ITEMS, int(limit)))
+        for flag in exclude_quality:
+            if flag not in QUALITY_FLAGS:
+                raise ValidationError("invalid quality flag", {"value": str(flag)[:50]})
         levels = CoverageService(self.store).use_case_levels()
         assessed = {r["_key"]: r.get("state") for r in _paged(self.store, C.READINESS, None, ["_key", "state"])}
         base = {"items": [], "formula": {"version": FORMULA_VERSION, "weights": dict(WEIGHTS)},
                 "basis": {"active_use_cases": len(levels), "assessed": len(assessed),
                           "discovery_completed_at": discovery_completed_at or None},
-                "empty": None, "eligible_total": 0, "excluded": {}}
+                "empty": None, "eligible_total": 0, "excluded": {}, "exclude_quality": list(exclude_quality)}
         if not levels:
             base["empty"] = EMPTY_NO_CATALOGUE
             return base
@@ -84,11 +91,12 @@ class RecommendationService:
             base["empty"] = EMPTY_NO_ASSESSMENT if discovery_completed_at else EMPTY_NO_DISCOVERY
             return base
 
+        flagged = self._flagged(exclude_quality)
         mine = self._own_selections(user)
         deployments = self._deployment_states()
         covered = self._covered_techniques(levels)
         excluded = {"not_in_active_catalogue": 0, "already_deployed": 0, "rejected_by_you": 0,
-                    "blocked": 0, "not_ready": 0, "insufficient_evidence": 0, "has_blockers": 0}
+                    "blocked": 0, "not_ready": 0, "insufficient_evidence": 0, "has_blockers": 0, "quality_flagged": 0}
         candidates: List[Dict[str, Any]] = []
         for key, state in assessed.items():
             if key not in levels:
@@ -114,6 +122,9 @@ class RecommendationService:
             if row.get("blockers"):
                 excluded["has_blockers"] += 1
                 continue
+            if key in flagged:
+                excluded["quality_flagged"] += 1
+                continue
             candidates.append(self._candidate(row, level, mine.get(key), deployments.get(key), covered))
         candidates.sort(key=lambda c: (0 if c["state"] == STATE_READY else 1, -c["draft_score"],
                                        -c["criticality_rank"], -(c["score"] or 0), c["content_id"]))
@@ -123,6 +134,12 @@ class RecommendationService:
         if not candidates:
             base["empty"] = EMPTY_NONE_ELIGIBLE
         return base
+
+    def _flagged(self, flags: Sequence[str]) -> Set[str]:
+        if not flags:
+            return set()
+        query = {"$and": [{"provider_status": "active"}, {"quality_flags": {"$in": list(flags)}}]}
+        return {r["_key"] for r in _paged(self.store, C.CATALOG, query, ["_key"])}
 
     def _own_selections(self, user: str) -> Dict[str, str]:
         """catalog key -> intent for the calling user only; other users' rows are never read."""

@@ -429,6 +429,34 @@ define(["jquery", "splunk.util"], function ($, splunkUtil) {
         modal({ title: title, message: message, input: input, confirmLabel: confirmLabel || "OK" }, onConfirm);
     }
 
+    /*
+     * Shown while stored catalogue summaries are older than the app (facets.summary, D-066). Provider and the other
+     * existing filters work on old summaries; wave, analytic story and data source need Reindex.
+     */
+    function reindexHint(summary, active, action) {
+        if (!summary || !(summary.outdated > 0)) { return null; }
+        var box = stateBox("warn", "Reindex needed to enable the wave, analytic story and data source filters",
+            summary.outdated + " of " + (active || 0) + " active use cases were summarised by an earlier version, so they have no wave, " +
+            "analytic story or data source yet and those three filters skip them. The provider filter and the other filters work. " +
+            "Reindex re-reads the stored records (no download).");
+        if (action) { box.appendChild(action); }
+        return box;
+    }
+
+    /* Display names of the providers the app knows; any other provider id is shown as it is. */
+    var PROVIDER_LABELS = { fenre: "Fenre", escu: "ESCU" };
+
+    function providerLabel(provider) {
+        return PROVIDER_LABELS[provider] || provider || "";
+    }
+
+    function providerBadge(provider) {
+        if (!provider) { return null; }
+        var b = badge(providerLabel(provider), "provider");
+        b.setAttribute("title", "Content provider: " + provider);
+        return b;
+    }
+
     /* Keys match splunk_ucm.catalog.quality.QUALITY_FLAGS (checked by a unit test). */
     var QUALITY_FLAGS = {
         unreviewed: ["unreviewed", "No review status, or draft"],
@@ -437,12 +465,13 @@ define(["jquery", "splunk.util"], function ($, splunkUtil) {
         sme_review_pending: ["SME review pending", "Compliance mapping awaits SME review"],
         unbounded_index: ["index=*", "Primary SPL searches index=* or no index"],
         es_required: ["needs ES", "Requires Splunk Enterprise Security"],
-        duplicate_spl: ["duplicate SPL", "Primary SPL is identical to another use case"]
+        duplicate_spl: ["duplicate SPL", "Primary SPL is identical to another use case"],
+        provider_twin: ["twin in other provider", "Primary SPL is identical to a use case from another provider", "info"]
     };
 
     function qualityBadges(flags) {
         return (flags || []).filter(function (f) { return QUALITY_FLAGS[f]; }).map(function (f) {
-            var b = badge(QUALITY_FLAGS[f][0], "warn");
+            var b = badge(QUALITY_FLAGS[f][0], QUALITY_FLAGS[f][2] || "warn");
             b.setAttribute("title", QUALITY_FLAGS[f][1]);
             return b;
         });
@@ -753,7 +782,7 @@ define(["jquery", "splunk.util"], function ($, splunkUtil) {
 
     return {
         accessBadge: accessBadge, accessBox: accessBox, lintBox: lintBox, rowBoundNote: rowBoundNote, jobErrors: jobErrors, jobFailureBox: jobFailureBox, schedulerCard: schedulerCard,
-        modal: modal, qualityBadges: qualityBadges, QUALITY_FLAGS: QUALITY_FLAGS, notify: notify, confirmAction: confirmAction, askText: askText,
+        modal: modal, qualityBadges: qualityBadges, QUALITY_FLAGS: QUALITY_FLAGS, providerBadge: providerBadge, providerLabel: providerLabel, reindexHint: reindexHint, notify: notify, confirmAction: confirmAction, askText: askText,
         get: get, post: post, postRaw: postRaw, el: el, clear: clear, badge: badge,
         criticalityBadge: criticalityBadge, chips: chips, stateBox: stateBox, queryParams: queryParams,
         setQueryParams: setQueryParams, pager: pager, debounce: debounce, shortSha: shortSha,

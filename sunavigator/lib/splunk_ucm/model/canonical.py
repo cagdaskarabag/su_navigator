@@ -125,6 +125,8 @@ class UseCase:
     products: List[str] = dataclasses.field(default_factory=list)
     monitoring_types: List[str] = dataclasses.field(default_factory=list)
     pillar: str = ""
+    analytic_stories: List[str] = dataclasses.field(default_factory=list)  # ESCU annotation
+    data_sources: List[str] = dataclasses.field(default_factory=list)  # ESCU annotation, one name per entry
     # technical requirements
     requirements: List[Requirement] = dataclasses.field(default_factory=list)
     data_sources_text: str = ""

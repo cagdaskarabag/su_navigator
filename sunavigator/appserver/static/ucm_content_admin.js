@@ -21,6 +21,7 @@ function ucmViewMain($, ucm) {
     var importBox = el("div", {});
     var jobsBox = el("div", {});
     var boundBox = el("div", {});
+    var reindexBox = el("div", {});
     var auditBox = el("div", {});
     var refreshTimer = null;
     var localCategories = {};
@@ -210,6 +211,39 @@ function ucmViewMain($, ucm) {
         });
     }
 
+    function reindexSection() {
+        var message = el("div", {});
+        var button = el("button", { "class": "btn", type: "button", text: "Reindex catalogue summaries", onclick: function () {
+            ucm.confirmAction("Reindex the catalogue?",
+                "Every summary is re-derived from the stored records, without any download. It takes about 5 seconds per 1,000 use cases. " +
+                "Selections, readiness and deployments are not changed.", "Reindex", function () {
+                    button.disabled = true;
+                    ucm.clear(message).appendChild(el("div", { "class": "ucm-loading", text: "Reindexing…" }));
+                    ucm.post("catalog/reindex", {}).done(function (res) {
+                        ucm.clear(message).appendChild(ucm.stateBox("info", "Reindex finished.", "Re-derived " + (res.reindexed || 0) +
+                            " summaries, skipped " + (res.skipped || 0) + "."));
+                        loadHint();
+                    }).fail(function (err) {
+                        ucm.clear(message).appendChild(ucm.stateBox("error", "Reindex failed.", err.message));
+                    }).always(function () { button.disabled = false; });
+                });
+        } });
+        return el("div", { "class": "ucm-section" }, el("h3", { text: "Catalogue summaries" }), reindexBox,
+            el("div", { "class": "ucm-sub", text: "Reindex re-derives the searchable summaries and the catalogue facets from the stored records. " +
+                "Run it after an upgrade that adds filters. It needs the ucm_content_manager role." }),
+            el("div", { "class": "ucm-actions" }, button), message);
+    }
+
+    function loadHint() {
+        ucm.get("catalog/facets").done(function (f) {
+            ucm.clear(reindexBox);
+            var summary = f && f.summary;
+            var note = ucm.reindexHint(summary, f && f.active);
+            reindexBox.appendChild(note || el("div", { "class": "ucm-sub", text: summary
+                ? "All active catalogue summaries are current (version " + summary.version + ")." : "" }));
+        }).fail(function () { ucm.clear(reindexBox); });
+    }
+
     function renderAudit() {
         ucm.get("audit", { limit: 15, prefix: "content." }).done(function (data) {
             var body = el("tbody", {});
@@ -227,11 +261,13 @@ function ucmViewMain($, ucm) {
     ucm.clear(root);
     root.appendChild(el("div", { "class": "ucm-cards" }, stateCard, platformCard));
     root.appendChild(boundBox);
+    root.appendChild(reindexSection());
     root.appendChild(providerSection());
     root.appendChild(importSection());
     root.appendChild(jobsBox);
     root.appendChild(auditBox);
     refresh();
+    loadHint();
     renderPlatform();
     renderAudit();
 }
