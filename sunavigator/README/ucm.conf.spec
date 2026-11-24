@@ -50,6 +50,11 @@ max_join_keys = <integer>
 * Longest key list the catalogue sends to the KV Store when the availability or bookmark
   filter joins readiness or selections. Longer lists are filtered inside the app instead.
   Measured limit 8000 keys of 44 characters; default 2000, range 1-5000.
+kv_row_limit = <integer>
+* The value of limits.conf [kvstore] max_rows_per_query on this deployment. The KV Store returns
+  at most this many rows per query, so a catalogue total at this number is a lower bound and
+  Administration warns when the catalogue approaches it. Filters that join readiness or bookmarks
+  refuse above this number minus one. It does not change the platform limit. Default 50000.
 
 [discovery]
 earliest = <relative-time>
