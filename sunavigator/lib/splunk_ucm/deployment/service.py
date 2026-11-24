@@ -25,6 +25,7 @@ from ..model.canonical import UseCase
 from ..platform.search import SearchClient
 from ..readiness.principal import NOT_MET, SchedulerAccess, check_access, scan_spl
 from ..spl.analysis import analyze
+from ..spl.lint import lint_search
 from ..spl.parser import high_cost, parse
 from ..spl.policy import classify, command_exists, expanded_pipeline
 from ..storage import collections as C
@@ -559,7 +560,8 @@ class DeploymentService:
             raise ConflictError("saved search %r is not managed by this app" % name, {"code": "unmanaged"})
 
     def _check_spl(self, spl: str) -> Dict[str, Any]:
-        out: Dict[str, Any] = {"parse_ok": False, "parse_error": "", "side_effects": [], "high_cost": []}
+        out: Dict[str, Any] = {"parse_ok": False, "parse_error": "", "side_effects": [], "high_cost": [],
+                               "lint": lint_search(spl)}
         try:
             parsed = parse(self.search, spl, app=self.saved.app)
         except (UnsupportedOperation, ValidationError) as exc:

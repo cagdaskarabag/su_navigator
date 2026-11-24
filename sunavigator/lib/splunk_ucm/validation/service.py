@@ -21,6 +21,7 @@ from ..platform.search import SearchClient
 from ..readiness.principal import scan_spl
 from ..readiness.service import ReadinessService
 from ..spl.analysis import analyze
+from ..spl.lint import lint_search
 from ..spl.parser import high_cost, parse
 from ..spl.policy import classify, command_exists, expanded_pipeline
 from ..storage import collections as C
@@ -170,7 +171,7 @@ class ValidationService:
             "parse_ok": False, "parse_error": "", "commands": [], "side_effects": [],
             "indirect_commands": [], "unknown_commands": [], "review_commands": [],
             "high_cost": [], "warnings": [], "cim_parse_ok": None, "cim_parse_error": "",
-            "access_scan": None, "preview": previous.get("preview"), "field_samples": previous.get("field_samples") or [],
+            "access_scan": None, "lint": [], "preview": previous.get("preview"), "field_samples": previous.get("field_samples") or [],
             "sampled_at": previous.get("sampled_at"), "normalized": "",
         }
         if not uc.spl:
@@ -179,6 +180,7 @@ class ValidationService:
             return doc
         static = analyze(uc.spl)
         doc["warnings"] = list(static.warnings)
+        doc["lint"] = lint_search(uc.spl, uc.cim_spl)
         try:
             parsed = parse(self.search, uc.spl, app=APP_NAME)
         except (UnsupportedOperation, ValidationError) as exc:
