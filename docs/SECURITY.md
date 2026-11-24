@@ -156,6 +156,15 @@ states, which are app-shared metadata (D-044) any app user can already read
 through `ucm/readiness`. Neither filter adds a collection, a capability or an
 ACL change.
 
+## Recommendations read only the caller's rejects (D-060)
+
+`GET ucm/readiness/recommendations` excludes use cases the **calling** user
+rejected. It queries `uc_selections` with `user = ctx.user`, ignores any `user`
+request parameter, returns no selection data of other users, and writes nothing.
+A unit test checks that another user's name never appears in a response and that
+their rejects have no effect. Readiness, deployments and the catalogue are
+app-shared metadata (D-044) already readable by every app user.
+
 ## Control tests write to Splunk (D-054)
 
 A control test sends fixture events to the test index in `[controltest] index`

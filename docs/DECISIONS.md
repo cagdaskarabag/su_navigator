@@ -1103,3 +1103,63 @@ as drift.
 * Not done (OD-6): export of any kind. Not done by design: filter-aware counts, a
   Sankey, "bookmark" meaning anything beyond the caller's own intent.
 
+## D-060 Recommended next use cases
+
+*0.8.4 (OD-7).*
+
+* Context: after discovery and assessment a user still has to decide where to
+  start. The decision is theirs; the app can only order what it already knows.
+* Decision: `GET ucm/readiness/recommendations` (`readiness/recommend.py`),
+  read-only and deterministic, with no state and no learning. It returns at most
+  10 items, the formula and its weights, the counts it left out, and one of four
+  distinct empty states (`no_catalogue`, `no_discovery`, `no_assessment`,
+  `none_eligible`).
+* Eligibility, in this order: an active entry in `uc_catalog`; a `uc_readiness`
+  row; readiness state `ready`, or `partially_ready` with no blockers (blocked,
+  not ready and insufficient evidence are never recommended); not rejected by the
+  calling user (their own `uc_selections` rows, user from `ctx.user`, never from a
+  parameter); not already deployed.
+* "Already deployed" is `CoverageService.use_case_levels` itself, so the list and
+  the coverage matrix cannot disagree. Checked on the lab and in the code
+  (`deployment/service.py`): a deployment document carries a workflow `state`
+  (draft, pending_approval, approved, rejected, deployed, failed, retired) and a
+  `deployed_revision`. Deploy sets `deployed_revision`; **retire sets it to
+  `None`** and removes the saved search; a failed deploy keeps the previous
+  `deployed_revision`. The coverage level is *deployed* (or *enabled* when
+  `live_status` is `enabled`) exactly when `deployed_revision >= 1`, whatever the
+  workflow state. So: enabled or disabled deployed searches are excluded; retired,
+  draft, pending approval, approved, rejected and never-deployed use cases are
+  eligible, and a draft, pending or approved deployment is shown as a flag. Lab
+  data: one retired deployment (`deployed_revision` null), one retired that had
+  never been deployed, one pending approval. Note: the flat `live_status` field of
+  a retired deployment can still read `disabled` (it is not reset on retire); no
+  code in this feature reads it for deployed use cases, `deployed_revision` decides.
+* Withdrawn catalogue entries (2,089 on the lab) have no readiness rows and are
+  excluded because they are not in the active catalogue.
+* Order: `ready` before `partially_ready`, then draft score descending, then
+  `criticality_rank` descending, readiness score descending and `content_id`
+  ascending. The state tiering is this record's reading of "prefer ready, then
+  partially ready with zero blockers".
+* Draft score = 0.40 x readiness score + 0.25 x criticality (rank/4 x 100) + 0.20
+  x new MITRE gain x 100 + 0.15 x readiness coverage x 100, rounded to two
+  decimals. New MITRE gain is the share of the use case's technique ids that are
+  not in the set of technique ids of active use cases at deployed level or higher
+  (deployed, enabled, operational). Ids are compared as stored: a deployed
+  `T1110.001` does not count as covering `T1110` here, although the coverage matrix
+  rolls sub-techniques up into their parent. A use case without technique ids has
+  gain 0 and its reason says "No MITRE ATT&CK technique mapping is stored". The
+  weights are product defaults, not measured; they are returned with every response
+  so a later change is visible.
+* Selected and deferred use cases stay eligible with a flag and no boost; a
+  bookmark is flagged the same way. Rejected ones of other users have no effect and
+  nothing about them is returned (unit test: no other user name appears in a
+  response).
+* Reasons come from stored fields: readiness state, score and coverage, criticality,
+  the new technique ids, requirement counts, the unverified count (always stated),
+  the first unmet required requirements, and for data models only "Data model
+  definition installed (populated data not verified)" when a stored `cim_model`
+  result has code `model_present`.
+* Not done: weights editable by the user, any use of `uc_selections` of other
+  users (for example "popular with your colleagues"), automatic selection, and
+  filtering by the user's role or domain interest.
+

@@ -199,9 +199,67 @@ function ucmViewMain($, ucm) {
             })));
     }
 
+    var FLAG_LABEL = { in_backlog: "In your backlog", deferred: "You deferred this", bookmarked: "You bookmarked this" };
+    var EXCLUDED_LABEL = { not_in_active_catalogue: "not in the active catalogue", already_deployed: "already deployed",
+        rejected_by_you: "rejected by you", blocked: "blocked", not_ready: "not ready", insufficient_evidence: "insufficient evidence",
+        has_blockers: "with unmet critical requirements" };
+    var PART_LABEL = [["readiness", "readiness score"], ["criticality", "criticality"], ["mitre_gain", "new MITRE coverage"],
+        ["coverage", "requirement coverage"]];
+
+    function recommendationItem(it) {
+        var flags = (it.flags || []).map(function (f) {
+            return ucm.badge(f === "deployment_in_progress" ? "Deployment " + String(it.deployment_state || "").replace(/_/g, " ") : FLAG_LABEL[f] || f, "info");
+        });
+        var parts = PART_LABEL.map(function (p) { return p[1] + " " + ((it.score_parts || {})[p[0]] || 0); }).join(" + ");
+        return el("div", { "class": "ucm-card ucm-recommendation" },
+            el("div", {}, el("a", { href: "ucm_usecase?id=" + encodeURIComponent(it.content_id), text: it.title }),
+                el("span", { "class": "ucm-sub ucm-mono", text: " " + it.content_id })),
+            el("div", { "class": "ucm-actions" }, ucm.readinessBadge(it.state), ucm.criticalityBadge(it.criticality), flags),
+            el("div", { "class": "ucm-sub", text: "Draft score " + it.draft_score + " = " + parts }),
+            el("details", { "class": "ucm-details" }, el("summary", { text: "Why this use case" }),
+                el("ul", { "class": "ucm-list" }, (it.reasons || []).map(function (r) { return el("li", { text: r }); }))));
+    }
+
+    function recommendationEmpty(data) {
+        var excluded = data.excluded || {};
+        var why = Object.keys(excluded).map(function (k) { return excluded[k] + " " + (EXCLUDED_LABEL[k] || k); }).join(", ");
+        switch (data.empty) {
+        case "no_catalogue":
+            return el("div", {}, ucm.stateBox("empty", "No use cases have been imported yet.", "Recommendations need content in the catalogue."),
+                el("a", { href: "ucm_content_admin", text: "Get content" }));
+        case "no_discovery":
+            return el("div", {}, ucm.stateBox("empty", "Discovery has not completed yet.", "Recommendations need to know what data this environment has."),
+                el("a", { href: "ucm_inventory", text: "Run discovery" }));
+        case "no_assessment":
+            return el("div", {}, ucm.stateBox("empty", "The use cases have not been assessed yet.", "Discovery is done; assess the catalogue to get recommendations."),
+                el("a", { href: "ucm_readiness", text: "Open Readiness" }));
+        default:
+            return el("div", {}, ucm.stateBox("empty", "No use case is eligible right now.",
+                "A use case is eligible when it is ready (or partially ready with no unmet critical requirement), not rejected by you and not deployed." +
+                (why ? " Left out: " + why + "." : "")),
+                el("a", { href: "ucm_readiness", text: "Open Readiness" }));
+        }
+    }
+
+    function renderRecommendations(body, data) {
+        ucm.clear(body);
+        if (data.empty) { body.appendChild(recommendationEmpty(data)); return; }
+        var w = (data.formula && data.formula.weights) || {};
+        var pct = function (k) { return Math.round(100 * (w[k] || 0)) + "%"; };
+        body.appendChild(el("div", { "class": "ucm-sub", text: "Showing " + data.items.length + " of " + data.eligible_total + " eligible use cases. " +
+            "Draft score = " + pct("readiness") + " readiness score + " + pct("criticality") + " criticality + " + pct("mitre_gain") +
+            " new MITRE coverage + " + pct("coverage") + " requirement coverage. The weights are a starting point, not measured. " +
+            "Ready use cases come before partially ready ones. This is a suggestion from stored results; nothing is selected or deployed for you." }));
+        body.appendChild(el("div", { "class": "ucm-cards" }, data.items.map(recommendationItem)));
+    }
+
     function recommendationSlot() {
-        return el("div", { "class": "ucm-section", id: "ucm-home-recommendations" }, el("h3", { text: "Recommended next" }),
-            el("div", { "class": "ucm-sub", text: "A short list of use cases that look ready to adopt will appear here in a later 0.8.x release." }));
+        var body = el("div", {}, el("div", { "class": "ucm-loading", text: "Loading…" }));
+        var node = el("div", { "class": "ucm-section", id: "ucm-home-recommendations" }, el("h3", { text: "Recommended next" }),
+            el("div", { "class": "ucm-sub", text: "Use cases that look ready to adopt, from the stored readiness results and your own selections." }), body);
+        ucm.get("readiness/recommendations").done(function (data) { renderRecommendations(body, data); })
+            .fail(function (err) { ucm.clear(body).appendChild(ucm.stateBox("error", "Recommendations are not available.", err && err.message ? err.message : "The request failed.")); });
+        return node;
     }
 
     ucm.clear(root).appendChild(el("div", {},

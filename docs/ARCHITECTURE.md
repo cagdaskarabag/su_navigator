@@ -83,6 +83,32 @@ type ─▶ ``score`` (weights, veto) ─▶ batch_save ``uc_readiness``. The wo
 queues a re-assessment when discovery or content sync completed after the
 last assessment (D-024).
 
+Recommendation flow (D-060, `readiness/recommend.py`), read-only:
+``CoverageService.use_case_levels`` (active catalogue with its deployed level) +
+all ``uc_readiness`` keys and states + ``ready`` / ``partially_ready`` rows +
+``uc_deployments`` states + the calling user's own ``uc_selections`` ─▶ eligibility
+filter ─▶ draft score ─▶ order ─▶ reasons for the top 10 (one ``uc_readiness`` read
+each, for the ``cim_model`` result).
+
+```
+eligible   = active catalogue entry
+             AND uc_readiness row with state ready, or partially_ready with no blockers
+             AND level in (catalogue, ready)        # not deployed, enabled or operational
+             AND intent of the calling user != reject
+draft      = 0.40 * score                           # readiness score, 0-100
+           + 0.25 * (criticality_rank / 4 * 100)    # critical 4 ... unknown 0
+           + 0.20 * gain * 100                      # gain = |ids not covered| / |ids|, 0 without ids
+           + 0.15 * coverage * 100                  # share of scored weight that was decided
+covered    = union of mitre_ids of active use cases at level deployed, enabled or operational
+order      = (state ready first, -draft, -criticality_rank, -score, content_id)
+limit      = 10
+```
+
+Empty states, in order: no active catalogue; no readiness rows and no completed
+discovery; no readiness rows after discovery; rows exist but none eligible (the
+response counts what was left out). The weights are defaults, returned with every
+response (`formula`), and are not calibrated against outcomes.
+
 ## 4. Canonical model (`ucm.usecase/1`)
 
 Python dataclasses in `model/canonical.py`; serialised as plain dicts.
@@ -172,6 +198,7 @@ Downgrades are not supported (D-033).
 |---|---|---|
 | `GET ucm/catalog` | read collections | Filtered, paged catalogue (`q, domain, category, criticality, difficulty, sourcetype, mitre, status, quality, review, regulation, availability, bookmarked, sort, offset, count`). Facet parameters take several comma-separated values (OR within a facet, AND between facets). `availability` is a readiness state or `not_assessed`; `bookmarked=1` uses the caller's own bookmark selections (user from the session). Both are joined by `_key` (D-059). |
 | `GET ucm/catalog/facets` | read | Review statuses, regulations, quality flags and counts per domain, category, criticality and difficulty in the active catalogue (stored `catalog::facets` v2, whole-catalogue counts). |
+| `GET ucm/readiness/recommendations` | read collections | Up to 10 recommended use cases for the calling user, with draft-score parts, reasons, flags, the formula and one of four empty states (D-060). Read-only. |
 | `GET ucm/usecase?id=` | read | Canonical detail (normalized on read) + provenance. |
 | `GET ucm/categories` | read | Category list with sync state. |
 | `GET ucm/sync` | read | Provider state + recent jobs. |

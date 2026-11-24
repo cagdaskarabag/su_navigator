@@ -41,6 +41,7 @@ from ..frameworks.operations import OperationsService
 from ..frameworks.registry import FrameworkRegistry
 from ..platform.search import SearchClient
 from ..readiness.query import ReadinessFilter, ReadinessQueryService
+from ..readiness.recommend import MAX_ITEMS as MAX_RECOMMENDATIONS, RecommendationService
 from ..readiness.service import ReadinessService, new_job as new_readiness_job
 from ..readiness.worker import settings_from_config as readiness_settings
 from ..selection.service import SelectionService
@@ -451,6 +452,12 @@ def get_readiness_summary(ctx: Context, req: Request) -> Response:
     return Response(200, out)
 
 
+def get_readiness_recommendations(ctx: Context, req: Request) -> Response:
+    completed = ctx.discovery_service().state.state().get("last_completed_at")
+    return Response(200, RecommendationService(ctx.store).recommend(
+        ctx.user, completed, _int(req.arg("count"), MAX_RECOMMENDATIONS, "count")))
+
+
 def get_readiness_usecase(ctx: Context, req: Request) -> Response:
     doc = ctx.readiness_service().get(req.arg("id"))
     if doc is None:
@@ -767,6 +774,7 @@ def build_router() -> Router:
     router.add("POST", "readiness", post_readiness)
     router.add("GET", "readiness/summary", get_readiness_summary)
     router.add("GET", "readiness/usecase", get_readiness_usecase)
+    router.add("GET", "readiness/recommendations", get_readiness_recommendations)
     router.add("POST", "readiness/assess", post_readiness_assess)
     router.add("GET", "selections", get_selections)
     router.add("POST", "selections", post_selections)

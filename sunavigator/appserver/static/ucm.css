@@ -125,3 +125,5 @@ textarea.ucm-modal-input { min-height: 72px; resize: vertical; }
 .ucm-chip-button:hover { background: #dce9f6; }
 .ucm-kpi-how { margin-top: 6px; font-size: 11px; color: #5c6773; }
 .ucm-kpis .ucm-card { min-width: 190px; }
+.ucm-recommendation { min-width: 300px; max-width: 460px; }
+.ucm-recommendation .ucm-actions { margin: 4px 0; }

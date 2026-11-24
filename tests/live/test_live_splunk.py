@@ -537,6 +537,28 @@ class LiveApiTest(unittest.TestCase):
             api(self.viewer, "POST", "selections/delete", body={"id": mine})
             api(self.admin, "POST", "selections/delete", body={"id": theirs})
 
+    def test_recommendations_follow_readiness_and_the_callers_rejects(self):
+        status, base = api(self.viewer, "GET", "readiness/recommendations")
+        self.assertEqual(status, 200, base)
+        self.assertLessEqual(len(base["items"]), 10)
+        for item in base["items"]:
+            self.assertIn(item["state"], ("ready", "partially_ready"))
+            self.assertTrue(item["reasons"])
+        if not base["items"]:
+            self.assertIn(base["empty"], ("no_catalogue", "no_discovery", "no_assessment", "none_eligible"))
+            return
+        pick = base["items"][0]["content_id"]
+        try:
+            self.assertEqual(api(self.viewer, "POST", "selections", body={"id": pick, "intent": "reject"})[0], 200)
+            _, mine = api(self.viewer, "GET", "readiness/recommendations")
+            _, other = api(self.admin, "GET", "readiness/recommendations", {"user": self.VIEWER})
+            self.assertNotIn(pick, [i["content_id"] for i in mine["items"]])
+            self.assertEqual(mine["excluded"].get("rejected_by_you"), 1)
+            self.assertNotIn("rejected_by_you", other["excluded"])
+            self.assertNotIn(self.VIEWER, json.dumps(other))
+        finally:
+            api(self.viewer, "POST", "selections/delete", body={"id": pick})
+
     def test_selection_and_spl_validation(self):
         status, body = api(self.viewer, "POST", "selections",
                            body={"id": "fenre:UC-13.1.1", "intent": "select", "priority": 70})

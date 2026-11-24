@@ -1,10 +1,10 @@
-# SUNavigator 0.8.3 — operator guide
+# SUNavigator 0.8.4 — operator guide
 
 **SUNavigator** (short for **Splunk use case navigator**) discovers, assesses,
 selects, validates and deploys monitoring use cases in Splunk.
 
 This is the install, usage and troubleshooting guide for **SUNavigator
-0.8.3**. It is written for a single Splunk Enterprise instance
+0.8.4**. It is written for a single Splunk Enterprise instance
 (search head + indexer on one host), including a local macOS install. Search
 head clusters and Splunk Cloud are **not** validated in this version.
 
@@ -24,6 +24,14 @@ Related documents (design, not how-to):
 
 The 0.8 line is a usability release. It adds no schema change and no new
 collections. An upgrade from 0.7.3 keeps your data.
+
+### 0.8.4
+
+- **Recommended next.** The Home page lists up to 10 use cases that look ready
+  to adopt, with the reasons behind each (§6.0, D-060). Recommendations use
+  stored readiness results, deployments and your own selections only; they
+  select and deploy nothing. The route is `GET /services/ucm/readiness/recommendations`.
+  No schema change.
 
 ### 0.8.3
 
@@ -194,7 +202,7 @@ commands (`delete`, `outputlookup`, `collect`, script, and similar). Deployed
 searches have **no email, webhook or script alert actions**; the default
 alert mode only writes to Splunk's Triggered Alerts.
 
-**Not in 0.8.3:** PDF export of coverage, a bundled regulation-control
+**Not in 0.8.4:** PDF export of coverage, a bundled regulation-control
 catalogue, validated SHC behaviour, Splunk Cloud vetting submission.
 
 ---
@@ -206,7 +214,7 @@ catalogue, validated SHC behaviour, Splunk Cloud vetting submission.
 | Splunk | Enterprise 10.x (validated on 10.2.9 in development; tested by operators on 10.4.3 Darwin arm64). Python 3.9 or 3.13 in Splunk. |
 | KV Store | Must reach `status: ready`. The app stores catalogue, inventory, readiness, selections, deployments and audit in KV collections. |
 | Role | First-time setup needs `admin` (or `sc_admin` on Cloud). |
-| Disk | The 0.8.3 package is a few megabytes. Category 9 of Fenre is about 120 records; the full Fenre corpus is tens of thousands of records. |
+| Disk | The 0.8.4 package is a few megabytes. Category 9 of Fenre is about 120 records; the full Fenre corpus is tens of thousands of records. |
 | Network | Optional. Remote sync needs HTTPS to `api.github.com` and `raw.githubusercontent.com`. Offline import needs none. |
 | Browser | Splunk Web. The app is a set of Simple XML views plus JavaScript under `/en-US/app/sunavigator/`. |
 
@@ -223,7 +231,7 @@ Placeholders used below:
 
 ```bash
 ./tools/package.sh
-# writes dist/sunavigator-0.8.3.tar.gz
+# writes dist/sunavigator-0.8.4.tar.gz
 ```
 
 The tarball has a single top-level folder `sunavigator/`
@@ -241,11 +249,11 @@ then fails in the UI with `500 Internal Server Error` even though splunkd is
 still unpacking. Use the CLI:
 
 ```bash
-$SPLUNK_HOME/bin/splunk install app /path/to/sunavigator-0.8.3.tar.gz \
+$SPLUNK_HOME/bin/splunk install app /path/to/sunavigator-0.8.4.tar.gz \
   -auth "$SPLUNK_USER:$SPLUNK_PASSWORD"
 # first install: omit -update
 # upgrade of an existing copy:
-$SPLUNK_HOME/bin/splunk install app /path/to/sunavigator-0.8.3.tar.gz \
+$SPLUNK_HOME/bin/splunk install app /path/to/sunavigator-0.8.4.tar.gz \
   -update 1 -auth "$SPLUNK_USER:$SPLUNK_PASSWORD"
 
 $SPLUNK_HOME/bin/splunk restart
@@ -522,8 +530,28 @@ state only and runs no search:
   highlighted "next step" is the first one with no stored result: no
   catalogue, then no completed discovery, then no assessment; after that,
   Choose. It is a pointer, not a check that earlier results are current.
-- **Recommended next**: a placeholder; the list arrives in a later 0.8.x
-  release.
+- **Recommended next** (from 0.8.4): up to 10 use cases, each linking to its
+  use-case page, with a "Why this use case" list. A use case is eligible when it
+  has a stored readiness result of *ready* (or *partially ready* with no unmet
+  critical requirement), is active in the catalogue, is not already deployed
+  (enabled or not) and you have not rejected it. Your own rejects are the only
+  ones used. Use cases you selected or deferred stay in the list and say so;
+  nothing is boosted for that. A use case with a deployment draft in progress is
+  listed and flagged. *Ready* use cases come before *partially ready* ones; inside
+  each group the order is the draft score, then criticality, readiness score and
+  use-case id.
+
+  Draft score = 40% readiness score + 25% criticality (critical 100, high 75,
+  medium 50, low 25) + 20% new MITRE coverage (the share of the use case's
+  technique ids that no deployed use case covers) + 15% requirement coverage.
+  These weights are a starting point, not measured; the page shows the four
+  parts for every item. The reasons are built from stored fields only,
+  including how many requirements are not verified yet. The only statement about
+  data models is "Data model definition installed (populated data not
+  verified)", and only when the stored result says so.
+
+  If the list is empty the page says why: no catalogue, discovery not completed,
+  not assessed, or no use case eligible (with counts of what was left out).
 - **Explore by domain**: opens the Domain dashboard
   (`ucm_domain?form.domain=<domain>`) for each of the 13 domains, or all.
 - **User guide**: a static placeholder that says the guide is in development,
@@ -911,7 +939,7 @@ Most non-admin roles cannot. The UI then reports run status **not
 available**, not “no runs”. Tick **Include run status** only if your role
 can search `_internal`.
 
-Regulation controls have no bundled catalogue in 0.8.3; only controls that
+Regulation controls have no bundled catalogue in 0.8.4; only controls that
 appear on imported use cases are listed.
 
 **Export ATT&CK Navigator layer** (next to the legend) downloads the matrix
@@ -1036,7 +1064,7 @@ app. Do the steps in this order:
    $SPLUNK_HOME/bin/splunk restart
    ```
 
-4. **Install SUNavigator 0.8.3** as in §3.2. The first install omits
+4. **Install SUNavigator 0.8.4** as in §3.2. The first install omits
    `-update`, because `sunavigator` is a new app ID.
 5. **Re-create the GitHub token** if you use one (§3.6). It must be stored in
    realm `sunavigator`. The 0.7.0 token in realm `splunk_use_case_manager` is
@@ -1189,7 +1217,7 @@ tail -50 "$SPLUNK_HOME/var/log/splunk/sunavigator.log"
 ```
 
 On a search head cluster only the captain runs jobs (not validated in
-0.8.3). On a single instance `standalone = 1` is expected.
+0.8.4). On a single instance `standalone = 1` is expected.
 
 ### 9.4 Provider could not be reached
 
@@ -1396,7 +1424,7 @@ Full table: [ARCHITECTURE.md §6](ARCHITECTURE.md).
 
 ---
 
-## 12. Known limitations (0.8.3)
+## 12. Known limitations (0.8.4)
 
 - Catalogue total counts are bounded by KV `max_rows_per_query` (50,000).
 - Catalogue search does not rank and does not search descriptions.
@@ -1419,7 +1447,7 @@ Full table: [ARCHITECTURE.md §6](ARCHITECTURE.md).
 
 ## 13. Quick start checklist
 
-1. `splunk install app sunavigator-0.8.3.tar.gz` then `splunk restart`.
+1. `splunk install app sunavigator-0.8.4.tar.gz` then `splunk restart`.
 2. `splunk show kvstore-status` → `ready` (macOS: §9.2 if stuck on `starting`).
 3. Open **SUNavigator → Administration**; all platform pills green.
 4. **Check provider for categories** → tick **9** → **Synchronize**, **or**
