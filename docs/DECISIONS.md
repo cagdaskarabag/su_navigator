@@ -929,3 +929,43 @@ as drift.
   settings are kept only as raw data in the stored record; `cis20`, `nist`,
   `cve` and kill-chain phases are kept in `provider_extras`, not mapped to a
   framework (no ATT&CK-style registry for them in the app).
+
+## D-056 Usability: select-all, glossary and static-asset cache busting
+*0.8.0.*
+* Select all: the Content Administration category list gets a tri-state header
+  checkbox, Select all / Deselect all and a count (`ucm.selectAll`). It only
+  changes the checkboxes it was given and never a disabled one. It does not touch
+  the separate "Re-download all records" and "Allow schema" options, so selecting
+  categories cannot trigger a forced re-download.
+* Glossary: one set of texts (`READINESS_HELP`, `STATUS_HELP`) in `ucm_common.js`
+  feeds tooltips and legends on the Readiness and use-case pages. The wording
+  follows `readiness/scoring.py` and `evaluators.py`; `unverified` is "not checked
+  yet", "left out of score and coverage", and explicitly not "data is absent". A
+  unit test asserts the glossary keys equal `STATES` and `STATUSES`, so a new
+  state cannot ship without an explanation.
+* Cache busting (verified on the lab, Splunk 10.2.9): static files are served
+  at `/en-US/static/@<splunk build>[.<push>]-<app build>/app/sunavigator/<file>`
+  with `Cache-Control: max-age=31536000`. The app build is `app.conf [install]
+  build`, so it must be raised in every change that touches `appserver/static`.
+  Two traps were found and handled:
+  1. The views loaded the shared module with the RequireJS id
+     `../app/sunavigator/ucm_common`, which is requested as
+     `/static/@<splunk build>/app/sunavigator/ucm_common.js` with no app build.
+     That file would stay cached for a year across upgrades while the view
+     script (which has the build) changed, so a new view could run against an old
+     `ucm_common.js`. `splunk.util.make_url` in the browser does not help: it
+     always writes `:0` as the app build. Each view script now derives the module
+     URL from the `<link>` of `ucm.css`, which the dashboard XML loads under the
+     busted URL, so all three files share one cache key. If the link is missing it
+     falls back to the old id. A unit test pins the pattern and the `script` and
+     `stylesheet` attributes of every view.
+  2. Splunk Web also keeps static files in a server-side cache. After copying
+     files into a running instance the old content is still served until a
+     restart or `/en-US/_bump` (an operator action; the lab uses restart).
+* Observed: with build 2, the script, stylesheet and `ucm_common.js` are all
+  requested under `@41bebfa38eb4-2`.
+* Browser logic tests: `tests/js` holds dependency-free Node tests with a minimal
+  fake DOM and AMD stub (`fake_dom.js`); `tests/unit/test_js_logic.py` runs them
+  inside the Python suite and skips when Node is not installed. The fake DOM
+  throws on any `innerHTML` use, so the tests also enforce the safe-DOM rule for
+  the code they load.

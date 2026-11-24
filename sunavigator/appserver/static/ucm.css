@@ -88,4 +88,7 @@ textarea.ucm-input { font-family: Menlo, Consolas, monospace; font-size: 12px; }
 textarea.ucm-modal-input { min-height: 72px; resize: vertical; }
 .ucm-modal-error { min-height: 16px; color: #b3261e; font-size: 12px; }
 .ucm-modal .ucm-actions { justify-content: flex-end; }
+.ucm-help { cursor: help; text-decoration: underline dotted #8a96a3; text-underline-offset: 3px; }
+.ucm-legend-box .ucm-kv { margin: 6px 0 4px 12px; max-width: 900px; }
+.ucm-legend-box .ucm-kv dd { word-break: normal; }
 .ucm-modal .btn-danger { background: #b3261e; border-color: #b3261e; color: #fff; }

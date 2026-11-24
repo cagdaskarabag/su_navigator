@@ -1,8 +1,17 @@
-require([
-    "jquery",
-    "../app/sunavigator/ucm_common",
-    "splunkjs/mvc/simplexml/ready!"
-], function ($, ucm) {
+/*
+ * ucm_common.js is requested from the same static directory as ucm.css, which the dashboard
+ * XML loads under /static/@<build>.<push>-<app build>/... and so carries the app build.
+ * A relative module id ("../app/sunavigator/ucm_common") or splunk.util.make_url (which
+ * always writes app build 0) would leave it cached for a year across upgrades.
+ */
+var ucmCommonUrl = (function () {
+    var links = document.querySelectorAll('link[href*="/app/sunavigator/ucm.css"]');
+    return links.length ? links[0].href.replace(/ucm\.css([?#].*)?$/, "ucm_common.js") : "../app/sunavigator/ucm_common";
+}());
+
+require(["jquery", ucmCommonUrl, "splunkjs/mvc/simplexml/ready!"], ucmViewMain);
+
+function ucmViewMain($, ucm) {
     "use strict";
     var el = ucm.el;
     var root = document.getElementById("ucm-backlog");
@@ -47,4 +56,4 @@ require([
     }
 
     load();
-});
+}

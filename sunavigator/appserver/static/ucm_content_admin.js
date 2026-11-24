@@ -1,8 +1,17 @@
-require([
-    "jquery",
-    "../app/sunavigator/ucm_common",
-    "splunkjs/mvc/simplexml/ready!"
-], function ($, ucm) {
+/*
+ * ucm_common.js is requested from the same static directory as ucm.css, which the dashboard
+ * XML loads under /static/@<build>.<push>-<app build>/... and so carries the app build.
+ * A relative module id ("../app/sunavigator/ucm_common") or splunk.util.make_url (which
+ * always writes app build 0) would leave it cached for a year across upgrades.
+ */
+var ucmCommonUrl = (function () {
+    var links = document.querySelectorAll('link[href*="/app/sunavigator/ucm.css"]');
+    return links.length ? links[0].href.replace(/ucm\.css([?#].*)?$/, "ucm_common.js") : "../app/sunavigator/ucm_common";
+}());
+
+require(["jquery", ucmCommonUrl, "splunkjs/mvc/simplexml/ready!"], ucmViewMain);
+
+function ucmViewMain($, ucm) {
     "use strict";
     var el = ucm.el;
     var root = document.getElementById("ucm-admin");
@@ -89,15 +98,20 @@ require([
             text: "Provider version " + manifest.provider_version + " at commit " + manifest.source_ref +
                 " (ref " + manifest.requested_ref + "), schema " + manifest.schema_version + "." }));
         (manifest.warnings || []).forEach(function (w) { providerBox.appendChild(ucm.stateBox("info", "Provider warning", w)); });
-        var head = el("tr", {}, el("th", {}), el("th", { text: "Category" }), el("th", { text: "Upstream use cases" }),
-            el("th", { text: "Imported locally" }), el("th", { text: "Last sync" }));
         var body = el("tbody", {});
         var boxes = [];
-        manifest.categories.forEach(function (c) {
+        var rows = manifest.categories.map(function (c) {
             var local = localCategories[c.category_id] || {};
             var box = el("input", { type: "checkbox", value: c.category_id, "aria-label": c.name });
             if (local.selected) { box.checked = true; }
             boxes.push(box);
+            return { c: c, local: local, box: box };
+        });
+        var bulk = ucm.selectAll(boxes, "categories");
+        var head = el("tr", {}, el("th", {}, bulk.header), el("th", { text: "Category" }), el("th", { text: "Upstream use cases" }),
+            el("th", { text: "Imported locally" }), el("th", { text: "Last sync" }));
+        rows.forEach(function (row) {
+            var c = row.c, local = row.local, box = row.box;
             body.appendChild(el("tr", {}, el("td", {}, box),
                 el("td", {}, el("div", { text: c.category_id + ". " + c.name }), el("div", { "class": "ucm-sub", text: c.description || "" })),
                 el("td", { text: c.upstream_count === null ? "unknown" : c.upstream_count }),
@@ -122,6 +136,8 @@ require([
                     ucm.clear(message).appendChild(ucm.stateBox("error", "Synchronization was not queued.", err.message));
                 }).always(function () { syncBtn.disabled = false; });
             } });
+        providerBox.appendChild(el("div", { "class": "ucm-actions" }, bulk.selectAllButton, bulk.deselectAllButton, bulk.count,
+            el("span", { "class": "ucm-sub", text: "Selecting categories does not re-download records; that is the separate option below." })));
         providerBox.appendChild(el("table", { "class": "ucm-table" }, el("thead", {}, head), body));
         providerBox.appendChild(el("div", { "class": "ucm-actions" }, syncBtn,
             el("label", {}, force, " Re-download all records"),
@@ -215,4 +231,4 @@ require([
     refresh();
     renderPlatform();
     renderAudit();
-});
+}

@@ -1,8 +1,17 @@
-require([
-    "jquery",
-    "../app/sunavigator/ucm_common",
-    "splunkjs/mvc/simplexml/ready!"
-], function ($, ucm) {
+/*
+ * ucm_common.js is requested from the same static directory as ucm.css, which the dashboard
+ * XML loads under /static/@<build>.<push>-<app build>/... and so carries the app build.
+ * A relative module id ("../app/sunavigator/ucm_common") or splunk.util.make_url (which
+ * always writes app build 0) would leave it cached for a year across upgrades.
+ */
+var ucmCommonUrl = (function () {
+    var links = document.querySelectorAll('link[href*="/app/sunavigator/ucm.css"]');
+    return links.length ? links[0].href.replace(/ucm\.css([?#].*)?$/, "ucm_common.js") : "../app/sunavigator/ucm_common";
+}());
+
+require(["jquery", ucmCommonUrl, "splunkjs/mvc/simplexml/ready!"], ucmViewMain);
+
+function ucmViewMain($, ucm) {
     "use strict";
     var el = ucm.el;
     var root = document.getElementById("ucm-readiness");
@@ -11,6 +20,25 @@ require([
     var state = { state: params.state || "", domain: params.domain || "", criticality: params.criticality || "",
         q: params.q || "", sort: params.sort || "score", offset: parseInt(params.offset || "0", 10) || 0 };
     var pollTimer = null;
+    var COLUMNS = [
+        ["Use case"], ["Criticality"],
+        ["State", "Overall readiness from the requirement checks. Hover a state badge for its rule."],
+        ["Score", "Weighted share of the decided requirements: met counts 1, partial 0.5, not met and unknown 0. " +
+            "Weight is the requirement level (critical 3, required 2, recommended 1) times its confidence. " +
+            "Not verified and n/a requirements are left out."],
+        ["Coverage", "Share of the scored weight that could be decided as met, partial or not met. Unknown lowers coverage; " +
+            "not verified and n/a requirements are left out."],
+        ["Unmet (critical/required)", "Critical and required requirements that were checked and are not met. The first 3 are " +
+            "listed; up to 20 unmet required requirements are kept. Unmet recommended requirements are only on the use case page."],
+        ["Not verified", "Requirements the inventory cannot check yet, such as unsampled fields, event conditions, permissions " +
+            "or unparsed SPL. They are left out of score and coverage, and do not mean the data is absent."]
+    ];
+
+    function howToRead() {
+        return el("div", { "class": "ucm-section" },
+            ucm.legend("How to read this page: readiness states", ucm.READINESS_STATES, ucm.readinessBadge, ucm.READINESS_HELP),
+            ucm.legend("How to read this page: requirement statuses", ucm.STATUSES, ucm.statusBadge, ucm.STATUS_HELP));
+    }
 
     function scoreCell(item) {
         if (item.score === null || item.score === undefined) { return el("span", { "class": "ucm-sub", text: "–" }); }
@@ -54,7 +82,9 @@ require([
             s.discovery_at && data.discovery_completed_at && s.discovery_at !== data.discovery_completed_at
                 ? ucm.stateBox("info", "Results are older than the latest discovery.", "A re-assessment is queued automatically by the background worker unless auto_assess is disabled.")
                 : null);
-        var gaps = el("div", { "class": "ucm-card" }, el("h3", { text: "Most common unmet requirements" }));
+        var gaps = el("div", { "class": "ucm-card" }, el("h3", { text: "Most common unmet requirements" }),
+            el("div", { "class": "ucm-sub", text: "Critical and required requirements that were checked and not met, across blocked, " +
+                "not ready and partially ready use cases." }));
         var list = (data.top_blockers || []).map(function (g) { return { g: g, critical: true }; })
             .concat((data.top_gaps || []).map(function (g) { return { g: g, critical: false }; })).slice(0, 12);
         if (!list.length) {
@@ -75,9 +105,7 @@ require([
             return ucm.stateBox("empty", "No assessed use cases match.", "Assessment runs after discovery; clear filters or re-assess.");
         }
         var head = el("tr", {});
-        ["Use case", "Criticality", "State", "Score", "Coverage", "Unmet", "Unverified"].forEach(function (h) {
-            head.appendChild(el("th", { text: h }));
-        });
+        COLUMNS.forEach(function (c) { head.appendChild(c[1] ? ucm.helpHeader(c[0], c[1]) : el("th", { text: c[0] })); });
         var body = el("tbody", {});
         data.items.forEach(function (it) {
             var unmet = (it.blockers || []).concat(it.gaps || []);
@@ -151,6 +179,7 @@ require([
     function render(summary) {
         ucm.clear(root).appendChild(el("div", {},
             el("div", { id: "rd-summary" }, renderSummary(summary)),
+            howToRead(),
             toolbar(),
             el("div", { id: "rd-table" }, el("div", { "class": "ucm-loading", text: "Loading…" }))));
         bindToolbar();
@@ -169,4 +198,4 @@ require([
     }
 
     poll();
-});
+}

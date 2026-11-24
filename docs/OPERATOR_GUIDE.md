@@ -1,10 +1,10 @@
-# SUNavigator 0.7.3 — operator guide
+# SUNavigator 0.8.0 — operator guide
 
 **SUNavigator** (short for **Splunk use case navigator**) discovers, assesses,
 selects, validates and deploys monitoring use cases in Splunk.
 
 This is the install, usage and troubleshooting guide for **SUNavigator
-0.7.3**. It is written for a single Splunk Enterprise instance
+0.8.0**. It is written for a single Splunk Enterprise instance
 (search head + indexer on one host), including a local macOS install. Search
 head clusters and Splunk Cloud are **not** validated in this version.
 
@@ -19,6 +19,32 @@ Related documents (design, not how-to):
 | [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md) | Work packages and validation status |
 
 ---
+
+## What changed in 0.8.x
+
+The 0.8 line is a usability release. It adds no schema change and no new
+collections. An upgrade from 0.7.3 keeps your data.
+
+### 0.8.0
+
+- **Select all categories.** The category list on Content Administration has
+  a header checkbox (tri-state), **Select all** and **Deselect all** buttons,
+  and a count of selected categories. Selecting categories does not
+  re-download records; **Re-download all records** stays a separate option
+  (D-056).
+- **Readiness terms are explained where they appear.** Column headers and
+  status badges on the Readiness page and the use-case page carry a tooltip,
+  and a collapsible legend lists every readiness state and requirement
+  status. "Not verified" is described as not checked yet, never as missing
+  data. The texts come from one glossary in `ucm_common.js`, and a unit test
+  keeps its keys equal to the engine's states and statuses.
+- **Browser cache.** Splunk serves app JavaScript and CSS with a one-year
+  cache lifetime under a URL that contains the app build number
+  (`app.conf [install] build`). The build number is raised whenever static
+  files change, and the shared `ucm_common.js` is now requested under the same
+  URL, so browsers load the new files after the upgrade. Restart Splunk after
+  installing, because Splunk Web also caches static files on the server. If a
+  page still looks unchanged, reload with the cache bypassed.
 
 ## 0. What changed in 0.7.3
 
@@ -128,7 +154,7 @@ commands (`delete`, `outputlookup`, `collect`, script, and similar). Deployed
 searches have **no email, webhook or script alert actions**; the default
 alert mode only writes to Splunk's Triggered Alerts.
 
-**Not in 0.7.3:** PDF export of coverage, a bundled regulation-control
+**Not in 0.8.0:** PDF export of coverage, a bundled regulation-control
 catalogue, validated SHC behaviour, Splunk Cloud vetting submission.
 
 ---
@@ -140,7 +166,7 @@ catalogue, validated SHC behaviour, Splunk Cloud vetting submission.
 | Splunk | Enterprise 10.x (validated on 10.2.9 in development; tested by operators on 10.4.3 Darwin arm64). Python 3.9 or 3.13 in Splunk. |
 | KV Store | Must reach `status: ready`. The app stores catalogue, inventory, readiness, selections, deployments and audit in KV collections. |
 | Role | First-time setup needs `admin` (or `sc_admin` on Cloud). |
-| Disk | The 0.7.3 package is a few megabytes. Category 9 of Fenre is about 120 records; the full Fenre corpus is tens of thousands of records. |
+| Disk | The 0.8.0 package is a few megabytes. Category 9 of Fenre is about 120 records; the full Fenre corpus is tens of thousands of records. |
 | Network | Optional. Remote sync needs HTTPS to `api.github.com` and `raw.githubusercontent.com`. Offline import needs none. |
 | Browser | Splunk Web. The app is a set of Simple XML views plus JavaScript under `/en-US/app/sunavigator/`. |
 
@@ -157,7 +183,7 @@ Placeholders used below:
 
 ```bash
 ./tools/package.sh
-# writes dist/sunavigator-0.7.3.tar.gz
+# writes dist/sunavigator-0.8.0.tar.gz
 ```
 
 The tarball has a single top-level folder `sunavigator/`
@@ -175,11 +201,11 @@ then fails in the UI with `500 Internal Server Error` even though splunkd is
 still unpacking. Use the CLI:
 
 ```bash
-$SPLUNK_HOME/bin/splunk install app /path/to/sunavigator-0.7.3.tar.gz \
+$SPLUNK_HOME/bin/splunk install app /path/to/sunavigator-0.8.0.tar.gz \
   -auth "$SPLUNK_USER:$SPLUNK_PASSWORD"
 # first install: omit -update
 # upgrade of an existing copy:
-$SPLUNK_HOME/bin/splunk install app /path/to/sunavigator-0.7.3.tar.gz \
+$SPLUNK_HOME/bin/splunk install app /path/to/sunavigator-0.8.0.tar.gz \
   -update 1 -auth "$SPLUNK_USER:$SPLUNK_PASSWORD"
 
 $SPLUNK_HOME/bin/splunk restart
@@ -739,7 +765,7 @@ Most non-admin roles cannot. The UI then reports run status **not
 available**, not “no runs”. Tick **Include run status** only if your role
 can search `_internal`.
 
-Regulation controls have no bundled catalogue in 0.7.3; only controls that
+Regulation controls have no bundled catalogue in 0.8.0; only controls that
 appear on imported use cases are listed.
 
 **Export ATT&CK Navigator layer** (next to the legend) downloads the matrix
@@ -864,7 +890,7 @@ app. Do the steps in this order:
    $SPLUNK_HOME/bin/splunk restart
    ```
 
-4. **Install SUNavigator 0.7.3** as in §3.2. The first install omits
+4. **Install SUNavigator 0.8.0** as in §3.2. The first install omits
    `-update`, because `sunavigator` is a new app ID.
 5. **Re-create the GitHub token** if you use one (§3.6). It must be stored in
    realm `sunavigator`. The 0.7.0 token in realm `splunk_use_case_manager` is
@@ -1017,7 +1043,7 @@ tail -50 "$SPLUNK_HOME/var/log/splunk/sunavigator.log"
 ```
 
 On a search head cluster only the captain runs jobs (not validated in
-0.7.3). On a single instance `standalone = 1` is expected.
+0.8.0). On a single instance `standalone = 1` is expected.
 
 ### 9.4 Provider could not be reached
 
@@ -1224,7 +1250,7 @@ Full table: [ARCHITECTURE.md §6](ARCHITECTURE.md).
 
 ---
 
-## 12. Known limitations (0.7.3)
+## 12. Known limitations (0.8.0)
 
 - Catalogue total counts are bounded by KV `max_rows_per_query` (50,000).
 - Catalogue search does not rank and does not search descriptions.
@@ -1247,7 +1273,7 @@ Full table: [ARCHITECTURE.md §6](ARCHITECTURE.md).
 
 ## 13. Quick start checklist
 
-1. `splunk install app sunavigator-0.7.3.tar.gz` then `splunk restart`.
+1. `splunk install app sunavigator-0.8.0.tar.gz` then `splunk restart`.
 2. `splunk show kvstore-status` → `ready` (macOS: §9.2 if stuck on `starting`).
 3. Open **SUNavigator → Administration**; all platform pills green.
 4. **Check provider for categories** → tick **9** → **Synchronize**, **or**

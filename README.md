@@ -1,6 +1,6 @@
 # SUNavigator (Splunk Use Case Navigator)
 
-[![Version](https://img.shields.io/badge/version-0.7.3-blue.svg)](docs/OPERATOR_GUIDE.md#0-what-changed-in-073)
+[![Version](https://img.shields.io/badge/version-0.8.x-blue.svg)](docs/OPERATOR_GUIDE.md#what-changed-in-08x)
 [![Splunk Compatibility](https://img.shields.io/badge/splunk-Enterprise%2010.x%20%7C%20Cloud-orange.svg)](docs/OPERATOR_GUIDE.md#2-requirements)
 [![Python Support](https://img.shields.io/badge/python-3.9%20%7C%203.13-brightgreen.svg)](docs/DECISIONS.md#d-005-stdlib-only-python-compatible-with-39313)
 [![Tests](https://img.shields.io/badge/unit%20tests-354%20passed-success.svg)](tests/)
@@ -127,7 +127,7 @@ Package the production `.tar.gz` bundle from this repository:
 git clone https://github.com/cagdaskarabag/sun_navigator.git
 cd sun_navigator
 ./tools/package.sh
-# Output: dist/sunavigator-0.7.3.tar.gz
+# Output: dist/sunavigator-0.8.0.tar.gz
 ```
 
 ### CLI Installation (Recommended)
@@ -135,7 +135,7 @@ cd sun_navigator
 Splunk Web's UI upload times out on packages over standard browser HTTP limits. Install via the Splunk CLI:
 
 ```bash
-$SPLUNK_HOME/bin/splunk install app dist/sunavigator-0.7.3.tar.gz \
+$SPLUNK_HOME/bin/splunk install app dist/sunavigator-0.8.0.tar.gz \
   -auth "$SPLUNK_USER:$SPLUNK_PASSWORD"
 
 $SPLUNK_HOME/bin/splunk restart

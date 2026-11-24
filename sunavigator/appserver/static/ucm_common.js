@@ -172,14 +172,89 @@ define(["jquery", "splunk.util"], function ($, splunkUtil) {
     var STATUS_LABELS = { met: ["met", "ok"], partial: ["partial", "warn"], not_met: ["not met", "error"],
         unknown: ["unknown", "neutral"], unverified: ["not verified", "info"], not_applicable: ["n/a", "neutral"] };
 
+    /*
+     * Keys match splunk_ucm.readiness.scoring.STATES and evaluators.STATUSES (checked by a unit test).
+     * Wording follows scoring.py: a missing check is never described as missing data.
+     */
+    var READINESS_HELP = {
+        ready: "Score at or above the ready threshold, coverage at or above the minimum, and no unmet critical or required requirement.",
+        partially_ready: "Score at or above the partial threshold, but below the ready threshold or with at least one unmet required requirement.",
+        not_ready: "Score below the partial threshold.",
+        blocked: "At least one critical requirement was checked and is not met. Blocked wins over any score.",
+        insufficient_evidence: "Too little could be decided: coverage is below the minimum, or no requirement could be scored."
+    };
+    var STATUS_HELP = {
+        met: "Checked against the inventory and satisfied.",
+        partial: "Satisfied with a caveat, for example data older than the freshness threshold, an object shared only " +
+            "inside its app, an add-on below the documented minimum version, or SPL that needs review. Counts half in the score.",
+        not_met: "Checked and not satisfied, for example no events for the sourcetype in the discovery window, add-on not " +
+            "installed, or SPL rejected by Splunk's parser. Unmet critical requirements block the use case.",
+        unknown: "An evaluator ran but could not decide, for example the Splunk version was not recorded. Counts as 0 in the " +
+            "score and lowers coverage.",
+        unverified: "Not checked yet: the inventory cannot evaluate it (fields not sampled, event conditions, permissions, " +
+            "free-text sources, SPL not parsed). Left out of score and coverage. It is not a failure and does not mean the data is absent.",
+        not_applicable: "Does not apply to this deployment. Left out of score and coverage."
+    };
+
     function readinessBadge(value) {
         var l = READINESS_LABELS[value] || [value || "not assessed", "neutral"];
-        return badge(l[0], l[1]);
+        var b = badge(l[0], l[1]);
+        if (READINESS_HELP[value]) { b.setAttribute("title", READINESS_HELP[value]); }
+        return b;
     }
 
     function statusBadge(value) {
         var l = STATUS_LABELS[value] || [value || "not assessed", "neutral"];
-        return badge(l[0], l[1]);
+        var b = badge(l[0], l[1]);
+        if (STATUS_HELP[value]) { b.setAttribute("title", STATUS_HELP[value]); }
+        return b;
+    }
+
+    /* Table header with an explanation shown on hover and focus. */
+    function helpHeader(label, help) {
+        return el("th", { "class": "ucm-help", title: help, tabindex: "0" }, label);
+    }
+
+    /* Collapsible legend: one row per status or state, badge plus explanation. */
+    function legend(title, keys, badgeFn, help) {
+        return el("details", { "class": "ucm-details ucm-legend-box" }, el("summary", { text: title }),
+            el("dl", { "class": "ucm-kv" }, keys.map(function (k) {
+                return [el("dt", {}, badgeFn(k)), el("dd", { text: help[k] })];
+            })));
+    }
+
+    /*
+     * Tri-state "select all" over a fixed list of checkboxes. Only the boxes passed in change,
+     * disabled boxes are left alone, and individual changes keep the header and count in step.
+     */
+    function selectAll(boxes, noun, onChange) {
+        var header = el("input", { type: "checkbox", "aria-label": "Select all " + noun });
+        var count = el("span", { "class": "ucm-sub", "aria-live": "polite" });
+        var allBtn = el("button", { "class": "btn", type: "button", text: "Select all" });
+        var noneBtn = el("button", { "class": "btn", type: "button", text: "Deselect all" });
+        function enabled() { return boxes.filter(function (b) { return !b.disabled; }); }
+        function sync() {
+            var n = boxes.filter(function (b) { return b.checked; }).length;
+            var open = enabled();
+            var openChecked = open.filter(function (b) { return b.checked; }).length;
+            header.checked = n > 0 && n === boxes.length;
+            header.indeterminate = n > 0 && n < boxes.length;
+            header.disabled = !open.length;
+            allBtn.disabled = openChecked === open.length;
+            noneBtn.disabled = openChecked === 0;
+            count.textContent = n + " of " + boxes.length + " " + noun + " selected";
+            if (onChange) { onChange(n); }
+        }
+        function setAll(value) {
+            enabled().forEach(function (b) { b.checked = value; });
+            sync();
+        }
+        header.addEventListener("change", function () { setAll(header.checked); });
+        allBtn.addEventListener("click", function () { setAll(true); });
+        noneBtn.addEventListener("click", function () { setAll(false); });
+        boxes.forEach(function (b) { b.addEventListener("change", sync); });
+        sync();
+        return { header: header, selectAllButton: allBtn, deselectAllButton: noneBtn, count: count, sync: sync };
     }
 
     /*
@@ -294,7 +369,9 @@ define(["jquery", "splunk.util"], function ($, splunkUtil) {
         get: get, post: post, postRaw: postRaw, el: el, clear: clear, badge: badge,
         criticalityBadge: criticalityBadge, chips: chips, stateBox: stateBox, queryParams: queryParams,
         setQueryParams: setQueryParams, pager: pager, debounce: debounce, shortSha: shortSha,
-        readinessBadge: readinessBadge, statusBadge: statusBadge,
+        readinessBadge: readinessBadge, statusBadge: statusBadge, helpHeader: helpHeader, legend: legend,
+        selectAll: selectAll, READINESS_HELP: READINESS_HELP, STATUS_HELP: STATUS_HELP,
+        STATUSES: ["met", "partial", "not_met", "unknown", "unverified", "not_applicable"],
         READINESS_STATES: ["ready", "partially_ready", "not_ready", "blocked", "insufficient_evidence"],
         DOMAINS: ["security", "infrastructure", "network", "application", "database", "cloud", "endpoint",
             "identity", "ot_ics", "observability", "compliance", "business", "other"],

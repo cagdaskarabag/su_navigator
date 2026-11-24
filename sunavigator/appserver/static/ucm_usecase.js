@@ -1,8 +1,17 @@
-require([
-    "jquery",
-    "../app/sunavigator/ucm_common",
-    "splunkjs/mvc/simplexml/ready!"
-], function ($, ucm) {
+/*
+ * ucm_common.js is requested from the same static directory as ucm.css, which the dashboard
+ * XML loads under /static/@<build>.<push>-<app build>/... and so carries the app build.
+ * A relative module id ("../app/sunavigator/ucm_common") or splunk.util.make_url (which
+ * always writes app build 0) would leave it cached for a year across upgrades.
+ */
+var ucmCommonUrl = (function () {
+    var links = document.querySelectorAll('link[href*="/app/sunavigator/ucm.css"]');
+    return links.length ? links[0].href.replace(/ucm\.css([?#].*)?$/, "ucm_common.js") : "../app/sunavigator/ucm_common";
+}());
+
+require(["jquery", ucmCommonUrl, "splunkjs/mvc/simplexml/ready!"], ucmViewMain);
+
+function ucmViewMain($, ucm) {
     "use strict";
     var el = ucm.el;
     var root = document.getElementById("ucm-usecase");
@@ -58,9 +67,11 @@ require([
         var byId = {};
         ((readiness && readiness.results) || []).forEach(function (r) { byId[r.req_id] = r; });
         var head = el("tr", {});
-        ["Type", "Requirement", "Level", "Source", "Confidence", "Status", "Evidence"].forEach(function (h) {
+        ["Type", "Requirement", "Level", "Source", "Confidence"].forEach(function (h) {
             head.appendChild(el("th", { text: h }));
         });
+        head.appendChild(ucm.helpHeader("Status", "Result of checking this requirement against the inventory. Hover a status for its meaning."));
+        head.appendChild(el("th", { text: "Evidence" }));
         var body = el("tbody", {});
         reqs.forEach(function (r) {
             var res = byId[r.req_id];
@@ -486,6 +497,7 @@ require([
         root.appendChild(section("Business value", text(uc.business_value)));
         root.appendChild(section("Requirements", requirementsTable(uc.requirements, uc.readiness),
             el("div", { "class": "ucm-sub", text: "Requirements come from the provider record or are derived from its SPL; derived requirements are hypotheses with lower confidence and weight." }),
+            ucm.legend("What the statuses mean", ucm.STATUSES, ucm.statusBadge, ucm.STATUS_HELP),
             el("details", { "class": "ucm-details" }, el("summary", { text: "Provider data-source description" }), text(uc.data_sources_text)),
             uc.required_fields.length ? el("div", {}, el("strong", { text: "Required fields: " }), ucm.chips(uc.required_fields)) : null,
             uc.datamodel_acceleration_text ? el("details", { "class": "ucm-details" }, el("summary", { text: "Data model acceleration notes" }), text(uc.datamodel_acceleration_text)) : null));
@@ -530,4 +542,4 @@ require([
     }
 
     load();
-});
+}

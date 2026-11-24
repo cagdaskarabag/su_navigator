@@ -1,4 +1,6 @@
 import datetime
+import os
+import re
 import unittest
 
 import helpers  # noqa: F401
@@ -8,10 +10,10 @@ from splunk_ucm.audit import AuditService
 from splunk_ucm.config import AppConfig
 from splunk_ucm.discovery.service import DiscoveryService, new_job as new_djob
 from splunk_ucm.errors import ValidationError
-from splunk_ucm.readiness.evaluators import (MET, NOT_MET, PARTIAL, UNKNOWN, UNVERIFIED,
+from splunk_ucm.readiness.evaluators import (MET, NOT_MET, PARTIAL, STATUSES, UNKNOWN, UNVERIFIED,
                                              EvaluationSettings, evaluate)
 from splunk_ucm.readiness.query import ReadinessFilter, ReadinessQueryService
-from splunk_ucm.readiness.scoring import ScoringSettings, score
+from splunk_ucm.readiness.scoring import STATES, ScoringSettings, score
 from splunk_ucm.readiness.service import ReadinessService, new_job
 from splunk_ucm.readiness.snapshot import EnvironmentSnapshot
 from splunk_ucm.readiness.worker import ReadinessWorker
@@ -316,6 +318,35 @@ class ReadinessApiTest(unittest.TestCase):
         self.assertEqual(status, 200)
         self.assertIn("by_state", body)
         self.assertEqual(call(viewer, "GET", "readiness", {"state": "ready"})[0], 200)
+
+
+class ReadinessGlossaryTest(unittest.TestCase):
+    """The UI glossary in ucm_common.js names exactly the engine's states and statuses."""
+
+    def setUp(self):
+        path = os.path.join(os.path.dirname(__file__), "..", "..", "sunavigator", "appserver", "static", "ucm_common.js")
+        with open(path, encoding="utf-8") as handle:
+            self.js = handle.read()
+
+    def keys(self, name):
+        block = self.js.split("var %s = {" % name, 1)[1].split("};", 1)[0]
+        return re.findall(r"^\s*(\w+):", block, re.M)
+
+    def array(self, name):
+        block = self.js.split("%s: [" % name, 1)[1].split("]", 1)[0]
+        return re.findall(r'"(\w+)"', block)
+
+    def test_glossary_matches_engine(self):
+        self.assertEqual(self.keys("READINESS_HELP"), list(STATES))
+        self.assertEqual(self.array("READINESS_STATES"), list(STATES))
+        self.assertEqual(self.keys("STATUS_HELP"), list(STATUSES))
+        self.assertEqual(self.array("STATUSES"), list(STATUSES))
+
+    def test_glossary_never_equates_unchecked_with_absent(self):
+        block = self.js.split("var STATUS_HELP = {", 1)[1].split("};", 1)[0]
+        unverified = block.split("unverified:", 1)[1].split("not_applicable:", 1)[0]
+        self.assertIn("does not mean the data is absent", unverified)
+        self.assertIn("Left out of score and coverage", unverified)
 
 
 if __name__ == "__main__":
