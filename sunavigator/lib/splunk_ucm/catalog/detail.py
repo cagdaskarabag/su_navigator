@@ -14,6 +14,7 @@ from ..errors import NotFoundError, ValidationError
 from ..model.canonical import Category
 from ..storage import collections as C
 from ..storage.repositories import CategoryRepository, ContentRepository, decode_raw
+from .lineage import authority, find_twins
 from .quality import ordered
 
 _KEY_RE = re.compile(r"^[A-Za-z0-9._-]{1,120}$")
@@ -75,12 +76,17 @@ class UseCaseDetailService:
         out["validation_warning_count"] = stored.get("validation_warning_count", 0)
         out["requirement_summary"] = self._requirement_summary(out["requirements"])
         out["spl_duplicates"] = []
-        if "duplicate_spl" in (catalog.get("quality_flags") or []) and catalog.get("spl_hash"):
-            out["quality_flags"] = ordered(list(out["quality_flags"]) + ["duplicate_spl"])
+        out["spl_twins"] = []
+        out["authority"] = authority(out["provenance"]["provider"])
+        derived = [f for f in ("duplicate_spl", "provider_twin") if f in (catalog.get("quality_flags") or [])]
+        if derived and catalog.get("spl_hash"):
+            out["quality_flags"] = ordered(list(out["quality_flags"]) + derived)
             rows = self.content.store.query(C.CATALOG, {"$and": [{"spl_hash": catalog["spl_hash"]},
                                                                  {"provider_status": "active"}]},
                                             sort=[("sort_key", 1)], limit=21, fields=["content_id"])
             out["spl_duplicates"] = [r["content_id"] for r in rows if r.get("content_id") != out["content_id"]][:20]
+            out["spl_twins"] = find_twins(self.content.store, catalog["spl_hash"], out["provenance"]["provider"],
+                                          out["content_id"])
         return out
 
     @staticmethod

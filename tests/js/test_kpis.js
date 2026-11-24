@@ -47,7 +47,7 @@ var tests = {
         var t = v.root.textContent;
         assert.ok(/Assessed100%268 of 268 active use cases/.test(t), t);
         assert.ok(/Deployed2/.test(t) && /1 enabled; 5 deployments recorded/.test(t), t);
-        assert.deepStrictEqual(v.calls.map(function (c) { return c.path; }).sort(), ["catalog", "deployments", "readiness/summary"]);
+        assert.deepStrictEqual(v.calls.map(function (c) { return c.path; }).sort(), ["catalog", "catalog/facets", "deployments", "readiness/summary"]);
         assert.strictEqual(v.calls.filter(function (c) { return c.method !== "GET"; }).length, 0);
     },
     "overview still shows readiness KPIs when deployments fail": function () {

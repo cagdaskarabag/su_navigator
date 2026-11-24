@@ -558,9 +558,21 @@ function ucmViewMain($, ucm) {
             })));
     }
 
+    var PLAN_ANCHORS = ["ucm-sec-selection", "ucm-sec-deployment"];
+    var plan = { open: false, toggle: null, panel: null };
+
+    function setPlan(open) {
+        plan.open = open;
+        if (!plan.toggle || !plan.panel) { return; }
+        plan.toggle.setAttribute("aria-expanded", open ? "true" : "false");
+        plan.toggle.textContent = open ? "Hide deployment plan" : "Plan deployment";
+        if (open) { plan.panel.removeAttribute("hidden"); } else { plan.panel.setAttribute("hidden", "hidden"); }
+    }
+
     function jump(id, label) {
         return el("a", { href: "#" + id, text: label, onclick: function (ev) {
             if (ev && ev.preventDefault) { ev.preventDefault(); }
+            if (PLAN_ANCHORS.indexOf(id) >= 0) { setPlan(true); }
             var target = document.getElementById(id);
             if (target && target.scrollIntoView) { target.scrollIntoView(); }
         } });
@@ -833,6 +845,8 @@ function ucmViewMain($, ucm) {
         uc.macros.forEach(function (m) { rows.push(["Macro (from SPL)", el("span", { "class": "ucm-mono", text: m })]); });
         uc.lookups.forEach(function (l) { rows.push(["Lookup (from SPL)", el("span", { "class": "ucm-mono", text: l })]); });
         uc.cim_models.forEach(function (c) { rows.push(["CIM model", c]); });
+        if ((uc.analytic_stories || []).length) { rows.push(["Analytic stories", filterLinks(uc.analytic_stories, "story")]); }
+        if ((uc.data_sources || []).length) { rows.push(["Data sources (provider names)", filterLinks(uc.data_sources, "data_source")]); }
         if (uc.splunk_versions.length) { rows.push(["Splunk versions", uc.splunk_versions.join(", ")]); }
         if (uc.equipment.length) { rows.push(["Equipment", ucm.chips(uc.equipment)]); }
         if (uc.hardware) { rows.push(["Hardware / platform", uc.hardware]); }
@@ -883,21 +897,99 @@ function ucmViewMain($, ucm) {
         }));
     }
 
+    function filterLinks(values, param) {
+        return el("span", {}, values.map(function (v) {
+            return el("a", { "class": "ucm-badge ucm-badge-chip", href: "ucm_catalogue?" + param + "=" + encodeURIComponent(v),
+                title: "Open the catalogue filtered to this value", text: v });
+        }));
+    }
+
+    function twinLink(t) {
+        return el("li", {},
+            ucm.providerBadge(t.provider), " Same detection in " + ucm.providerLabel(t.provider) + ": ",
+            el("a", { "class": "ucm-mono", href: "ucm_usecase?id=" + encodeURIComponent(t.key || t.content_id), text: t.content_id }),
+            t.title ? el("span", { "class": "ucm-sub", text: " " + t.title }) : null,
+            t.authority && t.authority.label ? el("span", { "class": "ucm-sub", text: " (" + t.authority.label + ")" }) : null);
+    }
+
+    /* Twins share the primary SPL text after whitespace normalisation; nothing more is claimed. */
+    function lineageBox(uc) {
+        var twins = uc.spl_twins || [];
+        var twinIds = twins.map(function (t) { return t.content_id; });
+        var same = (uc.spl_duplicates || []).filter(function (id) { return twinIds.indexOf(id) < 0; });
+        if (!twins.length && !same.length) { return null; }
+        var box = el("div", { "class": "ucm-lineage" });
+        if (twins.length) {
+            var own = uc.authority && uc.authority.label ? " This record comes from " + ucm.providerLabel(uc.provenance.provider) +
+                ": " + uc.authority.label.toLowerCase() + "." : "";
+            var inner = el("div", {}, el("ul", {}, twins.map(twinLink)),
+                el("div", { "class": "ucm-sub", text: "The primary SPL is identical after whitespace is normalised. Title, schedule, severity and " +
+                    "compliance mappings can still differ." + own }),
+                el("div", { "class": "ucm-sub", text: "Provider rule: ESCU is the source for detection content; Fenre supplies compliance and mapping " +
+                    "context. The rule comes from the provider roles, not from comparing the two records." }),
+                el("div", { "class": "ucm-sub", text: "Deploy it once: deploying both creates two saved searches that run the same SPL." }));
+            var twinBox = ucm.stateBox("info", "This search also exists in another provider");
+            twinBox.appendChild(inner);
+            box.appendChild(twinBox);
+        }
+        if (same.length) {
+            box.appendChild(ucm.stateBox("warn", "The primary SPL is identical in other use cases of this provider",
+                "Deploying more than one of them runs the same search twice: " + same.join(", ") + "."));
+        }
+        return box;
+    }
+
+    function planItem(label, node) {
+        return el("span", { "class": "ucm-plan-item" }, el("span", { "class": "ucm-sub", text: label }), node);
+    }
+
+    /* Selection, review and deployment controls stay as they were; they sit behind one disclosure button. */
+    function planSection(uc) {
+        var view = uc.deployment || { deployment: null, allowed_actions: [] };
+        var dep = view.deployment;
+        var rd = uc.readiness;
+        var sel = uc.selection;
+        var drift = dep && dep.live && dep.live.drift ? dep.live.drift.length : 0;
+        var can = (view.allowed_actions || []).filter(function (a) { return a !== "draft"; })
+            .map(function (a) { return ACTION_LABELS[a] || a; });
+        var status = el("div", { "class": "ucm-plan-status" },
+            planItem("Selection", sel ? ucm.badge(sel.intent, sel.intent === "select" ? "ok" : "info") : ucm.badge("not selected", "neutral")),
+            planItem("Readiness", rd ? ucm.readinessBadge(rd.state) : ucm.badge("not assessed", "neutral")),
+            planItem("Deployment", dep ? ucm.badge(dep.state.replace("_", " "), STATE_KIND[dep.state] || "neutral") : ucm.badge("not deployed", "neutral")),
+            dep ? planItem("Saved search", ucm.badge((dep.live && dep.live.status) || "absent", LIVE_KIND[(dep.live && dep.live.status) || "absent"])) : null,
+            drift ? ucm.badge("drift: " + drift, "warn") : null,
+            dep && dep.content_changed ? ucm.badge("provider content changed", "warn") : null);
+        var panel = el("div", { "class": "ucm-plan-panel", id: "ucm-plan-panel" },
+            anchored("ucm-sec-selection", section("Your selection", selectionBox(uc))),
+            section("Deployment", deploymentBox(uc)));
+        var toggle = el("button", { "class": "btn btn-primary", type: "button", "aria-controls": "ucm-plan-panel",
+            onclick: function () { setPlan(!plan.open); } });
+        plan.toggle = toggle;
+        plan.panel = panel;
+        setPlan(plan.open);
+        return anchored("ucm-sec-deployment", section("Plan deployment",
+            el("div", { "class": "ucm-plan" }, status,
+                el("div", { "class": "ucm-actions" }, toggle,
+                    el("span", { "class": "ucm-sub", text: can.length ? "Available to you now: " + can.join(", ") + "." :
+                        "No deployment action is available to you right now; the panel explains why." })),
+                panel)));
+    }
+
     function render(uc) {
         var p = uc.provenance;
         ucm.clear(root);
         root.appendChild(el("div", { "class": "ucm-header" },
             el("div", { "class": "ucm-sub" }, el("a", { href: "ucm_catalogue", text: "‹ Content Catalogue" })),
             el("h2", { text: uc.title }),
-            el("div", {}, el("span", { "class": "ucm-mono", text: uc.content_id + "  " }), ucm.criticalityBadge(uc.criticality),
+            el("div", {}, ucm.providerBadge(p.provider), el("span", { "class": "ucm-mono", text: " " + uc.content_id + "  " }), ucm.criticalityBadge(uc.criticality),
                 ucm.badge(uc.difficulty, "neutral"), ucm.chips(uc.domains), ucm.badge("review: " + uc.review_status, "info"),
                 ucm.qualityBadges(uc.quality_flags),
                 uc.provider_status === "withdrawn" ? ucm.badge("withdrawn upstream", "warn") : null),
-            el("div", { "class": "ucm-sub", text: [uc.category_name, uc.subcategory].filter(Boolean).join(" › ") })));
+            el("div", { "class": "ucm-sub", text: [ucm.providerLabel(p.provider), uc.category_name, uc.subcategory].filter(Boolean).join(" › ") })));
 
         root.appendChild(el("div", { "class": "ucm-actions ucm-jump" }, el("span", { "class": "ucm-sub", text: "Jump to:" }),
             jump("ucm-sec-requirements", "Requirements and readiness"), jump("ucm-sec-spl", "SPL and search"),
-            jump("ucm-sec-selection", "Your selection"), jump("ucm-sec-deployment", "Deployment"), jump("ucm-sec-details", "Details")));
+            jump("ucm-sec-selection", "Your selection"), jump("ucm-sec-deployment", "Plan deployment"), jump("ucm-sec-details", "Details")));
         root.appendChild(summaryStrip(uc));
 
         root.appendChild(section("Description", text(uc.description)));
@@ -911,10 +1003,8 @@ function ucmViewMain($, ucm) {
             el("details", { "class": "ucm-details" }, el("summary", { text: "Provider data-source description" }), text(uc.data_sources_text)),
             uc.required_fields.length ? el("div", {}, el("strong", { text: "Required fields: " }), ucm.chips(uc.required_fields)) : null,
             uc.datamodel_acceleration_text ? el("details", { "class": "ucm-details" }, el("summary", { text: "Data model acceleration notes" }), text(uc.datamodel_acceleration_text)) : null)));
-        if ((uc.spl_duplicates || []).length) {
-            root.appendChild(ucm.stateBox("warn", "The primary SPL is identical in other use cases",
-                "Deploying more than one of them runs the same search twice: " + uc.spl_duplicates.join(", ") + "."));
-        }
+        var lineage = lineageBox(uc);
+        if (lineage) { root.appendChild(lineage); }
         var sources = [{ label: "Primary search", spl: uc.spl, primary: true }, { label: "CIM search", spl: uc.cim_spl, primary: false }]
             .concat(uc.spl_variants.map(function (v) { return { label: "Variant: " + v.model, spl: v.spl, primary: false }; }));
         root.appendChild(anchored("ucm-sec-spl", section("SPL and search",
@@ -923,8 +1013,6 @@ function ucmViewMain($, ucm) {
             uc.spl_variants.map(function (v) { return spl("Variant: " + v.model + " (" + v.sourcetypes.join(", ") + ")", v.spl); }),
             validationBox(uc),
             searchBox(uc, sources))));
-        root.appendChild(anchored("ucm-sec-selection", section("Your selection", selectionBox(uc))));
-        root.appendChild(anchored("ucm-sec-deployment", section("Deployment", deploymentBox(uc))));
         root.appendChild(anchored("ucm-sec-details", el("div", { "class": "ucm-section" })));
         root.appendChild(section("Dependencies", dependencies(uc)));
         root.appendChild(section("Implementation", text(uc.instructions),
@@ -934,6 +1022,7 @@ function ucmViewMain($, ucm) {
         root.appendChild(section("Framework mappings", frameworks(uc)));
         root.appendChild(section("Known false positives", text(uc.known_false_positives)));
         root.appendChild(section("References", references(uc)));
+        root.appendChild(planSection(uc));
         root.appendChild(section("Provenance", kv([
             ["Provider", p.provider], ["Provider record id", p.provider_record_id],
             ["Catalogue version", p.provider_version], ["Source commit", el("span", { "class": "ucm-mono", text: p.source_ref })],
@@ -952,6 +1041,8 @@ function ucmViewMain($, ucm) {
         ucm.clear(root).appendChild(ucm.stateBox("error", "No use case selected.", "Open a use case from the Content Catalogue."));
         return;
     }
+    if (/^#ucm-sec-(selection|deployment)$/.test(window.location.hash || "")) { plan.open = true; }
+
     function load() {
         ucm.get("usecase", { id: id }).done(render).fail(function (err) {
             ucm.clear(root).appendChild(ucm.stateBox("error", "The use case could not be loaded.", err.message));

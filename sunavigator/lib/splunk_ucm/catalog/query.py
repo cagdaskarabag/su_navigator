@@ -33,6 +33,8 @@ _TOKEN_RE = re.compile(r"^[^\x00-\x1f]{1,200}$")
 _MITRE_RE = re.compile(r"^(T\d{4}(\.\d{3})?|TA\d{4})$")
 _FACET_RE = re.compile(r"^[a-z0-9][a-z0-9._-]{0,79}$")
 MAX_TERMS = 6
+MAX_FACET_VALUES = 50
+WAVES = ("crawl", "walk", "run")
 NOT_ASSESSED = "not_assessed"
 AVAILABILITY = tuple(READINESS_STATES) + (NOT_ASSESSED,)
 # Largest key list sent to the KV Store as ``_key $in``. Measured on Splunk 10.2.9: 8000 keys of 44
@@ -58,6 +60,11 @@ class CatalogFilter:
     quality: Sequence[str] = ()
     review: Sequence[str] = ()
     regulation: Any = ()
+    providers: Sequence[str] = ()
+    waves: Sequence[str] = ()
+    stories: Sequence[str] = ()
+    data_sources: Sequence[str] = ()
+    exclude_quality: Sequence[str] = ()
     availability: Sequence[str] = ()
     bookmarked: bool = False
     provider_status: str = STATUS_ACTIVE
@@ -113,6 +120,24 @@ def build_query(f: CatalogFilter) -> Dict[str, Any]:
         clauses.append({"frameworks": {"$in": ["regulation:" + v for v in regulations]}})
     if f.quality:
         clauses.append({"quality_flags": {"$in": _check_all(f.quality, list(QUALITY_FLAGS), "quality flag")}})
+    for flag in _check_all(f.exclude_quality, list(QUALITY_FLAGS), "quality flag"):
+        clauses.append({"quality_flags": {"$ne": flag}})
+    if f.providers:
+        for value in f.providers:
+            if not _FACET_RE.match(value):
+                raise ValidationError("invalid provider", {"value": value[:50]})
+        clauses.append({"provider": {"$in": list(f.providers)}})
+    if f.waves:
+        clauses.append({"wave": {"$in": _check_all(f.waves, WAVES, "wave")}})
+    for field, values, name in (("analytic_stories", f.stories, "analytic story"),
+                                ("data_sources", f.data_sources, "data source")):
+        if values:
+            if len(values) > MAX_FACET_VALUES:
+                raise ValidationError("too many %s values" % name, {"limit": MAX_FACET_VALUES})
+            for value in values:
+                if not _TOKEN_RE.match(value):
+                    raise ValidationError("invalid %s" % name)
+            clauses.append({field: {"$in": list(values)}})
     if f.q:
         if not _TOKEN_RE.match(f.q):
             raise ValidationError("invalid search text")

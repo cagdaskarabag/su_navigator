@@ -202,7 +202,8 @@ function ucmViewMain($, ucm) {
     var FLAG_LABEL = { in_backlog: "In your backlog", deferred: "You deferred this", bookmarked: "You bookmarked this" };
     var EXCLUDED_LABEL = { not_in_active_catalogue: "not in the active catalogue", already_deployed: "already deployed",
         rejected_by_you: "rejected by you", blocked: "blocked", not_ready: "not ready", insufficient_evidence: "insufficient evidence",
-        has_blockers: "with unmet critical requirements" };
+        has_blockers: "with unmet critical requirements", quality_flagged: "left out by the review-quality option" };
+    var QUALITY_OPTION = ["ai_reviewed", "unreviewed"];
     var PART_LABEL = [["readiness", "readiness score"], ["criticality", "criticality"], ["mitre_gain", "new MITRE coverage"],
         ["coverage", "requirement coverage"]];
 
@@ -212,7 +213,8 @@ function ucmViewMain($, ucm) {
         });
         var parts = PART_LABEL.map(function (p) { return p[1] + " " + ((it.score_parts || {})[p[0]] || 0); }).join(" + ");
         return el("div", { "class": "ucm-card ucm-recommendation" },
-            el("div", {}, el("a", { href: "ucm_usecase?id=" + encodeURIComponent(it.content_id), text: it.title }),
+            el("div", {}, ucm.providerBadge(String(it.content_id || "").split(":")[0]),
+                el("a", { href: "ucm_usecase?id=" + encodeURIComponent(it.content_id), text: it.title }),
                 el("span", { "class": "ucm-sub ucm-mono", text: " " + it.content_id })),
             el("div", { "class": "ucm-actions" }, ucm.readinessBadge(it.state), ucm.criticalityBadge(it.criticality), flags),
             el("div", { "class": "ucm-sub", text: "Draft score " + it.draft_score + " = " + parts }),
@@ -246,6 +248,11 @@ function ucmViewMain($, ucm) {
         if (data.empty) { body.appendChild(recommendationEmpty(data)); return; }
         var w = (data.formula && data.formula.weights) || {};
         var pct = function (k) { return Math.round(100 * (w[k] || 0)) + "%"; };
+        if ((data.exclude_quality || []).length) {
+            body.appendChild(el("div", { "class": "ucm-sub", text: "Left out by your option: use cases flagged " +
+                data.exclude_quality.map(function (f) { return ucm.QUALITY_FLAGS[f] ? ucm.QUALITY_FLAGS[f][0] : f; }).join(" or ") +
+                (data.excluded && data.excluded.quality_flagged ? " (" + data.excluded.quality_flagged + " otherwise eligible)" : "") + "." }));
+        }
         body.appendChild(el("div", { "class": "ucm-sub", text: "Showing " + data.items.length + " of " + data.eligible_total + " eligible use cases. " +
             "Draft score = " + pct("readiness") + " readiness score + " + pct("criticality") + " criticality + " + pct("mitre_gain") +
             " new MITRE coverage + " + pct("coverage") + " requirement coverage. The weights are a starting point, not measured. " +
@@ -255,10 +262,24 @@ function ucmViewMain($, ucm) {
 
     function recommendationSlot() {
         var body = el("div", {}, el("div", { "class": "ucm-loading", text: "Loading…" }));
+        var seq = 0;
+        var box = el("input", { type: "checkbox", name: "exclude_quality", "aria-label": "Leave out AI-reviewed and unreviewed use cases" });
+        function fetch() {
+            var mine = ++seq;
+            var params = box.checked ? { exclude_quality: QUALITY_OPTION.join(",") } : {};
+            ucm.get("readiness/recommendations", params).done(function (data) { if (mine === seq) { renderRecommendations(body, data); } })
+                .fail(function (err) {
+                    if (mine !== seq) { return; }
+                    ucm.clear(body).appendChild(ucm.stateBox("error", "Recommendations are not available.", err && err.message ? err.message : "The request failed."));
+                });
+        }
+        box.addEventListener("change", fetch);
         var node = el("div", { "class": "ucm-section", id: "ucm-home-recommendations" }, el("h3", { text: "Recommended next" }),
-            el("div", { "class": "ucm-sub", text: "Use cases that look ready to adopt, from the stored readiness results and your own selections." }), body);
-        ucm.get("readiness/recommendations").done(function (data) { renderRecommendations(body, data); })
-            .fail(function (err) { ucm.clear(body).appendChild(ucm.stateBox("error", "Recommendations are not available.", err && err.message ? err.message : "The request failed.")); });
+            el("div", { "class": "ucm-sub", text: "Use cases that look ready to adopt, from the stored readiness results and your own selections." }),
+            el("label", { "class": "ucm-check", title: "Off by default. Review flags are shown on every use case; this only changes this list." },
+                box, " Leave out AI-reviewed and unreviewed use cases"),
+            body);
+        fetch();
         return node;
     }
 

@@ -17,7 +17,7 @@ from ..requirements import derive_requirements
 from ..validation import FieldContract, ValidationPolicy
 
 PROVIDER = "escu"
-NORMALIZER_VERSION = "escu-1.0.0"
+NORMALIZER_VERSION = "escu-1.1.0"
 _MITRE_TECHNIQUE = re.compile(r"^T(\d{4})(\.\d{3})?$")
 ID_PATTERN = r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
 SCHEMA_VERSION = "1.0"
@@ -120,7 +120,8 @@ class EscuNormalizer(Normalizer):
             content_id="%s:UC-%s" % (PROVIDER, rid), key=content_key(rid), title=_s(raw.get("title")),
             provenance=provenance, description=_s(raw.get("description")),
             domains=list(category.domains), category_key=category.key, category_name=category.name,
-            subcategory=stories[0] if stories else "", tags=stories,
+            subcategory=stories[0] if stories else "", tags=stories, analytic_stories=stories,
+            data_sources=_strs(raw.get("dataSources")),
             criticality=_CRITICALITY.get(_s(raw.get("severity")).lower(), "unknown"),
             products=[PRODUCT], monitoring_types=[t for t in [_s(raw.get("type"))] if t],
             data_sources_text=", ".join(_strs(raw.get("dataSources"))),

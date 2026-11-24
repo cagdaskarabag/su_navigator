@@ -82,7 +82,7 @@ var tests = {
             "readiness/summary": { by_state: { ready: 5 }, scheduler: view() },
             deployments: { items: [], summary: { total: 0, by_state: {}, by_live: {} } } });
         assert.ok(/Scheduler account/.test(v.root.textContent));
-        assert.deepStrictEqual(v.calls.map(function (c) { return c.path; }).sort(), ["catalog", "deployments", "readiness/summary"]);
+        assert.deepStrictEqual(v.calls.map(function (c) { return c.path; }).sort(), ["catalog", "catalog/facets", "deployments", "readiness/summary"]);
     },
     "overview without a scheduler block shows no card": function () {
         var v = runView("ucm_overview.js", "ucm-overview-kpis", {

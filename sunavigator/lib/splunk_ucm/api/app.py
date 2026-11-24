@@ -244,6 +244,8 @@ def get_catalog(ctx: Context, req: Request) -> Response:
         criticality=req.args("criticality"), difficulty=req.args("difficulty"),
         sourcetype=req.arg("sourcetype").strip(), mitre=req.arg("mitre").strip().upper(),
         quality=req.args("quality"), review=req.args("review"), regulation=req.args("regulation"),
+        providers=req.args("provider"), waves=req.args("wave"), stories=req.args("story"),
+        data_sources=req.args("data_source"), exclude_quality=req.args("exclude_quality"),
         availability=req.args("availability"), bookmarked=req.arg("bookmarked") == "1",
         provider_status=req.arg("status", "active"), sort=req.arg("sort", "id"),
         offset=_int(req.arg("offset"), 0, "offset"), count=_int(req.arg("count"), 25, "count"),
@@ -474,7 +476,8 @@ def get_readiness_summary(ctx: Context, req: Request) -> Response:
 def get_readiness_recommendations(ctx: Context, req: Request) -> Response:
     completed = ctx.discovery_service().state.state().get("last_completed_at")
     return Response(200, RecommendationService(ctx.store).recommend(
-        ctx.user, completed, _int(req.arg("count"), MAX_RECOMMENDATIONS, "count")))
+        ctx.user, completed, _int(req.arg("count"), MAX_RECOMMENDATIONS, "count"),
+        req.args("exclude_quality")))
 
 
 def get_readiness_usecase(ctx: Context, req: Request) -> Response:
