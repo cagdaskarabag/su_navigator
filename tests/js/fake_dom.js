@@ -85,4 +85,54 @@ function loadAmd(file, deps) {
     return exported;
 }
 
-module.exports = { loadAmd: loadAmd, FakeElement: FakeElement, jq: jq };
+/* Synchronous stand-in for a jQuery promise; enough for .done/.fail/.always chains. */
+function resolved(value) {
+    var p = { done: function (f) { f(value); return p; }, fail: function () { return p; }, always: function (f) { f(); return p; } };
+    return p;
+}
+function rejected(err) {
+    var p = { done: function () { return p; }, fail: function (f) { f(err); return p; }, always: function (f) { f(); return p; } };
+    return p;
+}
+
+/*
+ * Run a view script (require([...], ucmViewMain) style) against the real ucm_common.js with a
+ * scripted API. routes maps "path" to a value or function(params) returning a value; a value that
+ * is an Error becomes a rejected request. Returns the root element and the calls made.
+ */
+function runView(file, rootId, routes, opts) {
+    opts = opts || {};
+    var ucm = loadAmd("ucm_common.js");
+    var calls = [];
+    function api(method) {
+        return function (p, params, body) {
+            calls.push({ method: method, path: p, params: params || {}, body: body });
+            var r = routes[method + " " + p] !== undefined ? routes[method + " " + p] : routes[p];
+            if (typeof r === "function") { r = r(params || {}, body); }
+            if (r === undefined) { return rejected({ status: 404, message: "no route " + p }); }
+            return r instanceof Error ? rejected({ status: 500, message: r.message }) : resolved(JSON.parse(JSON.stringify(r)));
+        };
+    }
+    ucm.get = api("GET");
+    ucm.post = api("POST");
+    var root = new FakeElement("div");
+    global.document.getElementById = function (id) { return id === rootId ? root : null; };
+    global.document.querySelectorAll = function () { return []; };
+    global.window = { location: { search: opts.search || "" } };
+    var $ = Object.assign(function () { throw new Error("jQuery call not stubbed"); }, jq, {
+        when: function () {
+            var args = Array.prototype.slice.call(arguments);
+            var ok = true, err = null, vals = [];
+            args.forEach(function (a) { a.done(function (v) { vals.push(v); }).fail(function (e) { ok = false; err = e; }); });
+            return ok ? { done: function (f) { f.apply(null, vals); return this; }, fail: function () { return this; } }
+                : { done: function () { return this; }, fail: function (f) { f(err); return this; } };
+        }
+    });
+    var src = fs.readFileSync(path.join(__dirname, "..", "..", "sunavigator", "appserver", "static", file), "utf8");
+    var captured;
+    var fakeRequire = function (deps, fn) { captured = fn; };
+    new Function("require", src + "\n;return ucmViewMain;")(fakeRequire)($, ucm);
+    return { root: root, ucm: ucm, calls: calls };
+}
+
+module.exports = { loadAmd: loadAmd, FakeElement: FakeElement, jq: jq, runView: runView };

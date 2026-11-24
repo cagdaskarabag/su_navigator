@@ -969,3 +969,26 @@ as drift.
   inside the Python suite and skips when Node is not installed. The fake DOM
   throws on any `innerHTML` use, so the tests also enforce the safe-DOM rule for
   the code they load.
+
+## D-057 Home page as the default landing view
+*0.8.1.*
+* Decision (OD-1): a new `ucm_home` view is the default landing page;
+  `ucm_overview` is unchanged, stays in the nav and is linked from Home. Only
+  `nav/default.xml` changes (`default="true"` moves). Static nav, as before.
+* Content: a status strip, the six-step journey, a placeholder slot for
+  recommendations (filled in a later 0.8.x release), a static user-guide section
+  (OD-2) and links to the Domain dashboard for the 13 domains.
+* Data: the strip reads existing endpoints only (`catalog`, `sync`, `discovery`,
+  `readiness/summary`). No new route, no schema change, no search. Each card
+  fails independently, and the "next step" marker is derived only from stored
+  results and is withheld while the state it depends on is unknown.
+* User guide (OD-2): static and deliberately thin. It says the guide is in
+  development and lists the existing views and the topics of
+  `docs/OPERATOR_GUIDE.md` in generic terms. It makes no claim about content that
+  does not exist yet. The operator guide is not packaged with the app, so the
+  page names the file rather than linking to it.
+* Domain links: the Domain dashboard takes the form token `domain`
+  (`?form.domain=<id>`; `*` is "All domains"). A unit test keeps the Home list
+  (ids, labels, order) equal to that dropdown and to `ucm.DOMAINS`.
+* Tests: `tests/js/test_home.js` runs the real view against a scripted API in
+  the fake DOM (all state combinations, partial failure, links).

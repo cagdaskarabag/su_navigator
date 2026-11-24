@@ -2,6 +2,7 @@
 
 import glob
 import os
+import re
 import shutil
 import subprocess
 import unittest
@@ -19,6 +20,38 @@ class JsLogicTest(unittest.TestCase):
             with self.subTest(suite=os.path.basename(suite)):
                 result = subprocess.run(["node", suite], capture_output=True, text=True, timeout=60)
                 self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
+
+class HomeViewTest(unittest.TestCase):
+    """The Home view is the default landing page and agrees with the Domain dashboard."""
+
+    ROOT = os.path.join(os.path.dirname(__file__), "..", "..", "sunavigator")
+
+    def read(self, *parts):
+        with open(os.path.join(self.ROOT, *parts), encoding="utf-8") as handle:
+            return handle.read()
+
+    def test_nav_default_is_home_and_overview_stays(self):
+        nav = self.read("default", "data", "ui", "nav", "default.xml")
+        self.assertIn('<view name="ucm_home" default="true" />', nav)
+        self.assertEqual(nav.count('default="true"'), 1)
+        self.assertIn('<view name="ucm_overview" />', nav)
+
+    def test_every_nav_view_exists(self):
+        nav = self.read("default", "data", "ui", "nav", "default.xml")
+        for name in re.findall(r'<view name="(ucm_\w+)"', nav):
+            self.assertTrue(os.path.exists(os.path.join(self.ROOT, "default", "data", "ui", "views", name + ".xml")), name)
+
+    def test_domain_links_match_the_domain_dashboard(self):
+        js = self.read("appserver", "static", "ucm_home.js")
+        home = re.findall(r'\["(\w+)", "([^"]+)"\]', js.split("var DOMAIN_LABELS = [", 1)[1].split("];", 1)[0])
+        xml = self.read("default", "data", "ui", "views", "ucm_domain.xml")
+        dropdown = [(v, label) for v, label in re.findall(r'<choice value="([^"*]+)">([^<]+)</choice>', xml)]
+        self.assertEqual(home, dropdown)
+        common = self.read("appserver", "static", "ucm_common.js")
+        listed = re.findall(r'"(\w+)"', common.split("DOMAINS: [", 1)[1].split("]", 1)[0])
+        self.assertEqual([d for d, _ in home], listed)
+        self.assertIn('token="domain"', xml)
 
 
 class AssetCacheBustingTest(unittest.TestCase):

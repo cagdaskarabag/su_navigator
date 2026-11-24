@@ -1,0 +1,11 @@
+<dashboard version="1.1" theme="light" script="ucm_home.js" stylesheet="ucm.css" hideEdit="true">
+  <label>Home</label>
+  <description>Where to start: the current state of content, discovery and readiness, the steps from content to monitoring, and links to every view.</description>
+  <row>
+    <panel>
+      <html>
+        <div id="ucm-home" class="ucm-root"><div class="ucm-loading">Loading…</div></div>
+      </html>
+    </panel>
+  </row>
+</dashboard>
