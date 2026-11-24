@@ -871,6 +871,11 @@ as drift.
 * Not covered: the verdict does not prove alerting, suppression, or the
   schedule. Only the 2 deployed use cases above were run on the lab; the
   remaining 92 fixtures were imported and not deployed.
+* **Amended by D-064 (0.8.8):** a search that errors on the test data is now
+  `content_error`, not `inconclusive`; the window is derived from the fixture
+  timestamps instead of the fixed `-10y` to `+1d`; `expected.max_count` and
+  `expected.fields` are asserted; the index rewrite touches search clauses only;
+  `1.1.1` is explained there (its manifest cannot pass even with the add-on).
 
 ## D-055 SHC captain detection on Splunk 10.2.9
 *0.7.3+ (T-19).*
@@ -1386,3 +1391,106 @@ as drift.
   `docs/SECURITY.md`). The `readiness/summary` response is visible to every app user and
   carries the owner name, role names and booleans, never index lists. No schema change,
   no migration, no new collection, no new capability, no new route, no new setting.
+
+## D-064 Control-test precision and the 94-fixture campaign
+*0.8.8 (B-05, B-06, B-08; issues #5 and #6).*
+* Context: D-054 gave a pass/fail from a row count over a fixed 10-year window and
+  reported every search error as `inconclusive`. The campaign below ran all 94 Fenre
+  fixtures on the lab and showed what that hid: errors indistinguishable from slow
+  indexing, a window that made `timechart` fixtures pass on empty buckets or fail with
+  "too many rows", events split in the middle of one Windows message, assertions in
+  the manifest that were never read, and over-refusals.
+* Decision, verdicts. `passed`, `failed`, `not_runnable` and `inconclusive` keep their
+  meaning. New **`content_error`**: Splunk ran the search on the test data and reported
+  an error (an `ERROR` message on the job, or HTTP 400 from the search endpoint). The
+  result carries `phase` (`positive` or `negative`) and the Splunk message in `reason`.
+  `inconclusive` is now only for data that was not searchable in time, a timeout, a
+  transport failure or a receiver error: states where the search was not judged. Stored
+  results are not migrated; a result without `window`, `fields` or `phase` renders as
+  before.
+* Decision, window. The search window is derived from the timestamps in the fixture's
+  first 128 characters per event (Splunk's own look-ahead): `min - 1 h` to `max + 1 h`
+  (`ControlTestRunner._replay`, `derive_window`). Formats: ISO 8601 (zone optional),
+  splunkd (`MM-DD-YYYY HH:MM:SS.mmm +zzzz`), `YYYY/MM/DD`, Windows (`MM/DD/YYYY
+  hh:mm:ss AM`), Snort (`MM/DD/YY-HH:MM:SS`), ctime, and syslog without a year (the
+  current year, or the previous one when that would be over a day ahead). A zoneless
+  time is read as UTC and the window is padded by **24 h**, not 1 h: splunkd reads it in
+  its own zone, which the app cannot see. An event with no parseable time is indexed
+  "now", so the end of the window becomes `+1d`; if no event parses the window is the
+  old `-10y` to `+1d`. The window is stored on each run (`positive.window`). Settle
+  counting still uses the wide window.
+* Decision, assertions. `expected.max_count` and `expected.fields` (`name`, `values`,
+  `min`, `max`, `regex`) are stored on the fixture (additive keys, same bundle format)
+  and asserted on the **positive** run with the semantics of Fenre's
+  `run_uc_tests.py`: `values` passes on any overlap; `min`/`max` run over the numeric
+  values and fail when none is numeric; `regex` passes on any match; multivalue results
+  count each value. A regex longer than 256 characters or with nested repetition is
+  refused at import (the fixture is skipped with its reason), as are unknown keys. The
+  hand-written YAML reader gained flow lists of scalars, YAML escapes in double quotes
+  and block lists of mappings; anything else (anchors, tags, flow mappings, nested or
+  multi-line flow lists, tabs) skips the fixture instead of being misread. Control tests
+  run at search level `smart` (as Fenre's runner does), so a search that does not end in
+  a transforming command returns its extracted fields.
+* Decision, scoping. The index rewrite is applied to **search clauses only**: the base
+  search, `search` and `where`-free pipeline heads, and the clauses of subsearches. Text
+  in `eval`, `where`, `fields`, `rex` and the like, and inside quotes, is never touched.
+  Breaker commands are recognised by command position, not by text, so `"map"` or `|REST`
+  inside a quoted string no longer refuses a search (`UC-2.6.38` and `UC-5.3.35` were
+  refused by D-054 for that reason). Everything D-054 refused is still refused. Two
+  refusals were **added** (they only narrow what can run): a macro call (the expansion
+  is not visible, so it could read any index; `` `comment` `` is allowed) and the
+  breakers `typer`, `eventcount`, `walklex`, `metasearch`, `loadjob`, `history`, `audit`
+  and `metadata`. No approval, capability or ACL changed.
+* Decision, event boundaries. When the file's first block starts with a timestamp, a
+  later blank-line block without one continues the event before it. `UC-1.2.6` is 4
+  events (it was 9) and `UC-9.1.2` is 2 (it was 6), which are the `min_count` values in
+  their manifests.
+* Decision, UI. The use-case page shows `content_error` as its own verdict, the search
+  window (and whether it was derived), `max_count`, and one line per field assertion
+  with its failures. Administration shows the first error of a failed latest
+  synchronization job above the job table (B-08), for example a commit that is not
+  allowed. Field sampling no longer asks for `_time`, `host`, `sourcetype` and the other
+  `INTRINSIC_FIELDS` (B-08).
+* Campaign (B-06). `tools/controltest_campaign.py` sends each fixture to the
+  `[controltest]` index with a per-run source marker and runs the SPL from the Fenre
+  checkout with the same code the app uses. It deploys nothing and writes no KV row.
+  A use case Splunk cannot parse in the app's namespace, or with side effects, is
+  `not_runnable` exactly as the deploy step would refuse it. Result on Splunk 10.2.9
+  without add-ons, 94 fixtures: **12 passed, 67 failed, 0 content_error, 0 inconclusive,
+  15 not_runnable**. Reasons: SUN defect 0 left (see below), missing add-on 1, upstream
+  content defect 20, fixture defect 53, not runnable 8, passed 12. Per fixture:
+  `docs/upstream/CONTROL_TEST_CAMPAIGN.md`; upstream findings for the product owner:
+  `docs/upstream/FENRE_FINDINGS.md` (nothing was filed on the Fenre repository).
+* SUN defects found by the campaign and fixed here: (1) a quoted `map`, `REST` or
+  `audit` made a search not runnable (2 of the 94); (2) the index rewrite changed
+  `eval index=...`; (3) Snort, ctime and `YYYY/MM/DD` times were not read, so the fixed
+  window gave a `timechart` "too many rows" error that the old code reported as
+  `inconclusive` (`UC-10.2.1`; it is now `content_error` if it recurs); (4) events with
+  blank lines inside were split; (5) manifest assertions were ignored.
+* Findings that are not SUN's: 64 of the 94 fixtures are 13 generic templates reused
+  across different use cases, so their events carry none of the terms or fields the SPL
+  needs; 12 base searches use the eval function `match()` as a search term, which
+  matches nothing (checked on the lab); 7 searches Splunk rejects (`timechart` with two
+  split-by fields in 4, a bad regex, a bad time modifier, bad `match` arguments); manifests
+  that assert fields the SPL does not return. Adding the Splunk add-ons and
+  `KV_MODE = json` changed no verdict: a run with `KV_MODE = json` on 38 sourcetypes was
+  identical per fixture to the run without (Splunk 10.2.9 extracts JSON automatically,
+  `AUTO_KV_JSON`). `UC-1.1.1` (issue #6) fails because the events are a multi-line `top`
+  table, `cpu_load_percent` is never derived and, with that field emulated, the SPL
+  gives one aggregated row whose columns are not the ones the manifest names.
+* Limitation, accepted and listed for the product owner: a search that filters on
+  `source=` (8 of the 94 SPLs; 6 of them are refused for this reason alone) is `not_runnable`, because the per-run
+  marker is the event `source`. Scoping by `_indextime` instead would lift this, at the
+  cost of a time-based isolation that two overlapping runs would share; it is not done.
+* Limitation: a `timechart` or other time-bucketing search can pass on empty buckets
+  (`UC-10.2.1`, `UC-12.1.1`). The row count cannot tell; add `fields` or `min`
+  assertions to such a fixture. Placeholder events can pass through `coalesce` defaults
+  (`UC-2.6.48`, `2.6.55`, `2.6.76`).
+* Cleanup and retention: events from control tests stay in the test index. The
+  campaign script's `--delete` removes its own events with `| delete`, which needs the
+  `can_delete` role (the app never asks for it). Otherwise set a short retention on the
+  test index (`frozenTimePeriodInSecs`) and a size cap (`maxTotalDataSizeMB`); a full
+  campaign adds about 300 events per run (308 fixture events in 94 fixtures).
+* Consequences: no schema change, no migration, no new capability, route or setting, no
+  new dependency; `docs/SECURITY.md` is unchanged because the picture is: new paths only
+  add refusals. The build number changed to 10. Python 3.9 compatible, stdlib only.

@@ -59,12 +59,7 @@ function ucmViewMain($, ucm) {
         jobs.forEach(function (j) {
             var t = j.totals || {};
             if (j.status === "queued" || j.status === "running") { active = true; }
-            var errors = (j.errors || []).map(function (e) { return e.message; });
-            (j.results || []).forEach(function (r) {
-                if (r.status === "failed") {
-                    errors.push("category " + r.category_id + ": " + ((r.errors[0] || {}).message || "failed"));
-                }
-            });
+            var errors = ucm.jobErrors(j);
             body.appendChild(el("tr", {},
                 el("td", { text: j.requested_at }), el("td", { text: j.source }), el("td", {}, statusBadge(j.status)),
                 el("td", { text: j.requested_by }), el("td", { text: j.provider_version || "" }),
@@ -74,8 +69,10 @@ function ucmViewMain($, ucm) {
                 el("td", { text: t.unchanged === undefined ? "" : t.unchanged }),
                 el("td", { text: t.withdrawn === undefined ? "" : t.withdrawn }),
                 el("td", { text: t.invalid === undefined ? "" : t.invalid }),
-                el("td", { "class": "ucm-sub", text: errors.slice(0, 3).join("; ") })));
+                el("td", { "class": j.status === "failed" ? "ucm-job-error" : "ucm-sub", text: errors.slice(0, 3).join("; ") })));
         });
+        var failure = ucm.jobFailureBox(jobs);
+        if (failure) { jobsBox.appendChild(failure); }
         jobsBox.appendChild(el("table", { "class": "ucm-table" }, el("thead", {}, head), body));
         return active;
     }

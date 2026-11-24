@@ -321,18 +321,50 @@ function ucmViewMain($, ucm) {
     var CONTROL_TEST_TEXT = {
         passed: "The deployed search returned rows for the fixture's positive events and none for its negative events.",
         failed: "The deployed search did not behave as the fixture expects.",
+        content_error: "The search failed with an error while it ran on the test data. The error belongs to the search or the " +
+            "data, not to access or time, so fix the content or the fixture and run the test again.",
         inconclusive: "The test could not finish, so the search is neither confirmed nor refuted.",
         not_runnable: "The search cannot be scoped to the test index, so it was not run against any index.",
         no_fixture: "No control fixture is imported for this use case."
     };
+    var CONTROL_TEST_KIND = { passed: "info", failed: "error", content_error: "error" };
+
+    function windowBound(value) {
+        var n = /^\d+$/.test(String(value)) ? parseInt(value, 10) : NaN;
+        return isNaN(n) ? String(value) : new Date(n * 1000).toISOString().replace(/\.\d+Z$/, "Z");
+    }
+
+    function windowText(w) {
+        if (!w || !w.earliest) { return ""; }
+        return "Search window " + windowBound(w.earliest) + " to " + windowBound(w.latest) +
+            (w.derived ? ", derived from the fixture timestamps." : ", the default (the fixture timestamps could not be read).");
+    }
+
+    function fieldAssertions(run) {
+        var fields = (run && run.fields) || [];
+        if (!fields.length) { return null; }
+        return el("ul", { "class": "ucm-control-fields" }, fields.map(function (f) {
+            return el("li", {}, ucm.badge(f.pass ? "passed" : "failed", f.pass ? "ok" : "error"), " field ",
+                el("span", { "class": "ucm-mono", text: f.name }),
+                f.pass ? "" : ": " + (f.failures || []).join("; "));
+        }));
+    }
 
     function controlTestBox(ct) {
-        var kind = ct.status === "passed" ? "info" : (ct.status === "failed" ? "error" : "warn");
         var parts = [CONTROL_TEST_TEXT[ct.status] || ct.status];
         if (ct.reason) { parts.push(ct.reason + "."); }
+        var run = ct.positive || {};
+        var win = windowText(run.window);
+        if (win) { parts.push(win); }
+        if (run.max_count !== undefined && run.rows !== undefined) {
+            parts.push("Positive run: " + run.rows + " rows, expected " + run.min_count + " to " + run.max_count + ".");
+        }
         if (ct.test_index) { parts.push("Test index " + ct.test_index + "."); }
         parts.push("Revision " + ct.revision + ", run " + (ct.ran_at || "") + " UTC by " + (ct.ran_by || "") + ".");
-        return ucm.stateBox(kind, "Control test: " + ct.status, parts.join(" "));
+        var box = ucm.stateBox(CONTROL_TEST_KIND[ct.status] || "warn", "Control test: " + ct.status.replace(/_/g, " "), parts.join(" "));
+        var list = fieldAssertions(run);
+        if (list) { box.appendChild(list); }
+        return box;
     }
 
     function draftForm(uc, dep, current) {

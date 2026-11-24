@@ -13,6 +13,7 @@ from .. import APP_NAME
 from ..audit import AuditService
 from ..catalog.detail import key_from_id
 from ..content.reindex import StoredNormalizer
+from ..content.requirements import INTRINSIC_FIELDS
 from ..discovery.spl import RELATIVE_TIME, validate_index_name
 from ..errors import NotFoundError, UnsupportedOperation, ValidationError
 from ..model.canonical import UseCase
@@ -146,7 +147,7 @@ class ValidationService:
         uc = self._load(use_case_id)
         doc = self._parse_use_case(uc)
         fields = [r.value for r in uc.requirements if r.type == "field" and _FIELD.match(r.value)
-                  and not r.attributes.get("derived_in_spl")]
+                  and r.value not in INTRINSIC_FIELDS and not r.attributes.get("derived_in_spl")]
         sourcetypes = [r.value for r in uc.requirements if r.type == "sourcetype"]
         doc["field_samples"] = self._sample(fields, sourcetypes) if fields else []
         doc["sampled_at"] = utc_now_iso()

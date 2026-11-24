@@ -56,6 +56,7 @@ details.ucm-details > summary { cursor: pointer; color: #1f4e79; margin: 4px 0; 
 .ucm-score-bar { display: inline-block; width: 60px; height: 6px; background: #e8ecef; border-radius: 3px; overflow: hidden; }
 .ucm-score-bar > span { display: block; height: 100%; background: #1f4e79; }
 .ucm-readiness-head { display: flex; gap: 16px; align-items: center; flex-wrap: wrap; }
+.ucm-job-error { color: #7f1d1d; font-size: 12px; font-weight: 600; }
 .ucm-state-warn { background: #fff8e1; color: #5c4400; }
 .ucm-form .ucm-kv dd { margin-bottom: 6px; }
 .ucm-input { width: 100%; max-width: 640px; box-sizing: border-box; }

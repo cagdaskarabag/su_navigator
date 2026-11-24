@@ -574,7 +574,8 @@ class LiveApiTest(unittest.TestCase):
         self.assertTrue(parsed.get("parse_ok"), parsed)
         self.assertFalse(parsed.get("side_effects"))
         fields = {r["field"]: r for r in parsed.get("field_samples") or []}
-        self.assertIn("_time", fields)
+        self.assertTrue(fields)
+        self.assertFalse({"_time", "host", "sourcetype", "_raw"} & set(fields), fields)
         status, preview = api(self.admin, "POST", "preview", body={"id": "fenre:UC-13.1.1"})
         self.assertEqual(status, 200, preview)
         self.assertIn("preview", preview)
@@ -737,12 +738,13 @@ class LiveControlTestTest(unittest.TestCase):
     NEGATIVE = "EventCode=4624 Account_Name=bob CallerComputerName=ws-lab-1\n"
 
     @staticmethod
-    def bundle(positive=None, negative=None, min_count=2):
+    def bundle(positive=None, negative=None, min_count=2, **extra):
         return {"format": "ucm-control-fixtures", "format_version": 1, "provider": "fenre",
-                "fixtures": [{"uc_id": "9.1.2", "sourcetype": "WinEventLog:Security", "host": "dc-lab-1",
-                              "min_count": min_count,
-                              "positive": LiveControlTestTest.POSITIVE if positive is None else positive,
-                              "negative": LiveControlTestTest.NEGATIVE if negative is None else negative}]}
+                "fixtures": [dict({"uc_id": "9.1.2", "sourcetype": "WinEventLog:Security", "host": "dc-lab-1",
+                                   "min_count": min_count,
+                                   "positive": LiveControlTestTest.POSITIVE if positive is None else positive,
+                                   "negative": LiveControlTestTest.NEGATIVE if negative is None else negative},
+                                  **extra)]}
 
     @classmethod
     def setUpClass(cls):
@@ -809,6 +811,30 @@ class LiveControlTestTest(unittest.TestCase):
         self.assertEqual(body["deployment"]["control_test"]["revision"], body["deployment"]["deployed_revision"])
         _, audit = api(self.admin, "GET", "audit", {"prefix": "deployment.controltest", "limit": "20"})
         self.assertIn(self.UC, [e["object_id"] for e in audit["events"]])
+
+    def test_field_assertions_run_on_the_deployed_search_results(self):
+        self.load(self.bundle(negative="", fields=[{"name": "Account_Name", "values": ["alice"]}], max_count=10))
+        ct = self.run_control_test()[1]["deployment"]["control_test"]
+        self.assertEqual(ct["status"], "passed", ct)
+        self.assertEqual([f["pass"] for f in ct["positive"]["fields"]], [True])
+        self.load(self.bundle(negative="", fields=[{"name": "Account_Name", "values": ["zed"]}]))
+        ct = self.run_control_test()[1]["deployment"]["control_test"]
+        self.assertEqual(ct["status"], "failed", ct)
+        self.assertIn("field Account_Name: expected one of ['zed']", ct["reason"])
+        self.load(self.bundle(negative="", max_count=1))
+        ct = self.run_control_test()[1]["deployment"]["control_test"]
+        self.assertEqual(ct["status"], "failed", ct)
+        self.assertIn("expected at most 1", ct["reason"])
+
+    def test_the_search_window_follows_the_fixture_timestamps(self):
+        positive = "".join("2026-04-16T08:00:0%dZ EventCode=4740 Account_Name=alice CallerComputerName=dc-lab-1\n" % i
+                           for i in range(3))
+        self.load(self.bundle(positive=positive, negative=""))
+        ct = self.run_control_test()[1]["deployment"]["control_test"]
+        self.assertEqual(ct["status"], "passed", ct)
+        window = ct["positive"]["window"]
+        self.assertTrue(window["derived"], window)
+        self.assertEqual(int(window["latest"]) - int(window["earliest"]), 7202)
 
     def test_missing_fixture_is_reported_without_running(self):
         self.kv.delete(C.CONTROL_FIXTURES, self.KEY)

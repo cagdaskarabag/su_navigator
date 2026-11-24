@@ -281,6 +281,22 @@ class DerivedFieldTest(unittest.TestCase):
         self.assertNotIn("sun_derived", search.oneshot_calls[-1])
 
 
+    def test_intrinsic_fields_are_not_sampled(self):
+        store = discovered()
+        doc = store.get(C.CONTENT, "fenre_UC-9.1.1")
+        raw = json.loads(doc["raw_json"])
+        raw["requiredFields"] = ["user", "_time", "host", "sourcetype", "_raw", "src"]
+        doc["raw_json"] = encode_raw(raw)
+        store.upsert(C.CONTENT, doc)
+        search = FakeParser()
+        out = ValidationService(store, AuditService(store), search).sample_and_assess("fenre:UC-9.1.1", "alice")
+        sampled = [f["field"] for f in out["field_samples"]]
+        for name in ("_time", "host", "sourcetype", "_raw"):
+            self.assertNotIn(name, sampled)
+            self.assertNotIn('"%s"' % name, search.oneshot_calls[-1])
+        self.assertIn("user", sampled)
+
+
 class EvaluatorValidationTest(unittest.TestCase):
     def test_field_and_spl_from_validation_doc(self):
         snap = EnvironmentSnapshot([], [], {"last_completed_at": "t", "splunk_version": "10.2.9"}, [{

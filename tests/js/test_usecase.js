@@ -292,6 +292,44 @@ var tests = {
         dds.forEach(function (d) { assert.ok(d.textContent.length > 10); });
         assert.ok(/Already retired/.test(details[0].textContent));
     },
+    "control test: a content error is shown as its own verdict with the window and per-field results": function () {
+        var uc = fixture("fenre_deployed");
+        uc.deployment.deployment.control_test = { status: "content_error", reason: "the search failed on the positive test data: Error in 'eval' command",
+            test_index: "ucm_controltest", revision: 3, ran_at: "2026-11-24T10:00:00Z", ran_by: "alice",
+            positive: { indexed: 3, window: { earliest: "1776322800", latest: "1776330002", derived: true } } };
+        var v = open(uc);
+        var t = v.root.textContent;
+        assert.ok(/Control test: content error/.test(t), "title");
+        assert.ok(/failed with an error while it ran on the test data/.test(t));
+        assert.ok(/Error in 'eval' command/.test(t));
+        assert.ok(/Search window 2026-04-16T07:00:00Z to 2026-04-16T09:00:02Z, derived from the fixture timestamps/.test(t), t);
+        var box = v.root.find(function (n) { return /ucm-state-error/.test(n.getAttribute("class") || ""); });
+        assert.ok(box.length >= 1);
+    },
+    "control test: failed run lists each field assertion and max_count": function () {
+        var uc = fixture("fenre_deployed");
+        uc.deployment.deployment.control_test = { status: "failed", reason: "field host: expected one of ['a'], saw []",
+            test_index: "ucm_controltest", revision: 3, ran_at: "2026-11-24T10:00:00Z", ran_by: "alice",
+            positive: { indexed: 3, rows: 9, min_count: 1, max_count: 5, window: { earliest: "-10y", latest: "+1d", derived: false },
+                fields: [{ name: "host", pass: false, failures: ["expected one of ['a'], saw []"] },
+                    { name: "count", pass: true, failures: [] }] } };
+        var v = open(uc);
+        var items = v.root.find(function (n) { return n.tagName === "LI" && /ucm-control-fields/.test((n.parentNode.getAttribute("class") || "")); });
+        assert.strictEqual(items.length, 2);
+        assert.ok(/failed.*field host: expected one of/.test(items[0].textContent), items[0].textContent);
+        assert.ok(/passed.*field count/.test(items[1].textContent), items[1].textContent);
+        var t = v.root.textContent;
+        assert.ok(/Positive run: 9 rows, expected 1 to 5/.test(t));
+        assert.ok(/the default \(the fixture timestamps could not be read\)/.test(t));
+    },
+    "control test: results stored before 0.8.8 still render": function () {
+        var uc = fixture("fenre_deployed");
+        uc.deployment.deployment.control_test = { status: "inconclusive", reason: "timed out", test_index: "ucm_controltest",
+            revision: 1, ran_at: "2026-11-01T10:00:00Z", ran_by: "bob", positive: { indexed: 3, rows: 0, min_count: 1, pass: false } };
+        var t = open(uc).root.textContent;
+        assert.ok(/Control test: inconclusive/.test(t) && /neither confirmed nor refuted/.test(t));
+        assert.ok(!/Search window/.test(t));
+    },
     "no innerHTML is used anywhere in the view": function () {
         var src = fs.readFileSync(path.join(__dirname, "..", "..", "sunavigator", "appserver", "static", "ucm_usecase.js"), "utf8");
         assert.ok(!/innerHTML|outerHTML|insertAdjacentHTML|document\.write/.test(src));

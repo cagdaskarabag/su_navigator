@@ -40,7 +40,7 @@ class FakeSplunk:
     ``keep`` stores only the first N events per marker, to model events lost in indexing.
     """
 
-    def __init__(self, fail_ingest=False, index_lag=0, indexed=True, keep=None):
+    def __init__(self, fail_ingest=False, index_lag=0, indexed=True, keep=None, row_fields=None, error=None):
         self.events = {}
         self.ingests = []
         self.searches = []
@@ -49,6 +49,9 @@ class FakeSplunk:
         self.indexed = indexed
         self.keep = keep
         self.counts = {}
+        self.windows = []
+        self.row_fields = row_fields
+        self.error = error
 
     def ingest(self, event, index, sourcetype, source, host):
         self.ingests.append((index, sourcetype, source, host))
@@ -66,13 +69,24 @@ class FakeSplunk:
             return 0
         return len(self.events.get(marker, []))
 
-    def search(self, spl, marker):
+    def search(self, spl, marker, earliest, latest):
         self.searches.append(spl)
-        return len([e for e in self.events.get(marker, []) if "hit" in e])
+        self.windows.append((earliest, latest))
+        if self.error is not None:
+            raise self.error
+        rows = []
+        for event in self.events.get(marker, []):
+            if "hit" in event:
+                rows.append(self.row_fields(event) if self.row_fields else {"_raw": event})
+        return rows
+
+
+CLOCK = 1790000000.0
 
 
 def runner(splunk=None, **kw):
     splunk = splunk or FakeSplunk()
+    kw.setdefault("clock", lambda: CLOCK)
     return ct.ControlTestRunner(splunk.ingest, splunk.count, splunk.search, sleep=lambda s: None, settle=5.0, **kw), splunk
 
 

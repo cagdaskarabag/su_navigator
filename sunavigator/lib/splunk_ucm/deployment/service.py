@@ -32,7 +32,7 @@ from ..storage.collections import DOC_SCHEMA
 from ..storage.kvstore import DocumentStore
 from ..storage.repositories import CategoryRepository, ContentRepository
 from ..util import safe_key, utc_now_iso
-from .controltest import ControlTestRunner, bundle_hash, validate_bundle
+from .controltest import ControlTestRunner, bundle_hash, expectations, validate_bundle
 from .savedsearch import SavedSearchClient
 from .export import build_bundle
 from .spec import drift, is_managed_by_us, normalize_spec, saved_search_name, settings_for, spl_hash
@@ -440,7 +440,8 @@ class DeploymentService:
             docs.append({"_key": safe_key("cf", key_from_id(content_id)), "content_id": content_id,
                          "provider": provider, "batch": batch, "sourcetype": fx["sourcetype"],
                          "host": fx["host"], "min_count": fx["min_count"], "positive": fx["positive"],
-                         "negative": fx.get("negative", ""), "imported_at": now, "imported_by": actor})
+                         "negative": fx.get("negative", ""), "imported_at": now, "imported_by": actor,
+                         **expectations(fx)})
         if docs:
             self.store.batch_save(C.CONTROL_FIXTURES, docs)
         self.store.delete_query(C.CONTROL_FIXTURES, {"provider": provider, "batch": {"$ne": batch}})
