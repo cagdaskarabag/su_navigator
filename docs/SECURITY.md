@@ -46,10 +46,18 @@ routes and dashboard preview, so a new route without a check fails the build
 
 ## Storage ACLs (`metadata/default.meta`)
 
-- Provider-owned collections (`uc_catalog`, `uc_content`, `uc_categories`,
-  `uc_sync_state`): readable by all app users, writable by `admin`, `sc_admin`,
+- Provider-owned collections (`uc_catalog`, `uc_content`, `uc_categories`):
+  readable by all app users, writable by `admin`, `sc_admin`,
   `ucm_content_manager` and `ucm_admin`. Direct KV writes by viewers are
   rejected by splunkd (verified live).
+- Evidence and job collections (`uc_sync_state`, `uc_environment_sources`,
+  `uc_source_mappings`, `uc_readiness`, `uc_validation`): readable by all app
+  users, writable only by `admin` / `sc_admin`. The REST handler writes them
+  with the system token after the capability check, and the background worker
+  writes discovery and readiness results. Analysts and content managers cannot
+  forge readiness, validation evidence, inventory or jobs through the KV REST
+  API (D-039; verified live: an analyst gets 403). Workers also check every
+  queued job's structure before running it and fail malformed jobs.
 - `uc_deployments`: readable by all app users, writable only by `admin` /
   `sc_admin`. The REST handler writes it with the system token after checking
   `ucm_deploy` (or `ucm_run_discovery` for drafts), so approvals cannot be
@@ -68,9 +76,7 @@ routes and dashboard preview, so a new route without a check fails the build
   request's system token (`passSystemAuth = true`), so users cannot forge or
   delete audit entries through the KV REST API.
 
-Known limitations: analysts can write `uc_readiness` directly, which could
-lift the readiness gate on enable (the gate is advisory and overridable
-anyway; every enable is audited with the readiness state). Content managers can write provider-owned collections
+Known limitations: content managers can write provider-owned collections
 directly through the KV REST API, bypassing validation. Those collections are
 derived data (rebuildable by sync/reindex) and never hold customer-owned
 state.

@@ -8,6 +8,7 @@ from ..config import AppConfig
 from ..errors import UcmError
 from ..log import get_logger
 from ..platform.search import SearchClient
+from ..storage.jobs import job_problem, reject
 from ..storage.kvstore import DocumentStore
 from ..storage.transport import SplunkdTransport
 from ..util import utc_now
@@ -93,6 +94,12 @@ class DiscoveryWorker:
         job = svc.state.next_queued()
         if job is None:
             return {"action": "idle", "expired": expired}
+        problem = job_problem(job)
+        if problem:
+            svc.state.save_job(reject(job, problem))
+            self.audit.record("system", "discovery.rejected", "discovery_job", str(job.get("job_id", "")),
+                              outcome="failed", details={"problem": problem})
+            return {"action": "rejected", "job_id": job.get("job_id"), "problem": problem}
         try:
             result = svc.run(job)
         except UcmError as exc:

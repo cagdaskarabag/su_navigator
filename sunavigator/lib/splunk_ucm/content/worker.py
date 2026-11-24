@@ -12,6 +12,7 @@ from ..audit import AuditService
 from ..config import AppConfig
 from ..errors import UcmError
 from ..log import get_logger
+from ..storage.jobs import job_problem, reject
 from ..storage.kvstore import DocumentStore
 from ..storage.repositories import SyncStateRepository
 from ..util import utc_now
@@ -89,6 +90,12 @@ class SyncWorker:
         job = self.state.next_queued()
         if job is None:
             return {"action": "idle", "expired": expired}
+        problem = job_problem(job)
+        if problem:
+            self.state.save_job(reject(job, problem))
+            self.audit.record("system", "content.sync.rejected", "sync_job", str(job.get("job_id", "")),
+                              outcome="failed", details={"problem": problem})
+            return {"action": "rejected", "job_id": job.get("job_id"), "problem": problem}
         provider_id = job.get("provider", "fenre")
         try:
             if not self.config.get_bool("provider:" + provider_id, "remote_sync_enabled", True):

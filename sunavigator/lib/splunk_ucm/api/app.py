@@ -146,15 +146,18 @@ class Context:
             fetch_concurrency=cfg.get_int("provider:fenre", "fetch_concurrency", 4, 1, 16),
             max_invalid_ratio=cfg.get_float("sync", "max_invalid_ratio", 0.2, 0.0, 1.0),
             job_timeout_seconds=cfg.get_int("sync", "job_timeout_seconds", 3600, 60, 86400))
-        return SyncService(self.store, self.audit, settings)
+        return SyncService(self.records(), self.audit, settings)
 
     def discovery_service(self) -> DiscoveryService:
         return DiscoveryService(
-            self.store, self.audit, SplunkInventory(self.user_transport),
+            self.records(), self.audit, SplunkInventory(self.user_transport),
             SearchClient(self.user_transport), settings_from_config(self.config))
 
     def readiness_service(self) -> ReadinessService:
-        return ReadinessService(self.store, self.audit, readiness_settings(self.config))
+        return ReadinessService(self.records(), self.audit, readiness_settings(self.config))
+
+    def mapping_service(self) -> MappingService:
+        return MappingService(self.records())
 
     def selection_service(self) -> SelectionService:
         return SelectionService(self.store, self.audit)
@@ -169,11 +172,12 @@ class Context:
             sample_events=cfg.get_int("validation", "sample_events", 200, 10, 1000),
             sample_timeout=cfg.get_int("validation", "sample_timeout_seconds", 30, 5, 120),
             extra_safe_commands=parse_extra_safe(cfg.get("spl", "extra_safe_commands", "")))
-        return ValidationService(self.store, self.audit, SearchClient(self.user_transport),
+        return ValidationService(self.records(), self.audit, SearchClient(self.user_transport),
                                  settings, self.readiness_service())
 
     def records(self) -> DocumentStore:
-        """Store for admin-write-only collections, used only after the handler's capability check."""
+        """Store for admin-write-only collections (D-039). Handlers write through it only after
+        their capability check; searches still run with the caller's session."""
         return self.record_store or (KVStore(self.system_transport) if self.system_transport else self.store)
 
     def deployment_service(self) -> DeploymentService:
@@ -380,7 +384,7 @@ def get_mappings(ctx: Context, req: Request) -> Response:
 def post_mappings(ctx: Context, req: Request) -> Response:
     ctx.require(CAP_RUN_DISCOVERY)
     body = req.json()
-    doc = MappingService(ctx.store).upsert_local(
+    doc = ctx.mapping_service().upsert_local(
         str(body.get("kind") or ""), str(body.get("value") or ""),
         str(body.get("canonical_value") or body.get("value") or ""), ctx.user,
         str(body.get("notes") or ""), str(body.get("confidence") or "high"))
@@ -392,7 +396,7 @@ def post_mappings(ctx: Context, req: Request) -> Response:
 def post_mappings_delete(ctx: Context, req: Request) -> Response:
     ctx.require(CAP_RUN_DISCOVERY)
     body = req.json()
-    MappingService(ctx.store).delete_local(str(body.get("kind") or ""), str(body.get("value") or ""),
+    ctx.mapping_service().delete_local(str(body.get("kind") or ""), str(body.get("value") or ""),
                                            ctx.user)
     ctx.audit.record(ctx.user, "discovery.mapping.delete", "mapping",
                      "%s:%s" % (body.get("kind"), body.get("value")))

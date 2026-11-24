@@ -11,8 +11,23 @@ access = read : [ * ], write : [ admin, sc_admin, ucm_content_manager, ucm_admin
 [collections/uc_categories]
 access = read : [ * ], write : [ admin, sc_admin, ucm_content_manager, ucm_admin ]
 
+# Job queue, discovery inventory, mappings, readiness and validation evidence:
+# written only by the REST handler with the system token after its capability
+# check, and by the background worker (D-039). Analysts use the REST API.
 [collections/uc_sync_state]
-access = read : [ * ], write : [ admin, sc_admin, ucm_content_manager, ucm_admin, ucm_analyst ]
+access = read : [ * ], write : [ admin, sc_admin ]
+
+[collections/uc_environment_sources]
+access = read : [ * ], write : [ admin, sc_admin ]
+
+[collections/uc_source_mappings]
+access = read : [ * ], write : [ admin, sc_admin ]
+
+[collections/uc_readiness]
+access = read : [ * ], write : [ admin, sc_admin ]
+
+[collections/uc_validation]
+access = read : [ * ], write : [ admin, sc_admin ]
 
 [collections/uc_audit]
 access = read : [ admin, sc_admin, ucm_admin, ucm_content_manager ], write : [ admin, sc_admin ]
@@ -20,20 +35,8 @@ access = read : [ admin, sc_admin, ucm_admin, ucm_content_manager ], write : [ a
 [transforms/ucm_audit_lookup]
 access = read : [ admin, sc_admin, ucm_admin, ucm_content_manager ], write : [ admin, sc_admin ]
 
-[collections/uc_environment_sources]
-access = read : [ * ], write : [ admin, sc_admin, ucm_admin, ucm_analyst ]
-
-[collections/uc_source_mappings]
-access = read : [ * ], write : [ admin, sc_admin, ucm_admin, ucm_analyst ]
-
-[collections/uc_readiness]
-access = read : [ * ], write : [ admin, sc_admin, ucm_admin, ucm_analyst ]
-
 [collections/uc_selections]
 access = read : [ * ], write : [ admin, sc_admin, ucm_admin, ucm_analyst, ucm_viewer ]
-
-[collections/uc_validation]
-access = read : [ * ], write : [ admin, sc_admin, ucm_admin, ucm_analyst ]
 
 [ucm]
 access = read : [ * ], write : [ admin, sc_admin, ucm_admin ]

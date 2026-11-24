@@ -173,6 +173,53 @@ class LiveOneshotContractTest(unittest.TestCase):
 
 
 @unittest.skipUnless(LIVE, "set UCM_LIVE_SPLUNK=1 to run against a real Splunk instance")
+class LiveWritePathTest(unittest.TestCase):
+    """D-039: analysts cannot write evidence or jobs directly; REST flows still work."""
+    ANALYST = "ucm_test_analyst_" + uuid.uuid4().hex[:6]
+    ANALYST_PW = "T3st!" + uuid.uuid4().hex
+
+    @classmethod
+    def setUpClass(cls):
+        cls.admin = transport()
+        status, _ = cls.admin.request("POST", "/services/authentication/users",
+                                      form={"name": cls.ANALYST, "password": cls.ANALYST_PW, "roles": "ucm_analyst"})
+        assert status in (200, 201), status
+        cls.analyst = transport(cls.ANALYST, cls.ANALYST_PW)
+        bundle = helpers.fixture_bundle(record_ids=["9.1.1"])
+        status, body = api(cls.admin, "POST", "import", raw=json.dumps(bundle).encode("utf-8"))
+        assert status == 200, body
+
+    @classmethod
+    def tearDownClass(cls):
+        api(cls.admin, "POST", "mappings/delete", body={"kind": "sourcetype", "value": "sun_live_st"})
+        cls.admin.request("DELETE", "/services/authentication/users/" + cls.ANALYST)
+
+    def test_direct_kv_writes_are_refused(self):
+        for coll in (C.SYNC_STATE, C.READINESS, C.VALIDATION, C.ENVIRONMENT_SOURCES, C.SOURCE_MAPPINGS):
+            path = "/servicesNS/nobody/sunavigator/storage/collections/data/" + coll
+            status, _ = self.analyst.request("POST", path, None, {"_key": "forged", "state": "ready"})
+            self.assertEqual(status, 403, coll)
+        status, _ = self.analyst.request("POST", "/servicesNS/nobody/sunavigator/storage/collections/data/"
+                                         + C.SELECTIONS, None, {"_key": "sel_live_probe", "user": self.ANALYST})
+        self.assertIn(status, (200, 201))
+        self.admin.request("DELETE", "/servicesNS/nobody/sunavigator/storage/collections/data/"
+                           + C.SELECTIONS + "/sel_live_probe")
+
+    def test_analyst_rest_flows_still_work(self):
+        uc = "fenre:UC-9.1.1"
+        status, body = api(self.analyst, "POST", "validate", body={"id": uc, "sample": False})
+        self.assertEqual(status, 200, body)
+        self.assertEqual(KVStore(self.admin).get(C.VALIDATION, "fenre_UC-9.1.1")["parsed_at"], body["parsed_at"])
+        status, body = api(self.analyst, "POST", "mappings",
+                           body={"kind": "sourcetype", "value": "sun_live_st", "canonical_value": "WinEventLog"})
+        self.assertEqual(status, 200, body)
+        status, body = api(self.analyst, "POST", "readiness", body={})
+        self.assertEqual(status, 202, body)
+        status, body = api(self.analyst, "POST", "readiness/assess", body={"id": uc})
+        self.assertIn(status, (200, 400), body)
+
+
+@unittest.skipUnless(LIVE, "set UCM_LIVE_SPLUNK=1 to run against a real Splunk instance")
 class LiveApiTest(unittest.TestCase):
     VIEWER = "ucm_test_viewer_" + uuid.uuid4().hex[:6]
     VIEWER_PW = "T3st!" + uuid.uuid4().hex

@@ -6,6 +6,7 @@ from typing import Any, Callable, Dict, Optional
 from ..audit import AuditService
 from ..config import AppConfig
 from ..storage import collections as C
+from ..storage.jobs import job_problem, reject
 from ..storage.kvstore import DocumentStore
 from ..util import utc_now
 from .evaluators import EvaluationSettings
@@ -79,6 +80,12 @@ class ReadinessWorker:
         job = self.service.next_queued()
         if job is None:
             return {"action": "idle", "expired": expired}
+        problem = job_problem(job)
+        if problem:
+            self.service.save_job(reject(job, problem))
+            self.service.audit.record("system", "readiness.rejected", "readiness_job", str(job.get("job_id", "")),
+                                      outcome="failed", details={"problem": problem})
+            return {"action": "rejected", "job_id": job.get("job_id"), "problem": problem}
         result = self.service.run(job)
         return {"action": "ran", "job_id": result["job_id"], "status": result["status"],
                 "totals": result.get("totals")}

@@ -475,3 +475,24 @@ as drift.
   24 `collect` and 18 `fit … into` are side effects.
 * Scripted and external lookups execute code through `lookup`. They are out
   of scope here; the lookup definition, not the search, is the control point.
+
+## D-039 Evidence and job collections are written with the system token
+*0.7.2. Extends the D-028 pattern to readiness, validation, discovery and jobs.*
+* Before 0.7.2, `ucm_analyst` (and `ucm_admin`, `ucm_content_manager` for
+  jobs) could write `uc_readiness`, `uc_validation`,
+  `uc_environment_sources`, `uc_source_mappings` and `uc_sync_state` directly
+  through the KV REST API. That let them lift the readiness gate on enable,
+  forge validation evidence or inventory, and enqueue jobs with arbitrary
+  parameters for the worker, which runs as the system user.
+* These collections are now writable only by `admin` / `sc_admin`. The REST
+  handler's `Context` gives the sync, discovery, readiness, validation and
+  mapping services the system-token store (`records()`). Every handler that
+  writes checks the capability first. Searches (parse, preview, field
+  sampling, discovery dispatch) still run with the caller's session, so
+  nobody sees data they could not search themselves.
+* Workers check each queued job's structure before running it (`storage/jobs.py`:
+  type, id/key, requester, source, provider, categories, ref, flags, time
+  bounds). A malformed job is failed with `invalid_job` and audited.
+* `uc_selections` stays user-writable: it is per-user intent, not evidence.
+  Provider collections stay writable by content managers (known limitation in
+  SECURITY.md).
