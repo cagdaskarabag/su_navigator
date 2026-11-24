@@ -12,10 +12,12 @@ require([
         q: initial.q || "", domain: initial.domain || "", category: initial.category || "",
         criticality: initial.criticality || "", difficulty: initial.difficulty || "",
         sourcetype: initial.sourcetype || "", mitre: initial.mitre || "", quality: initial.quality || "",
+        review: initial.review || "", regulation: initial.regulation || "",
         sort: initial.sort || "id",
         offset: parseInt(initial.offset || "0", 10) || 0
     };
     var categories = [];
+    var facets = { review_statuses: [], regulations: [], quality_flags: [] };
     var selections = {};
     var requestSeq = 0;
     var results = el("div", { "class": "ucm-results" });
@@ -50,7 +52,7 @@ require([
         sortSel.querySelector("option").textContent = "ID";
         sortSel.querySelector("option").value = "id";
         return el("div", { "class": "ucm-toolbar" },
-            textInput("q", "Search", "Title, id, sourcetype, MITRE id…", "ucm-search"),
+            textInput("q", "Search", "Title, description, id, sourcetype, MITRE id…", "ucm-search"),
             select("domain", "Domain", opts(ucm.DOMAINS), state.domain),
             select("category", "Category", categories.map(function (c) {
                 return { value: c._key, label: c.category_id + ". " + c.name };
@@ -59,8 +61,15 @@ require([
             select("difficulty", "Difficulty", opts(ucm.DIFFICULTY), state.difficulty),
             textInput("sourcetype", "Sourcetype (exact)", "e.g. WinEventLog:Security"),
             textInput("mitre", "MITRE ATT&CK id", "e.g. T1110"),
+            select("review", "Review status", facets.review_statuses.map(function (r) {
+                return { value: r.id, label: r.id + " (" + r.count + ")" };
+            }), state.review),
+            select("regulation", "Regulation", facets.regulations.map(function (r) {
+                return { value: r.id, label: r.label + " (" + r.count + ")" };
+            }), state.regulation),
             select("quality", "Quality flag", Object.keys(ucm.QUALITY_FLAGS).map(function (k) {
-                return { value: k, label: ucm.QUALITY_FLAGS[k][1] };
+                var f = facets.quality_flags.filter(function (q) { return q.id === k; })[0];
+                return { value: k, label: ucm.QUALITY_FLAGS[k][1] + (f ? " (" + f.count + ")" : "") };
             }), state.quality),
             sortSel);
     }
@@ -94,7 +103,7 @@ require([
         ucm.clear(results);
         if (!data.items.length) {
             var filtered = state.q || state.domain || state.category || state.criticality ||
-                state.difficulty || state.sourcetype || state.mitre || state.quality;
+                state.difficulty || state.sourcetype || state.mitre || state.quality || state.review || state.regulation;
             results.appendChild(filtered
                 ? ucm.stateBox("empty", "No use cases match these filters.", "Clear one or more filters to widen the search.")
                 : el("div", {}, ucm.stateBox("empty", "No content has been imported yet.",
@@ -120,7 +129,7 @@ require([
         ucm.setQueryParams(state);
         ucm.clear(results).appendChild(el("div", { "class": "ucm-loading", text: "Loading…" }));
         var params = { offset: state.offset, count: PAGE, sort: state.sort };
-        ["q", "domain", "category", "criticality", "difficulty", "sourcetype", "mitre", "quality"].forEach(function (k) {
+        ["q", "domain", "category", "criticality", "difficulty", "sourcetype", "mitre", "quality", "review", "regulation"].forEach(function (k) {
             if (state[k]) { params[k] = state[k]; }
         });
         ucm.get("catalog", params).done(function (data) {
@@ -140,9 +149,11 @@ require([
 
     ucm.get("categories").always(function (data) {
         categories = (data && data.categories) || [];
-        ucm.clear(root);
-        root.appendChild(toolbar());
-        root.appendChild(results);
-        loadSelections().always(load);
+        ucm.get("catalog/facets").done(function (f) { facets = f; }).always(function () {
+            ucm.clear(root);
+            root.appendChild(toolbar());
+            root.appendChild(results);
+            loadSelections().always(load);
+        });
     });
 });

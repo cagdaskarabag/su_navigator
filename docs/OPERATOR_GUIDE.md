@@ -400,10 +400,12 @@ default max 100 rows).
 
 | Filter | Matches |
 | --- | --- |
-| Search | Case-insensitive substring on a precomputed field: id, title, sourcetypes, tags, MITRE ids. **Descriptions are not searched.** All terms must match. |
+| Search | Case-insensitive substring on a precomputed field: id, title, sourcetypes, tags, MITRE ids and the first 1,500 characters of the description. All terms must match. |
 | Domain, category, criticality, difficulty | Exact facets from the canonical model. |
 | Sourcetype (exact) | Exact sourcetype string. |
 | MITRE ATT&CK ID | Technique id such as `T1110`. |
+| Review status | Provider review status (for example `verified`, `draft`). Counts come from `GET /services/ucm/catalog/facets`. |
+| Regulation | Use cases mapped to one regulation (for example FedRAMP), with counts. |
 | Quality flag | Use cases carrying one quality flag (below). |
 
 Quality flags appear as amber badges next to the review status, in the

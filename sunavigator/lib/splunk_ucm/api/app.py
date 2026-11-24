@@ -12,6 +12,7 @@ import json
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from ..audit import AuditService
+from ..catalog.derived import get_facets
 from ..catalog.detail import UseCaseDetailService
 from ..catalog.query import CatalogFilter, CatalogQueryService
 from ..config import AppConfig, load_config
@@ -228,11 +229,16 @@ def get_catalog(ctx: Context, req: Request) -> Response:
         q=req.arg("q").strip(), domains=req.args("domain"), category_keys=req.args("category"),
         criticality=req.args("criticality"), difficulty=req.args("difficulty"),
         sourcetype=req.arg("sourcetype").strip(), mitre=req.arg("mitre").strip().upper(),
-        quality=req.args("quality"), provider_status=req.arg("status", "active"), sort=req.arg("sort", "id"),
+        quality=req.args("quality"), review=req.args("review"), regulation=req.arg("regulation").strip(),
+        provider_status=req.arg("status", "active"), sort=req.arg("sort", "id"),
         offset=_int(req.arg("offset"), 0, "offset"), count=_int(req.arg("count"), 25, "count"),
         with_total=req.arg("total", "1") != "0")
     max_page = ctx.config.get_int("catalog", "max_page_size", 100, 10, 500)
     return Response(200, CatalogQueryService(ctx.store, max_page).search(f))
+
+
+def get_catalog_facets(ctx: Context, req: Request) -> Response:
+    return Response(200, get_facets(ctx.store))
 
 
 def get_usecase(ctx: Context, req: Request) -> Response:
@@ -682,6 +688,7 @@ DEPLOYMENT_ACTIONS = ("draft", "submit", "approve", "reject", "deploy", "enable"
 def build_router() -> Router:
     router = Router()
     router.add("GET", "catalog", get_catalog)
+    router.add("GET", "catalog/facets", get_catalog_facets)
     router.add("GET", "usecase", get_usecase)
     router.add("GET", "categories", get_categories)
     router.add("GET", "sync", get_sync)

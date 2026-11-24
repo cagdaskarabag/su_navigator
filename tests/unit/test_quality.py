@@ -2,7 +2,8 @@ import unittest
 
 import helpers
 from splunk_ucm.catalog.detail import UseCaseDetailService
-from splunk_ucm.catalog.quality import FLAG_ORDER, refresh_duplicate_flags, spl_hash
+from splunk_ucm.catalog.derived import refresh_derived
+from splunk_ucm.catalog.quality import FLAG_ORDER, spl_hash
 from splunk_ucm.catalog.query import CatalogFilter, CatalogQueryService
 from splunk_ucm.errors import ValidationError
 from splunk_ucm.storage import collections as C
@@ -83,17 +84,17 @@ class DuplicateSplTest(unittest.TestCase):
         return sorted(d["_key"] for d in self.store.query(C.CATALOG, {"quality_flags": "duplicate_spl"}))
 
     def test_shared_hash_is_flagged_and_cleared(self):
-        self.assertEqual(refresh_duplicate_flags(self.store), {"duplicate_groups": 1, "updated": 2})
+        self.assertEqual(refresh_derived(self.store), {"duplicate_groups": 1, "updated": 2})
         self.assertEqual(self.flagged(), ["fenre_UC-9.1.1", "fenre_UC-9.1.2"])
-        self.assertEqual(refresh_duplicate_flags(self.store)["updated"], 0)
+        self.assertEqual(refresh_derived(self.store)["updated"], 0)
         doc = self.store.get(C.CATALOG, "fenre_UC-9.1.2")
         doc["provider_status"] = "withdrawn"
         self.store.upsert(C.CATALOG, doc)
-        refresh_duplicate_flags(self.store)
+        refresh_derived(self.store)
         self.assertEqual(self.flagged(), [])
 
     def test_filter_badges_and_detail(self):
-        refresh_duplicate_flags(self.store)
+        refresh_derived(self.store)
         svc = CatalogQueryService(self.store, max_page_size=1)
         first = svc.search(CatalogFilter(quality=["duplicate_spl"], count=1))
         second = svc.search(CatalogFilter(quality=["duplicate_spl"], count=1, offset=1))

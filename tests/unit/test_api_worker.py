@@ -173,5 +173,29 @@ class WorkerTest(unittest.TestCase):
         self.assertIsNone(self.worker(cfg).maybe_schedule())
 
 
+class WebExposureTest(unittest.TestCase):
+    """Splunk Web proxies only paths and methods listed in default/web.conf."""
+
+    def exposures(self):
+        import configparser
+        import os
+        path = os.path.join(os.path.dirname(__file__), "..", "..", "sunavigator", "default", "web.conf")
+        parser = configparser.ConfigParser()
+        parser.read(path)
+        return [(parser[s]["pattern"].split("/"), {m.strip() for m in parser[s]["methods"].split(",")})
+                for s in parser.sections() if s.startswith("expose:")]
+
+    def test_every_route_is_reachable_through_splunk_web(self):
+        exposures = self.exposures()
+
+        def exposed(method, path):
+            parts = ("ucm/" + path).split("/")
+            return any(method in methods and len(pattern) == len(parts)
+                       and all(p == "*" or p == q for p, q in zip(pattern, parts))
+                       for pattern, methods in exposures)
+        missing = [(m, p) for (m, p) in build_router().routes if not exposed(m, p)]
+        self.assertEqual(missing, [])
+
+
 if __name__ == "__main__":
     unittest.main()

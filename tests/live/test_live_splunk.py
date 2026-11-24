@@ -332,6 +332,16 @@ class LiveApiTest(unittest.TestCase):
         status, body = api(self.admin, "GET", "catalog", {"quality": "unreviewed", "count": "5"})
         self.assertEqual(status, 200, body)
         self.assertTrue(all("unreviewed" in i["quality_flags"] for i in body["items"]), body)
+        status, body = api(self.admin, "GET", "catalog", {"regulation": "Bad Id"})
+        self.assertEqual((status, body["error"]["message"]), (400, "invalid regulation"))
+
+    def test_facets_match_filters(self):
+        status, facets = api(self.viewer, "GET", "catalog/facets")
+        self.assertEqual(status, 200, facets)
+        for key, param in (("review_statuses", "review"), ("regulations", "regulation")):
+            for facet in facets[key][:3]:
+                status, body = api(self.viewer, "GET", "catalog", {param: facet["id"], "count": "1"})
+                self.assertEqual((status, body["total"]), (200, facet["count"]), (key, facet))
 
     def test_platform_report(self):
         status, body = api(self.admin, "GET", "platform")

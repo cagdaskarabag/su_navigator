@@ -676,3 +676,25 @@ as drift.
   flag filter returned exactly the expected records.
 * Not covered: ES dependencies only visible in SPL (notable or risk indexes)
   and near-duplicate SPL.
+
+## D-047 Catalogue search, review and regulation filters, facets
+*0.7.3+ (T-16, findings F-26 and F-27). Catalogue summary v4.*
+* Search also matches the first 1,500 characters of the description
+  (whitespace collapsed), still as a case-insensitive substring over one
+  precomputed field per record. The cap keeps summary documents small; terms
+  only later in a long description are not found.
+* New filters: review status (`GET catalog?review=<status>`, repeatable) and
+  regulation (`GET catalog?regulation=<id>`, matching the `regulation:<id>`
+  framework tag). Values must match `^[a-z0-9][a-z0-9._-]{0,79}$`; anything
+  else is a 400.
+* `GET catalog/facets` returns the review statuses, regulations (with labels)
+  and quality flags present in the active catalogue, with counts. It is
+  computed in the same post-pass as duplicate SPL (after every sync, offline
+  import and reindex) and stored in `uc_sync_state` as `catalog::facets`;
+  when the document is missing it is computed on request.
+* `[expose:ucm_api_catalog]` in `web.conf` allowed only POST, so the
+  catalogue page could not reach `catalog/facets` through Splunk Web. It now
+  allows GET and POST, and a unit test checks every REST route against the
+  `web.conf` expose patterns.
+* Verified on the lab (138 records): 26 regulations offered, FedRAMP 4 use
+  cases, FedRAMP + verified 3, `q=pipeline` 7 including description matches.

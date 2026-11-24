@@ -30,6 +30,7 @@ SORTS = {
 _KEY_RE = re.compile(r"^[A-Za-z0-9._-]{1,120}$")
 _TOKEN_RE = re.compile(r"^[^\x00-\x1f]{1,200}$")
 _MITRE_RE = re.compile(r"^(T\d{4}(\.\d{3})?|TA\d{4})$")
+_FACET_RE = re.compile(r"^[a-z0-9][a-z0-9._-]{0,79}$")
 MAX_TERMS = 6
 
 
@@ -43,6 +44,8 @@ class CatalogFilter:
     sourcetype: str = ""
     mitre: str = ""
     quality: Sequence[str] = ()
+    review: Sequence[str] = ()
+    regulation: str = ""
     provider_status: str = STATUS_ACTIVE
     sort: str = "id"
     offset: int = 0
@@ -83,6 +86,15 @@ def build_query(f: CatalogFilter) -> Dict[str, Any]:
         if not _MITRE_RE.match(f.mitre):
             raise ValidationError("invalid MITRE id")
         clauses.append({"mitre_ids": f.mitre})
+    if f.review:
+        for value in f.review:
+            if not _FACET_RE.match(value):
+                raise ValidationError("invalid review status", {"value": value[:50]})
+        clauses.append({"review_status": {"$in": list(f.review)}})
+    if f.regulation:
+        if not _FACET_RE.match(f.regulation):
+            raise ValidationError("invalid regulation")
+        clauses.append({"frameworks": "regulation:" + f.regulation})
     if f.quality:
         clauses.append({"quality_flags": {"$in": _check_all(f.quality, list(QUALITY_FLAGS), "quality flag")}})
     if f.q:

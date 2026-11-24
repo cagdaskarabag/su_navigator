@@ -169,13 +169,14 @@ Downgrades are not supported (D-033).
 
 | Method & path | Capability (role) | Purpose |
 |---|---|---|
-| `GET ucm/catalog` | read collections | Filtered, paged catalogue (`q, domain, category, criticality, difficulty, sourcetype, mitre, status, sort, offset, count`). |
+| `GET ucm/catalog` | read collections | Filtered, paged catalogue (`q, domain, category, criticality, difficulty, sourcetype, mitre, status, quality, review, regulation, sort, offset, count`). |
+| `GET ucm/catalog/facets` | read | Review statuses, regulations and quality flags in the active catalogue, with counts. |
 | `GET ucm/usecase?id=` | read | Canonical detail (normalized on read) + provenance. |
 | `GET ucm/categories` | read | Category list with sync state. |
 | `GET ucm/sync` | read | Provider state + recent jobs. |
 | `POST ucm/sync` | `ucm_manage_content` | Queue a sync job (`categories`, optional `ref`). |
 | `POST ucm/import` | `ucm_manage_content` | Import an offline bundle (JSON body). |
-| `POST ucm/catalog/reindex` | `ucm_manage_content` | Re-derive summaries from stored raw records. |
+| `POST ucm/catalog/reindex` | `ucm_manage_content` | Re-derive summaries from stored raw records, then duplicate-SPL flags and facets. |
 | `GET ucm/provider/manifest` | `ucm_manage_content` | Resolve the remote manifest (optional `ref`) without importing. |
 | `GET ucm/platform` | read | Capability report. |
 | `GET ucm/audit` | `ucm_manage_content` or `ucm_admin` | Recent audit events (`limit`, `prefix`). |
@@ -199,7 +200,7 @@ Downgrades are not supported (D-033).
 | `POST ucm/preview` | `ucm_run_discovery` | Bounded preview of imported SPL; refused when side-effect, indirect-execution or unknown commands are present (D-038). |
 | `GET ucm/deployments` | read | Deployments (`state`, `live`, `drift=1`, `summary=1`, paging). |
 | `GET ucm/deployment?id=` | read | Deployment document plus `allowed_actions` for the caller. Also embedded in `GET ucm/usecase`. |
-| `POST ucm/deployment/draft` | `ucm_run_discovery` or `ucm_deploy` | Create or replace a draft revision (`spl_source`, `custom_spl`, `cron`, `earliest`, `latest`, `alert_mode`, `severity`, `threshold`, `notes`). |
+| `POST ucm/deployment/draft` | `ucm_run_discovery` or `ucm_deploy` | Create or replace a draft revision (`spl_source`, `custom_spl`, `cron`, `earliest`, `latest`, `schedule_window`, `suppress_period`, `suppress_fields`, `alert_mode`, `severity`, `threshold`, `notes`). |
 | `POST ucm/deployment/submit` | `ucm_run_discovery` or `ucm_deploy` | Submit the draft for approval. |
 | `POST ucm/deployment/{approve,reject,deploy,enable,disable,rollback,retire}` | `ucm_deploy` | Workflow and saved-search actions (`note`; `override_reason` for enable). |
 | `POST ucm/deployment/verify` | `ucm_run_discovery` or `ucm_deploy` | Compare the saved search with its revision. |

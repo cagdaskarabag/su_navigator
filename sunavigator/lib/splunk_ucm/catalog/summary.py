@@ -21,7 +21,9 @@ def sort_key_for(record_id: str) -> str:
 
 # Bump when catalog_summary gains or changes fields; the upgrade migration
 # re-derives older summaries from stored raw records (no network).
-SUMMARY_VERSION = 3
+SUMMARY_VERSION = 4
+# Description text kept in search_text; KV regex search scans this field.
+SEARCH_DESCRIPTION_CHARS = 1500
 
 
 def catalog_summary(uc: UseCase) -> Dict[str, Any]:
@@ -37,7 +39,13 @@ def catalog_summary(uc: UseCase) -> Dict[str, Any]:
                       if m.framework != "mitre_attack" and m.object_id)[:300]
     addons = dedupe(a.name for a in uc.addons)
     search_text = " ".join([uc.provenance.provider_record_id, uc.content_id, uc.title,
-                            " ".join(sourcetypes), " ".join(uc.tags), " ".join(mitre)]).lower()
+                            " ".join(sourcetypes), " ".join(uc.tags), " ".join(mitre),
+                            " ".join(uc.description.split())[:SEARCH_DESCRIPTION_CHARS]]).lower()
+    regulation_labels = {}
+    for m in uc.framework_mappings:
+        if m.framework.startswith("regulation:"):
+            regulation_labels.setdefault(m.framework[len("regulation:"):],
+                                         m.attributes.get("regulation_label") or m.framework[len("regulation:"):])
     return {
         "_key": uc.key,
         "doc_schema": DOC_SCHEMA,
@@ -66,6 +74,7 @@ def catalog_summary(uc: UseCase) -> Dict[str, Any]:
         "mitre_ids": mitre,
         "frameworks": frameworks,
         "framework_controls": controls,
+        "regulation_labels": regulation_labels,
         "has_spl": bool(uc.spl or uc.cim_spl),
         "requirement_count": len(uc.requirements),
         "review_status": uc.review_status,
