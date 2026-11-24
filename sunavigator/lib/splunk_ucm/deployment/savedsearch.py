@@ -1,8 +1,11 @@
 """Saved-search adapter over ``/servicesNS/nobody/<app>/saved/searches``.
 
-Always called with the caller's session (D-011, D-028): Splunk enforces the
-app ACL (``metadata/default.meta [savedsearches]``) and the created search is
-owned by the deploying user, so it never runs with more privilege than they have.
+Writes use the REST handler's system token after the capability check, and
+every write sets the owner to the configured scheduled user (``[deployment]
+scheduled_owner``, role ``ucm_scheduler``). Operators have no write access to
+the saved searches themselves (``metadata/default.meta``, D-051), so a
+deployed search runs with that user's rights, never with an operator's or an
+administrator's.
 """
 
 import json
@@ -39,9 +42,10 @@ def _bool(value: Any) -> bool:
 
 
 class SavedSearchClient:
-    def __init__(self, transport: SplunkdTransport, app: str = APP_NAME):
+    def __init__(self, transport: SplunkdTransport, app: str = APP_NAME, owner: str = ""):
         self.t = transport
         self.app = app
+        self.owner = (owner or "").strip()
         self.base = "/servicesNS/nobody/%s/saved/searches" % quote(app, safe="")
 
     def _path(self, name: str) -> str:
@@ -81,19 +85,35 @@ class SavedSearchClient:
         out["app"] = acl.get("app") or self.app
         return out
 
+    def _require_owner(self) -> None:
+        if not self.owner:
+            raise ValidationError("[deployment] scheduled_owner is not set in ucm.conf; name the user that "
+                                  "holds the ucm_scheduler role before deploying")
+
+    def _assign_owner(self, name: str) -> None:
+        status, body = self.t.request("POST", self._path(name) + "/acl", {"output_mode": "json"},
+                                      form={"owner": self.owner, "sharing": "app"})
+        if status != 200:
+            self._raise(status, body, "assign the owner of")
+
     def create(self, name: str, settings: Dict[str, str]) -> None:
+        self._require_owner()
         form = dict(settings)
         form["name"] = name
         status, body = self.t.request("POST", self.base, {"output_mode": "json"}, form=form)
         if status not in (200, 201):
             self._raise(status, body, "create")
+        self._assign_owner(name)
 
     def update(self, name: str, settings: Dict[str, str]) -> None:
+        self._require_owner()
         status, body = self.t.request("POST", self._path(name), {"output_mode": "json"}, form=dict(settings))
         if status != 200:
             self._raise(status, body, "update")
+        self._assign_owner(name)
 
     def delete(self, name: str) -> bool:
+        self._require_owner()
         status, body = self.t.request("DELETE", self._path(name), {"output_mode": "json"})
         if status == 404:
             return False

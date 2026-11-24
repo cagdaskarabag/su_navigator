@@ -187,8 +187,10 @@ class Context:
     def deployment_service(self) -> DeploymentService:
         # Workflow records go through the system token (uc_deployments is admin-write only);
         # saved searches are written with the caller's session (D-028, D-029).
+        owner = self.config.get("deployment", "scheduled_owner", "").strip()
+        writer = self.system_transport or self.user_transport
         return DeploymentService(self.records(), self.audit, SearchClient(self.user_transport),
-                                 SavedSearchClient(self.user_transport), deployment_settings(self.config))
+                                 SavedSearchClient(writer, owner=owner), deployment_settings(self.config))
 
     def dashboard_service(self) -> DashboardService:
         views = ViewClient(self.system_transport) if self.system_transport else self.view_client

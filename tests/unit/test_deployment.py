@@ -1,5 +1,6 @@
 import datetime
 import unittest
+from urllib.parse import unquote
 
 import helpers  # noqa: F401  (sets sys.path)
 from splunk_ucm.audit import AuditService
@@ -170,6 +171,63 @@ class SchedulingTest(unittest.TestCase):
         spec = normalize_spec({"schedule_window": "AUTO", "suppress_period": "30m"}, {})
         self.assertEqual((spec["schedule_window"], spec["suppress_period"], spec["suppress_fields"]),
                          ("auto", "30m", ""))
+
+
+class OwnershipTest(unittest.TestCase):
+    """D-051: writes go through the system token and every search is owned by scheduled_owner."""
+
+    class FakeTransport:
+        def __init__(self, owner_after_create="splunk-system-user"):
+            self.calls = []
+            self.items = {}
+            self.owner_after_create = owner_after_create
+
+        def request(self, method, path, query=None, json_body=None, form=None, timeout=60.0):
+            form = dict(form or {})
+            self.calls.append((method, path, form))
+            name = unquote(path.rsplit("/saved/searches/", 1)[-1].split("/")[0]) if "/saved/searches/" in path else form.get("name")
+            if path.endswith("/acl"):
+                self.items[name]["owner"] = form["owner"]
+                return 200, b"{}"
+            if method == "POST" and path.endswith("/saved/searches"):
+                self.items[form["name"]] = {"owner": self.owner_after_create, "sharing": "app"}
+                return 201, b"{}"
+            if method == "POST":
+                return (200, b"{}") if name in self.items else (404, b"{}")
+            if method == "DELETE":
+                return (200, b"{}") if self.items.pop(name, None) is not None else (404, b"{}")
+            return 404, b"{}"
+
+    def test_writes_refused_without_scheduled_owner(self):
+        from splunk_ucm.deployment.savedsearch import SavedSearchClient
+        client = SavedSearchClient(self.FakeTransport(), owner="")
+        for action in (lambda: client.create("x", {}), lambda: client.update("x", {}), lambda: client.delete("x")):
+            with self.assertRaises(ValidationError):
+                action()
+        self.assertEqual(client.t.calls, [])
+
+    def test_create_and_update_reassign_owner(self):
+        from splunk_ucm.deployment.savedsearch import SavedSearchClient
+        t = self.FakeTransport()
+        client = SavedSearchClient(t, owner="ucm_scheduler")
+        client.create("SUN - x", {"search": "| makeresults"})
+        self.assertEqual(t.items["SUN - x"]["owner"], "ucm_scheduler")
+        t.items["SUN - x"]["owner"] = "alice"
+        client.update("SUN - x", {"disabled": "0"})
+        self.assertEqual(t.items["SUN - x"]["owner"], "ucm_scheduler")
+        acl = [c for c in t.calls if c[1].endswith("/acl")]
+        self.assertEqual([c[2] for c in acl], [{"owner": "ucm_scheduler", "sharing": "app"}] * 2)
+
+    def test_owner_drift_is_reported(self):
+        from splunk_ucm.deployment.spec import drift
+        rev = {"spl_hash": spl_hash("| makeresults"), "cron": "*/5 * * * *", "earliest": "-20m@m",
+               "latest": "-5m@m", "rev": 1}
+        live = {"search": "| makeresults", "cron_schedule": "*/5 * * * *", "dispatch.earliest_time": "-20m@m",
+                "dispatch.latest_time": "-5m@m", "is_scheduled": True, "disabled": True, "owner": "alice"}
+        self.assertEqual(drift(rev, live, True), [])
+        self.assertEqual([p["field"] for p in drift(rev, live, True, "ucm_scheduler")], ["owner"])
+        live["owner"] = "ucm_scheduler"
+        self.assertEqual(drift(rev, live, True, "ucm_scheduler"), [])
 
 
 class WorkflowTest(unittest.TestCase):

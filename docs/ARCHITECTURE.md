@@ -70,7 +70,7 @@ Imported SPL is data. It is never dispatched by the content subsystem.
 Discovery searches are a constructed ``tstats`` template over index names
 returned by ``/services/data/indexes`` (D-020, D-021).
 
-Deployment flow (WP5, D-028/D-029): draft (parse) ─▶ submit ─▶ approve (other
+Deployment flow (WP5, D-028/D-029, owner D-051): draft (parse) ─▶ submit ─▶ approve (other
 user) ─▶ deploy: create or update the saved search **disabled** with the
 operator's session ─▶ read back and compare ─▶ `deployed` or `failed` ─▶
 enable / disable / rollback (each read back) ─▶ retire (delete). The worker

@@ -49,7 +49,9 @@ class DeploymentSettings:
                  block_enable_states: Sequence[str] = ("blocked",), cron: str = "*/15 * * * *",
                  earliest: str = "-20m@m", latest: str = "-5m@m", alert_mode: str = "track",
                  max_revisions: int = 20, verify_interval_minutes: int = 60,
-                 extra_safe_commands: Sequence[str] = (), schedule_window: str = "auto"):
+                 extra_safe_commands: Sequence[str] = (), schedule_window: str = "auto",
+                 scheduled_owner: str = ""):
+        self.scheduled_owner = scheduled_owner
         self.extra_safe_commands = tuple(extra_safe_commands)
         self.schedule_window = schedule_window
         self.require_approval = require_approval
@@ -267,7 +269,7 @@ class DeploymentService:
             self._fail(doc, actor, "deploy", exc.message)
             raise
         observed = self.saved.get(name)
-        problems = drift(rev, observed, True) if observed else [{"field": "*", "detail": "not found after write"}]
+        problems = drift(rev, observed, True, self.settings.scheduled_owner) if observed else [{"field": "*", "detail": "not found after write"}]
         if problems:
             if observed:
                 self._safe_disable(name)
@@ -317,7 +319,7 @@ class DeploymentService:
             self._fail(doc, actor, "rollback", exc.message, keep_state=True)
             raise
         observed = self.saved.get(name)
-        problems = drift(prev, observed, True) if observed else [{"field": "*", "detail": "not found after write"}]
+        problems = drift(prev, observed, True, self.settings.scheduled_owner) if observed else [{"field": "*", "detail": "not found after write"}]
         self._set_live(doc, observed, True, prev, problems)
         doc["deployed_revision"] = prev["rev"]
         prev["rolled_back_at"] = utc_now_iso()
@@ -387,7 +389,7 @@ class DeploymentService:
             self._fail(doc, actor, action, exc.message, keep_state=True)
             raise
         observed = self.saved.get(name)
-        problems = drift(rev, observed, not enabled) if observed else [{"field": "*", "detail": "not found"}]
+        problems = drift(rev, observed, not enabled, self.settings.scheduled_owner) if observed else [{"field": "*", "detail": "not found"}]
         self._set_live(doc, observed, not enabled, rev, problems)
         details = dict(details)
         details["drift"] = len(problems)
@@ -423,7 +425,7 @@ class DeploymentService:
             doc["live_status"] = LIVE_UNMANAGED
             doc["live_drift"] = True
             return
-        self._set_live(doc, observed, expected_disabled, rev, drift(rev, observed, expected_disabled))
+        self._set_live(doc, observed, expected_disabled, rev, drift(rev, observed, expected_disabled, self.settings.scheduled_owner))
 
     def _set_live(self, doc: Dict[str, Any], observed: Optional[Dict[str, Any]], expected_disabled: bool,
                   rev: Dict[str, Any], problems: List[Dict[str, Any]]) -> None:

@@ -47,6 +47,9 @@ def api(t, method, path, query=None, body=None, raw=None):
     return status, json.loads(content or b"{}")
 
 
+SCHEDULED_OWNER = os.environ.get("UCM_LIVE_SCHEDULED_OWNER", "ucm_scheduler")
+
+
 @unittest.skipUnless(LIVE, "set UCM_LIVE_SPLUNK=1 to run against a real Splunk instance")
 class LiveKVStoreParityTest(unittest.TestCase):
     """The InMemoryStore used by unit tests must agree with the real KV Store."""
@@ -582,7 +585,7 @@ class LiveDeploymentTest(unittest.TestCase):
         self.assertEqual((dep["state"], dep["live"]["status"], dep["live"]["drift"]), ("deployed", "disabled", []))
         live = self.saved(name)
         self.assertTrue(live["disabled"])
-        self.assertEqual(live["owner"], self.OPERATOR)
+        self.assertEqual(live["owner"], SCHEDULED_OWNER)
         self.assertEqual(live["cron_schedule"], "*/30 * * * *")
         self.assertEqual((live["schedule_window"], live["alert.suppress"], live["alert.suppress.period"],
                           live["alert.suppress.fields"]), ("7", True, "1h", "user,src"))
@@ -591,6 +594,11 @@ class LiveDeploymentTest(unittest.TestCase):
         self.assertEqual(body["deployment"]["live"]["status"], "enabled")
         self.assertFalse(self.saved(name)["disabled"])
         from urllib.parse import quote
+        status, _ = self.operator.request("POST", self.SAVED + quote(name, safe=""), form={"disabled": "0"})
+        self.assertEqual(status, 403)
+        status, _ = self.operator.request("DELETE", self.SAVED + quote(name, safe=""))
+        self.assertNotEqual(status, 200)
+        self.assertFalse(self.saved(name)["disabled"])
         self.admin.request("POST", self.SAVED + quote(name, safe=""), form={"cron_schedule": "*/5 * * * *"})
         status, body = self.act(self.operator, "verify")
         self.assertEqual([d["field"] for d in body["deployment"]["live"]["drift"]], ["cron_schedule"])

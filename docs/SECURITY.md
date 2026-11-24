@@ -12,7 +12,7 @@ Status: WP5 (catalogue, discovery, readiness, selection, SPL validation, deploym
 | Imported SPL preview | Dispatched only after an explicit user action, a successful parse in the app namespace, a side-effect command gate, and a refusal of indirect-execution (`map`, `savedsearch`, `rest`, ...) and unknown commands (D-038). Time window and `max_count` are forced. Event payloads are not stored. |
 | Field sampling | Constructed `| search index=… sourcetype=… \| head N \| eval … \| fields <validated names> \| fieldsummary` over discovered pairs, in a window ending at the pair's newest event. Imported pipelines are not used. Only presence, counts and the index / sourcetype where a field was seen are kept; event values are not stored (D-044). |
 | Selections | Per-user KV rows; the handler only reads and writes the caller's `user` field. |
-| Deployment | Saved searches are written with the operator's session, owned by the operator (D-028), disabled first, read back and compared. Only searches carrying the app's marker are modified. No alert actions. Workflow records are written with the system token after the capability check (D-029). |
+| Deployment | Saved searches are written with the system token after the capability check and owned by `[deployment] scheduled_owner`, a dedicated `ucm_scheduler` account (D-051). Operators cannot edit or delete them in Splunk (verified on the lab). Disabled first, read back and compared, owner included. Only searches carrying the app's marker are modified. No alert actions. Workflow records are written with the system token after the capability check (D-029). |
 | Reference links | Rendered as links only when absolute `http(s)`; other values are dropped or shown as plain repository paths. |
 | Browser → app API | Splunk Web proxy (`/splunkd/__raw/services/ucm/*`), Splunk session + CSRF form key. All inputs are validated against allowlists; KV queries are built from structured filters, free text is regex-escaped. |
 | App → GitHub | HTTPS only, host allowlist (`api.github.com`, `raw.githubusercontent.com` by default, configurable), TLS verification on, optional proxy / CA bundle, response size caps, bounded retries, rate-limit aware. Refs are limited to `allowed_refs`; a commit SHA must be reachable from an allowed ref (GitHub compare API) before any content is fetched (D-043). |
@@ -32,7 +32,8 @@ Status: WP5 (catalogue, discovery, readiness, selection, SPL validation, deploym
 | `ucm_viewer` | `user` | none |
 | `ucm_analyst` | `ucm_viewer` | `ucm_run_discovery` |
 | `ucm_content_manager` | `ucm_analyst` | `ucm_manage_content` |
-| `ucm_deployment_operator` | `ucm_analyst` | `ucm_deploy`, `schedule_search` |
+| `ucm_deployment_operator` | `ucm_analyst` | `ucm_deploy` |
+| `ucm_scheduler` | `user` | `schedule_search`. Owner of deployed searches only; assign it to one account and set `scheduled_owner` (D-051). |
 | `ucm_admin` | content manager + deployment operator | all |
 
 `admin` and `sc_admin` receive all app capabilities.

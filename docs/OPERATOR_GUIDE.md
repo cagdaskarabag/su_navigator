@@ -262,7 +262,8 @@ The app adds capabilities and roles in `default/authorize.conf`. `admin` and
 | `ucm_viewer` | Read-only analyst | Catalogue, inventory, readiness, coverage. Own backlog. Cannot sync, discover, validate or deploy. |
 | `ucm_analyst` | Inventory + validation | Viewer plus discovery, local source mappings, readiness re-assess, SPL parse/preview/field sample, draft and submit a deployment. |
 | `ucm_content_manager` | Catalogue owner | Analyst plus GitHub sync, offline import, reindex, provider manifest, framework import/activate, audit read. |
-| `ucm_deployment_operator` | Deployer | Analyst plus approve/reject/deploy/enable/disable/rollback/retire, generated dashboards. Also gets `schedule_search`. |
+| `ucm_deployment_operator` | Deployer | Analyst plus approve/reject/deploy/enable/disable/rollback/retire, generated dashboards. |
+| `ucm_scheduler` | Scheduled-search owner | No UI role. Owns every deployed saved search; see the setup step below (D-051). |
 | `ucm_admin` | App admin | Content manager + deployment operator + `ucm_admin`. |
 
 The discovery inventory (index and sourcetype names, counts, apps, data
@@ -283,6 +284,23 @@ account you either:
 Create the second user in **Settings → Users → New User**. Assign
 `ucm_deployment_operator` (it already imports `ucm_analyst` / `ucm_viewer`).
 The built-in `user` role is included via `ucm_viewer`.
+
+**Scheduled owner (required before any deploy).** Deployed searches run as
+the account named in `[deployment] scheduled_owner` in `local/ucm.conf`, not
+as the operator or an administrator (D-051). Create a dedicated account
+(for example `sunavigator_scheduler`), assign it the `ucm_scheduler` role,
+and set:
+
+```
+[deployment]
+scheduled_owner = sunavigator_scheduler
+```
+
+The app refuses deploy, enable, disable, rollback and retire until this is set
+(the message names the setting). Searches run with that account's indexes,
+so grant it read access to the indexes your use cases search. Operators have
+no write access to the saved searches themselves: editing one in Splunk Web
+returns 403, and so does deleting it.
 
 Capabilities are enforced on every POST in `/services/ucm/...`. A viewer
 receives HTTP 403 for sync, import, discovery, deploy, and so on.
@@ -559,7 +577,7 @@ failed after a deploy error; retry deploy from approved/failed
    clicks **Approve** (optional audit note) or **Reject**. The submitter
    does not see Approve while `allow_self_approval = false`.
 5. **Deploy (disabled)** — creates or updates a saved search in this app,
-   named `SUN - <record id> - <title>`, owned by the operator, **disabled**.
+   named `SUN - <record id> - <title>`, owned by `scheduled_owner`, **disabled**.
    The app reads it back and compares. Failure → `failed` plus `last_error`.
 6. **Enable** — separate action. If readiness is in
    `block_enable_states` (default `blocked`), Splunk Web prompts for an
@@ -984,8 +1002,8 @@ If **neither** Approve nor Reject appears, the account lacks `ucm_deploy`
 
 Read **Last error** on the deployment card. Common causes: SPL failed
 re-parse, side-effect commands, review commands the approver did not acknowledge
-(`unacknowledged_commands`: start a new revision), missing `schedule_search` (the
-`ucm_deployment_operator` role grants it; a custom role may not), or the
+(`unacknowledged_commands`: start a new revision), `scheduled_owner` not set
+(§4, "Scheduled owner"), or the
 search name colliding with an unmanaged search.
 
 Only searches carrying the app's marker are updated. An operator-created

@@ -287,6 +287,7 @@ Measured on 10.2.9: an idle test sourcetype three hours old reads
 `sample_empty` with the old 15-minute window and `present` with the anchored one.
 
 ## D-028 Deployed searches are owned by the deploying user
+*Superseded by D-051 (0.7.3+): the owner is `[deployment] scheduled_owner`.*
 **Context.** Saved searches created through `/servicesNS/nobody/<app>/saved/searches`
 are owned by the caller (verified on 10.2.9). Changing the owner to `nobody`
 needs `admin_all_objects` ("You do not have permission to change the owner").
@@ -768,3 +769,33 @@ as drift.
   is requested and available.
 * Verified: the lab layer (41 techniques) loads in the public ATT&CK
   Navigator with no console errors and the expected colours.
+
+## D-051 Deployed searches are owned by a dedicated scheduler account
+*0.7.3+ (T-20). Supersedes D-028 for writes and ownership.*
+* Operator direct edit was possible on the lab: a `ucm_deployment_operator`
+  user could edit and delete a search the app had deployed, because the app
+  ACL granted that role write access. The roadmap's acceptance was "operator
+  direct edit refused".
+* Writes now go through the REST handler's system token after its capability
+  check (as the worker already did). `metadata/default.meta [savedsearches]`
+  no longer grants `ucm_deployment_operator` write, and
+  `ucm_deployment_operator` no longer gets `schedule_search`.
+* Each write reassigns the owner to `[deployment] scheduled_owner` with
+  `POST .../saved/searches/<name>/acl` (`owner`, `sharing=app`). The owner
+  must hold `ucm_scheduler` (`importRoles = user`, `schedule_search`).
+  Writes are refused until it is set. Drift reports an owner that differs.
+* Why a dedicated account and not `nobody`: a search owned by `nobody` runs
+  as `splunk-system-user` (D-028), which has far more rights than any
+  operator. The scheduler account runs searches with the rights of one
+  reviewed role. Alternatives considered: keeping the operator as owner
+  (operators could then edit their own searches through the ACL they were
+  given, and the system token would still have to create them).
+* Verified on the lab (10.2.9): before the change the operator edited and
+  deleted an app search (200). After it, edit returned 403 and delete was
+  refused for a new search; the owner was changed to the scheduler account
+  and the scheduler account can read its own search. The live lifecycle test
+  asserts the owner, the 403 on edit, and that delete is not allowed.
+* Not covered: an admin can still edit or reassign the searches (admins own
+  Splunk), and the scheduler account's index access is whatever its role
+  grants. Removing the scheduler account orphans its searches; `verify`
+  reports the owner.

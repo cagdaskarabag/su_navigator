@@ -167,8 +167,10 @@ def spl_hash(spl: str) -> str:
     return sha256_text(" ".join((spl or "").split()))
 
 
-def drift(revision: Dict[str, Any], live: Dict[str, Any], expected_disabled: bool) -> list:
+def drift(revision: Dict[str, Any], live: Dict[str, Any], expected_disabled: bool, owner: str = "") -> list:
     out = []
+    if owner and live.get("owner") != owner:
+        out.append({"field": "owner", "expected": owner, "observed": live.get("owner")})
     if spl_hash(live.get("search") or "") != revision["spl_hash"]:
         out.append({"field": "search", "detail": "search text differs from revision %d" % revision["rev"]})
     if " ".join(str(live.get("cron_schedule") or "").split()) != revision["cron"]:

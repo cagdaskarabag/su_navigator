@@ -112,6 +112,8 @@ default_schedule_window = auto|<integer 0-1440>
 default_alert_mode = none|track
 * track: an alert that adds to Triggered Alerts when results exceed the threshold; no external actions.
 * none: a scheduled report. Default track.
+scheduled_owner = <string>
+* Name of the account that owns every deployed saved search. It must hold the ucm_scheduler role (or any role with schedule_search and the indexes the searches read). Required before any deploy, enable, disable, rollback or retire; the app refuses those actions without it. Default empty. D-051.
 max_revisions = <integer 2-100>
 * Revisions kept per deployment. The deployed and previous deployed revisions are always kept. Default 20.
 verify_interval_minutes = <integer>
