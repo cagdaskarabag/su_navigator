@@ -297,6 +297,10 @@ _UNSAMPLED_DETAIL = {
 
 def eval_field(req, snap: EnvironmentSnapshot, settings: EvaluationSettings,
                content_id: str = "", key: str = ""):
+    made = (req.get("attributes") or {}).get("derived_in_spl")
+    if made:
+        return result(NOT_APPLICABLE, "derived_in_spl",
+                      "Produced by %s in the search; raw events are not expected to carry it." % made)
     sample = snap.field_sample(content_id, req.get("value") or "", key)
     if sample is None:
         return result(UNVERIFIED, "not_sampled", "Field has not been sampled. Run validation on this use case.")

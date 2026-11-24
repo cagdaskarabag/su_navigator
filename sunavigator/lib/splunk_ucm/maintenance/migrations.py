@@ -9,6 +9,7 @@ from typing import Any, Callable, Dict, List, Tuple
 
 from .. import __version__
 from ..catalog.summary import SUMMARY_VERSION
+from ..content.fenre.normalizer import NORMALIZER_VERSION
 from ..content.reindex import ReindexService
 from ..storage import collections as C
 from ..storage.kvstore import DocumentStore
@@ -26,9 +27,15 @@ def _reindex_summaries(store: DocumentStore) -> Dict[str, Any]:
     return ReindexService(store).reindex()
 
 
+def _outdated_normalizer(store: DocumentStore) -> int:
+    return store.count(C.CATALOG) - store.count(C.CATALOG, {"normalizer_version": NORMALIZER_VERSION})
+
+
 # (id, needed(store) -> bool, apply(store) -> details). Never reorder or remove entries.
 MIGRATIONS: List[Tuple[str, Callable[[DocumentStore], bool], Callable[[DocumentStore], Dict[str, Any]]]] = [
     ("0001_catalog_summary_v%d" % SUMMARY_VERSION, lambda s: _outdated_summaries(s) > 0, _reindex_summaries),
+    # Derived-field requirements (D-040); readiness re-normalizes on its next run.
+    ("0002_normalizer_%s" % NORMALIZER_VERSION, lambda s: _outdated_normalizer(s) > 0, _reindex_summaries),
 ]
 
 

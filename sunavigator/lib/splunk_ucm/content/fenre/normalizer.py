@@ -19,7 +19,7 @@ from ...util import dedupe, safe_key, sha256_json
 from ..provider import Normalizer, ProviderCategory, ProviderManifest, ProviderRecord
 from ..validation import FieldContract, ValidationPolicy, is_safe_url
 
-NORMALIZER_VERSION = "fenre-1.1.0"
+NORMALIZER_VERSION = "fenre-1.2.0"
 PROVIDER = "fenre"
 
 _DOMAIN_MAP_PATH = os.path.join(os.path.dirname(__file__), "domain_map.json")
@@ -348,7 +348,15 @@ class FenreNormalizer(Normalizer):
                 add(Requirement(_req_id("other", "eventtype=" + name), "other", "eventtype=" + name,
                                 "required", "derived_spl", "medium", "eventtype referenced by SPL"))
 
+        produced = primary.produced_fields if primary is not None else {}
         for field in uc.required_fields:
+            made = produced.get(field)
+            if made and not made["read_before"] and field not in _INTRINSIC_FIELDS:
+                # Created by the search itself; raw events are not expected to carry it.
+                add(Requirement(_req_id("field", field), "field", field, "informational", "provider_structured",
+                                "medium", "derived_in_spl: produced by %s" % made["command"],
+                                {"derived_in_spl": made["command"]}))
+                continue
             level = "informational" if field in _INTRINSIC_FIELDS else "required"
             add(Requirement(_req_id("field", field), "field", field, level, "provider_structured", "high"))
         uses_dm = primary is not None and bool(primary.datamodels)

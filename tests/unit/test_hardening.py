@@ -134,16 +134,31 @@ class MigrationTest(unittest.TestCase):
         store = loaded_catalog()
         self.outdate(store)
         runner = MigrationRunner(store, lambda: "2026-11-20T12:00:00Z")
-        self.assertEqual(runner.pending(), [MIGRATIONS[0][0]])
+        self.assertEqual(runner.pending(), [m[0] for m in MIGRATIONS])
         results = runner.run()
         self.assertEqual(results[0]["details"]["reindexed"], store.count(C.CATALOG))
+        self.assertEqual(results[1]["details"], {"not_needed": True})
         doc = store.get(C.CATALOG, "fenre_UC-9.1.1")
         self.assertEqual(doc["summary_version"], SUMMARY_VERSION)
         self.assertIn("regulation:cjis#5.5.1", doc["framework_controls"])
         state = store.get(C.SYNC_STATE, STATE_KEY)
-        self.assertEqual(state["applied"], [MIGRATIONS[0][0]])
+        self.assertEqual(state["applied"], [m[0] for m in MIGRATIONS])
         self.assertEqual(state["app_version"], __version__)
         self.assertEqual(runner.pending(), [])
+        self.assertEqual(runner.run(), [])
+
+    def test_normalizer_upgrade_reindexes_a_071_catalog(self):
+        from splunk_ucm.content.fenre.normalizer import NORMALIZER_VERSION
+        store = loaded_catalog()
+        for key, doc in list(store.collections[C.CATALOG].items()):
+            store.collections[C.CATALOG][key] = dict(doc, normalizer_version="fenre-1.1.0")
+        store.upsert(C.SYNC_STATE, {"_key": STATE_KEY, "doc_type": "app_state", "app_version": "0.7.1",
+                                    "applied": [MIGRATIONS[0][0]]})
+        runner = MigrationRunner(store, lambda: "t")
+        self.assertEqual(runner.pending(), ["0002_normalizer_" + NORMALIZER_VERSION])
+        results = runner.run()
+        self.assertEqual(results[0]["details"]["reindexed"], store.count(C.CATALOG))
+        self.assertEqual(store.count(C.CATALOG, {"normalizer_version": NORMALIZER_VERSION}), store.count(C.CATALOG))
         self.assertEqual(runner.run(), [])
 
     def test_fresh_install_marks_not_needed(self):

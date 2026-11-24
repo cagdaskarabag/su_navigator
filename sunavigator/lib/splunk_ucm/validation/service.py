@@ -135,7 +135,8 @@ class ValidationService:
     def sample_and_assess(self, use_case_id: str, actor: str) -> Dict[str, Any]:
         uc = self._load(use_case_id)
         doc = self._parse_use_case(uc)
-        fields = [r.value for r in uc.requirements if r.type == "field" and _FIELD.match(r.value)]
+        fields = [r.value for r in uc.requirements if r.type == "field" and _FIELD.match(r.value)
+                  and not r.attributes.get("derived_in_spl")]
         sourcetypes = [r.value for r in uc.requirements if r.type == "sourcetype"]
         doc["field_samples"] = self._sample(fields, sourcetypes) if fields else []
         doc["sampled_at"] = utc_now_iso()

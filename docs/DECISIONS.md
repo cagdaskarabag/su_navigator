@@ -512,3 +512,27 @@ as drift.
 * `uc_selections` stays user-writable: it is per-user intent, not evidence.
   Provider collections stay writable by content managers (known limitation in
   SECURITY.md).
+
+## D-040 Fields the search produces are not raw-data requirements
+*0.7.3 (T-05, finding F-02). Normalizer `fenre-1.2.0`.*
+* Provider `requiredFields` mix raw fields with fields the search creates
+  (`eval age_days=…`, `stats count as failures`, `rename src_ip as src`,
+  `rex "(?<user>…)"`, `spath output=…`, `lookup … OUTPUT owner`). Sampling raw
+  events for created fields reported them missing; in the readiness corpus
+  19 of 74 requirements were false `not_met` for this reason alone.
+* The static analyser records, per produced name, the first command that
+  creates it and whether the name is read earlier (in an earlier command, or
+  in the producing command itself, as in `eval user=lower(user)`). Values after
+  `=` in search clauses are literals, not reads.
+* A required field that is produced and not read before is kept, as
+  `informational`, confidence `medium`, attribute `derived_in_spl: <command>`.
+  It is not sampled; readiness reports it `not_applicable` (`derived_in_spl`).
+  A field read before it is produced stays `required` / `high`: the raw data
+  must carry it.
+* Static analysis only. Fields created by macros, `inputlookup`, `extract`,
+  `kv`, `foreach` or wildcard renames are not recognised and stay required.
+* Migration `0002_normalizer_fenre-1.2.0` re-derives catalogue summaries from
+  stored raw records (no network). Readiness always re-normalizes stored raw
+  records, so the next readiness run uses the new requirements.
+* Corpus delta: false `not_met` from derived fields 19 → 0; ready cases
+  falsely not ready 9 → 2 (the two OR / IN sourcetype cases, T-07).

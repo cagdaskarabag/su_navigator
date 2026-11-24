@@ -40,6 +40,28 @@ _LOOKUP_CMD = re.compile(
 _TIME_BOUND = re.compile(r"(?<![\w.])(earliest|latest|_index_earliest|_index_latest)\s*=", re.IGNORECASE)
 _NOT_BEFORE = re.compile(r"(?:^|\s)NOT\s*\(?\s*$")
 
+# Field production (D-040). Names a command creates, with the span they occupy in
+# the segment so the rest of the segment can be checked for reads of the same name.
+_NAME = r'"?([A-Za-z_][\w.:\-]*)"?'
+_AS_TARGET = re.compile(r'(?<![\w.])as\s+"?([A-Za-z_*][\w.:\-*]*)"?', re.IGNORECASE)
+_BY = re.compile(r"(?<![\w.])by\s", re.IGNORECASE)
+_BARE_COUNT = re.compile(r"(?<![\w.(])(count|c)(?![\w.(])")
+_REX_GROUP = re.compile(r"\(\?P?<([A-Za-z_]\w*)>")
+_SPATH_OUTPUT = re.compile(r"(?<![\w.])output\s*=\s*" + _NAME, re.IGNORECASE)
+_SPATH_PATH = re.compile(r"(?<![\w.])path\s*=\s*" + _NAME, re.IGNORECASE)
+_LOOKUP_OUTPUT = re.compile(r"(?<![\w.])(OUTPUT|OUTPUTNEW)\s", re.IGNORECASE)
+# In a search clause the value after a comparison is a literal, not a field read.
+_SEARCH_VALUE = re.compile(r'(!=|==|<=|>=|=|<|>)(\s*(?:"[^"]*"|[^\s()\[\]|]+))')
+_EVAL_TARGET = re.compile(r'^\s*"?([A-Za-z_][\w.:{}\-]*)"?\s*=(?!=)')
+_AGGREGATING = frozenset({"stats", "eventstats", "streamstats", "tstats", "sistats", "chart", "timechart",
+                          "geostats", "mstats", "sichart", "sitimechart"})
+_AS_PRODUCERS = _AGGREGATING | frozenset({"bin", "bucket", "convert", "xyseries", "top", "rare"})
+_FIXED_OUTPUTS = {
+    "top": ("count", "percent"), "rare": ("count", "percent"), "transaction": ("duration", "eventcount"),
+    "iplocation": ("City", "Country", "Region", "lat", "lon"),
+    "addinfo": ("info_min_time", "info_max_time", "info_search_time", "info_sid"),
+}
+
 
 @dataclasses.dataclass
 class ExtractedValue:
@@ -67,6 +89,8 @@ class SplAnalysis:
     generating_command: Optional[str] = None
     unbounded_index: bool = False  # index=* or no index and not a generating command
     warnings: List[str] = dataclasses.field(default_factory=list)
+    # name -> {"command": first producing command, "read_before": the name is read earlier}
+    produced_fields: Dict[str, Dict[str, object]] = dataclasses.field(default_factory=dict)
 
     def positive(self, attr: str) -> List[str]:
         return _uniq(v.value for v in getattr(self, attr) if not v.negated)
@@ -126,6 +150,88 @@ def _split_pipeline(masked: str) -> Tuple[List[Tuple[int, int, str]], bool]:
     return [seg for seg in segments if masked[seg[0]:seg[1]].strip()], has_sub
 
 
+def _top_level_parts(text: str, start: int) -> List[Tuple[int, str]]:
+    """Split at commas outside parentheses; returns ``(offset, part)``."""
+    parts, depth, begin = [], 0, start
+    for i in range(start, len(text)):
+        ch = text[i]
+        if ch == "(":
+            depth += 1
+        elif ch == ")":
+            depth = max(0, depth - 1)
+        elif ch == "," and depth == 0:
+            parts.append((begin, text[begin:i]))
+            begin = i + 1
+    parts.append((begin, text[begin:]))
+    return parts
+
+
+def _produced_spans(cmd: str, raw: str, masked: str) -> List[Tuple[str, int, int]]:
+    """``(name, start, end)`` of fields the command creates, offsets within the segment."""
+    head = re.match(r"\s*[A-Za-z_]\w*", masked)
+    body = head.end() if head else 0
+    out: List[Tuple[str, int, int]] = []
+    if cmd == "eval":
+        for offset, part in _top_level_parts(masked, body):
+            m = _EVAL_TARGET.match(part)
+            if m:
+                out.append((raw[offset + m.start(1):offset + m.end(1)], offset + m.start(1), offset + m.end(1)))
+    elif cmd in _AS_PRODUCERS or cmd == "rename":
+        by = _BY.search(masked, body) if cmd in _AGGREGATING else None
+        end = by.start() if by else len(masked)
+        for m in _AS_TARGET.finditer(masked, body, end):
+            name = raw[m.start(1):m.end(1)]
+            if "*" not in name:
+                out.append((name, m.start(), m.end()))
+        if cmd in _AGGREGATING:
+            for m in _BARE_COUNT.finditer(masked, body, end):
+                if not re.match(r"\s+as\s", masked[m.end():], re.IGNORECASE):
+                    out.append((m.group(1), m.start(), m.end()))
+    elif cmd == "rex" and not re.search(r"(?<![\w.])mode\s*=\s*sed", masked, re.IGNORECASE):
+        out.extend((m.group(1), m.start(), m.end()) for m in _REX_GROUP.finditer(raw))
+    elif cmd == "spath":
+        m = _SPATH_OUTPUT.search(masked) or _SPATH_PATH.search(masked)
+        if m:
+            out.append((raw[m.start(1):m.end(1)], m.start(), m.end()))
+    elif cmd == "lookup":
+        m = _LOOKUP_OUTPUT.search(masked)
+        if m:
+            tokens = list(re.compile(r"[A-Za-z_][\w.:\-]*").finditer(masked, m.end()))
+            i = 0
+            while i < len(tokens):
+                if i + 2 < len(tokens) and tokens[i + 1].group(0).lower() == "as":
+                    out.append((tokens[i + 2].group(0), tokens[i].start(), tokens[i + 2].end()))
+                    i += 3
+                else:
+                    out.append((tokens[i].group(0), tokens[i].start(), tokens[i].end()))
+                    i += 1
+    elif cmd == "strcat":
+        m = re.search(r'([A-Za-z_][\w.:\-]*)\s*$', masked)
+        if m:
+            out.append((m.group(1), m.start(1), m.end(1)))
+    for name in _FIXED_OUTPUTS.get(cmd, ()):
+        out.append((name, len(masked), len(masked)))
+    return out
+
+
+def _reads(name: str, text: str) -> bool:
+    return re.search(r"(?<![\w.:])%s(?![\w:]|\.\w)" % re.escape(name), text) is not None
+
+
+def _record_produced(produced: Dict[str, Dict[str, object]], cmd: str, raw: str, masked: str,
+                     before: str) -> None:
+    spans = _produced_spans(cmd, raw, masked)
+    if not spans:
+        return
+    rest = list(masked)
+    for _, start, end in spans:
+        rest[start:end] = " " * (end - start)
+    rest_text = "".join(rest)
+    for name, _, _ in spans:
+        if name not in produced:
+            produced[name] = {"command": cmd, "read_before": _reads(name, before) or _reads(name, rest_text)}
+
+
 def analyze(spl: str) -> SplAnalysis:
     """Analyse an SPL string without executing it."""
     result = SplAnalysis()
@@ -144,11 +250,13 @@ def analyze(spl: str) -> SplAnalysis:
     result.macros = _uniq(result.macros)
 
     segments, result.has_subsearch = _split_pipeline(masked)
+    read_text: List[str] = []
     stripped = spl.lstrip()
     first_cmd: Optional[str] = None
     for s, e, kind in segments:
         seg_masked = masked[s:e]
         if kind == _CONTINUATION:
+            read_text.append(seg_masked)
             continue
         word = re.match(r"\s*([A-Za-z_][A-Za-z0-9_]*)", seg_masked)
         if kind == _LEVEL_START:
@@ -161,6 +269,10 @@ def analyze(spl: str) -> SplAnalysis:
         if first_cmd is None:
             first_cmd = cmd
         result.commands.append(cmd)
+        if kind == _PIPE_START:
+            _record_produced(result.produced_fields, cmd, spl[s:e], seg_masked, "".join(read_text))
+        read_text.append(_SEARCH_VALUE.sub(lambda m: m.group(1) + " " * len(m.group(2)), seg_masked)
+                         if cmd == "search" else seg_masked)
         dm = _DATAMODEL_CMD.match(seg_masked)
         if dm and cmd == "datamodel":
             result.datamodels.append(dm.group(1) + ("." + dm.group(2) if dm.group(2) else ""))

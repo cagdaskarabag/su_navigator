@@ -1,4 +1,5 @@
 import unittest
+import json
 
 from splunk_ucm.api.app import CAP_RUN_DISCOVERY
 from splunk_ucm.audit import AuditService
@@ -11,6 +12,7 @@ from splunk_ucm.selection.service import SelectionService
 from splunk_ucm.spl.parser import for_parser, parser_candidates
 from splunk_ucm.storage import collections as C
 from splunk_ucm.storage.kvstore import InMemoryStore
+from splunk_ucm.storage.repositories import encode_raw
 from splunk_ucm.validation.service import ValidationService
 from unit.test_api_worker import call, make_ctx
 from unit.test_discovery import APPS, INDEXES, MODELS, ROWS, FakeInventory, FakeSearch, loaded_catalog
@@ -231,6 +233,24 @@ class FieldSampleCompletenessTest(unittest.TestCase):
         out = self.sample()
         self.assertEqual((out["user"]["sampled"], out["user"]["reason"]), (False, "sample_failed"))
         self.assertEqual(out["host"]["reason"], "sample_failed")
+
+
+class DerivedFieldTest(unittest.TestCase):
+    def test_derived_field_is_not_applicable_and_not_sampled(self):
+        res = evaluate({"type": "field", "value": "age_days", "attributes": {"derived_in_spl": "eval"}},
+                       EnvironmentSnapshot([], [], {"last_completed_at": "t"}, []), EvaluationSettings())
+        self.assertEqual((res["status"], res["code"]), ("not_applicable", "derived_in_spl"))
+        store = discovered()
+        doc = store.get(C.CONTENT, "fenre_UC-9.1.1")
+        raw = json.loads(doc["raw_json"])
+        raw["spl"] = raw["spl"] + " | eval sun_derived=1"
+        raw["requiredFields"] = ["user", "sun_derived"]
+        doc["raw_json"] = encode_raw(raw)
+        store.upsert(C.CONTENT, doc)
+        search = FakeParser()
+        out = ValidationService(store, AuditService(store), search).sample_and_assess("fenre:UC-9.1.1", "alice")
+        self.assertEqual([f["field"] for f in out["field_samples"]], ["user"])
+        self.assertNotIn("sun_derived", search.oneshot_calls[-1])
 
 
 class EvaluatorValidationTest(unittest.TestCase):

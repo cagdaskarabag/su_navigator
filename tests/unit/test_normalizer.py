@@ -95,6 +95,21 @@ class FenreNormalizerTest(unittest.TestCase):
         self.assertEqual(idx.level, "informational")
         self.assertEqual(reqs["cim_model:Authentication"].source, "provider_structured")
 
+    def test_fields_produced_by_the_search_are_informational(self):
+        spl = ('index=itsm sourcetype=snow:incident priority=1 | eval opened=strptime(opened_at,"%F") '
+               '| eval age_days=round((now()-opened)/86400,1) | eval user=lower(user) '
+               '| stats count as breaches by assignment_group user')
+        uc = self.normalize("9.1.1", lambda r: r.update(
+            spl=spl, requiredFields=["opened_at", "priority", "age_days", "user", "breaches", "assignment_group"]))
+        reqs = self.reqs(uc)
+        for name, command in (("age_days", "eval"), ("breaches", "stats")):
+            req = reqs["field:" + name]
+            self.assertEqual((req.level, req.confidence, req.attributes), ("informational", "medium",
+                                                                           {"derived_in_spl": command}))
+            self.assertIn("derived_in_spl", req.notes)
+        for name in ("opened_at", "priority", "user", "assignment_group"):
+            self.assertEqual((reqs["field:" + name].level, reqs["field:" + name].confidence), ("required", "high"))
+
     def test_missing_spl_is_a_critical_gap(self):
         uc = self.normalize("9.1.1", lambda r: (r.pop("spl", None), r.pop("cimSpl", None)))
         types = {r.type: r for r in uc.requirements}

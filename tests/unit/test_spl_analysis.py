@@ -51,6 +51,41 @@ class SplAnalysisTest(unittest.TestCase):
         self.assertTrue(analyze("index=* | stats count").unbounded_index)
         self.assertFalse(analyze("index=main | stats count").unbounded_index)
 
+    def produced(self, spl):
+        return {k: (v["command"], v["read_before"]) for k, v in analyze(spl).produced_fields.items()}
+
+    def test_produced_fields_by_command(self):
+        cases = {
+            'index=a | eval x=if(a=1, b, c), y=case(z="1,2", 1) | stats count(x) by y':
+                {"x": ("eval", False), "y": ("eval", False)},
+            "index=a | stats count as n dc(src) as srcs by user":
+                {"n": ("stats", False), "srcs": ("stats", False)},
+            "index=a | stats count by user | eventstats avg(count) as avg_n":
+                {"count": ("stats", False), "avg_n": ("eventstats", False)},
+            "index=a | rename src_ip as src, dest_ip as dest": {"src": ("rename", False), "dest": ("rename", False)},
+            'index=a | rex field=_raw "user=(?<user>\\S+) from (?P<ip>\\S+)"':
+                {"user": ("rex", False), "ip": ("rex", False)},
+            'index=a | rex mode=sed "s/a/b/g"': {},
+            "index=a | spath input=p path=a.b output=ab | spath path=c.d": {"ab": ("spath", False),
+                                                                              "c.d": ("spath", False)},
+            "index=a | lookup t ip as dest_ip OUTPUTNEW owner AS o, crit": {"o": ("lookup", False),
+                                                                           "crit": ("lookup", False)},
+            "index=a | top user": {"count": ("top", False), "percent": ("top", False)},
+            "index=a | iplocation src": {k: ("iplocation", False) for k in ("City", "Country", "Region", "lat", "lon")},
+            "index=a | rename * as x_*": {},
+        }
+        for spl, expected in cases.items():
+            self.assertEqual(self.produced(spl), expected, spl)
+
+    def test_read_before_production(self):
+        self.assertEqual(self.produced("index=a | eval user=lower(user)"), {"user": ("eval", True)})
+        self.assertEqual(self.produced("index=a src=1 | eval src=src+1"), {"src": ("eval", True)})
+        self.assertEqual(self.produced("index=a | stats sum(bytes) as bytes"), {"bytes": ("stats", True)})
+        self.assertEqual(self.produced("index=a | eval a=lower(TargetUserName)")["a"], ("eval", False))
+        self.assertEqual(self.produced("index=a | stats count by src_ip | rename src_ip as src")["src"],
+                         ("rename", False))
+        self.assertEqual(self.produced("index=a src.ip=1 | eval src=1")["src"], ("eval", False))
+
     def test_empty_and_garbage_input_do_not_raise(self):
         for spl in ("", "   ", "|", "]]]", '"unterminated', "`", None):
             analyze(spl or "")
