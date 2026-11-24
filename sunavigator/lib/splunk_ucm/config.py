@@ -23,6 +23,7 @@ DEFAULTS: Dict[str, Dict[str, str]] = {
     "import": {"max_bundle_mb": "50"},
     "controltest": {"index": "ucm_controltest"},
     "catalog": {"max_page_size": "100", "max_join_keys": "2000"},
+    "interactive_search": {"enabled": "true"},
     "discovery": {
         "earliest": "-7d", "latest": "now", "include_internal": "false",
         "max_pairs": "5000", "search_timeout_seconds": "120", "job_timeout_seconds": "600",

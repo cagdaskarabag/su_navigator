@@ -35,8 +35,10 @@ access = read : [ admin, sc_admin, ucm_admin, ucm_content_manager ], write : [ a
 [transforms/ucm_audit_lookup]
 access = read : [ admin, sc_admin, ucm_admin, ucm_content_manager ], write : [ admin, sc_admin ]
 
+# Per-user selections: written only by the REST handler with the system token, which takes the
+# user from the session (D-062). Reading stays open so the caller-scoped filters work (D-061).
 [collections/uc_selections]
-access = read : [ * ], write : [ admin, sc_admin, ucm_admin, ucm_analyst, ucm_viewer ]
+access = read : [ * ], write : [ admin, sc_admin ]
 
 [ucm]
 access = read : [ * ], write : [ admin, sc_admin, ucm_admin ]

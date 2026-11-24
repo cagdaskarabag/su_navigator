@@ -32,6 +32,17 @@ _FIELD = re.compile(r"^[\w.\-]{1,100}$")
 SAMPLE_MARKER = "sun_sample_marker"
 
 
+def _review_hint(doc: Dict[str, Any]) -> str:
+    """Only unknown commands can be trusted through ``extra_safe_commands``; indirect ones never can."""
+    if doc["indirect_commands"] and doc["unknown_commands"]:
+        return ("indirect commands (%s) are never previewed and cannot be allowed in ucm.conf; list trusted "
+                "read-only add-on commands (%s) in [spl] extra_safe_commands"
+                % (", ".join(doc["indirect_commands"]), ", ".join(doc["unknown_commands"])))
+    if doc["indirect_commands"]:
+        return ("indirect commands run SPL or reach data the search text does not show, so they are never "
+                "previewed and cannot be allowed in ucm.conf; an approver can still acknowledge them at deployment")
+    return "review the SPL, or list trusted read-only commands in ucm.conf [spl] extra_safe_commands"
+
 class ValidationSettings:
     def __init__(self, earliest: str = "-15m", latest: str = "now", preview_max: int = 50,
                  preview_timeout: int = 30, sample_events: int = 200, sample_timeout: int = 30,
@@ -98,9 +109,8 @@ class ValidationService:
                                   {"error": doc.get("parse_error")})
         if doc["review_commands"]:
             raise ValidationError(
-                "preview refused: search runs commands SUN cannot verify as read-only (%s); "
-                "review the SPL, or list trusted read-only commands in ucm.conf [spl] extra_safe_commands"
-                % ", ".join(doc["review_commands"]),
+                "preview refused: search runs commands SUN cannot verify as read-only (%s); %s"
+                % (", ".join(doc["review_commands"]), _review_hint(doc)),
                 {"code": "review_commands", "indirect": doc["indirect_commands"],
                  "unknown": doc["unknown_commands"]})
         earliest = _time(earliest or self.settings.earliest, "earliest")

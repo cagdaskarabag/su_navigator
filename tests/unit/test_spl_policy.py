@@ -2,7 +2,8 @@ import unittest
 
 import helpers  # noqa: F401  (sets sys.path)
 from splunk_ucm.platform.search import ParseResult
-from splunk_ucm.spl.policy import classify, command_exists, expanded_pipeline, parse_extra_safe
+from splunk_ucm.spl.policy import (HIDDEN_SPL_COMMANDS, MAX_NESTING, classify, command_exists, expanded_pipeline,
+                                   parse_extra_safe)
 
 
 def parsed(*commands, ok=True):
@@ -78,6 +79,82 @@ class ClassifyTest(unittest.TestCase):
     def test_parser_reported_commands_are_never_dropped(self):
         p = parsed(("search", " index=main"), ("apply", " m"))
         self.assertEqual(classify("index=main | `run_model`", p, exists=lambda n: False).unknown, ["apply"])
+
+
+def wrap_map(inner, prefix="search a"):
+    escaped = inner.replace("\\", "\\\\").replace('"', '\\"')
+    return '%s | map search="%s"' % (prefix, escaped)
+
+
+class NestedSearchTest(unittest.TestCase):
+    """SPL carried inside ``map search="..."`` is analysed (D-062)."""
+
+    def test_side_effects_inside_map_are_side_effects(self):
+        for cmd in ("collect index=s", "outputlookup x.csv", "sendemail to=a@b.c", "delete", "outputcsv y",
+                    "sendalert foo", "script python x", "mcollect index=m", "fit LinearRegression a from b into m1"):
+            p = classify('index=a | map search="search index=b | %s"' % cmd)
+            name = "fit into" if cmd.startswith("fit ") else cmd.split()[0]
+            self.assertIn(name, p.side_effects, cmd)
+            self.assertIn("map", p.indirect)
+
+    def test_clean_map_stays_indirect_only(self):
+        p = classify('index=a | map search="search index=b | head 1" maxsearches=5')
+        self.assertEqual((p.side_effects, p.hidden, p.indirect), ([], [], ["map"]))
+        self.assertEqual(p.nested, ["search", "head"])
+
+    def test_argument_order_and_escapes(self):
+        spl = 'index=a | map maxsearches=3 search="search index=b | eval q=\\"x\\" | collect index=s"'
+        self.assertEqual(classify(spl).side_effects, ["collect"])
+
+    def test_nesting_is_followed_to_the_limit(self):
+        inner = "search z | outputlookup z"
+        for _ in range(MAX_NESTING):
+            inner = wrap_map(inner)
+        self.assertEqual(classify(inner).side_effects, ["outputlookup"])
+        self.assertEqual(classify(inner).hidden, [])
+        deeper = wrap_map(inner)
+        self.assertEqual(classify(deeper).hidden, ["map (nested too deeply)"])
+        self.assertIn("map", classify(deeper).review)
+
+    def test_unreadable_map_searches_are_hidden(self):
+        for spl in ('index=a | map savedsearch="Errors"', "index=a | map search=x", "index=a | map (Errors)",
+                    'index=a | map savedsearch="x" search="search b"'):
+            self.assertEqual(classify(spl).hidden, ["map (search not readable)"], spl)
+
+    def test_macro_inside_the_map_string_is_hidden(self):
+        self.assertEqual(classify('index=a | map search="search `wrapper` | head 1"').hidden,
+                         ["map (macro in nested search)"])
+
+    def test_text_that_only_mentions_map_is_not_nested(self):
+        for spl in ('index=a | eval a="map search=\\"x | collect\\"" | table a', 'index=a | mapper search="x | collect"',
+                    'index=a "| map search=\\"x | collect\\""', "index=a | rex field=_raw \"map search=x\""):
+            p = classify(spl)
+            self.assertEqual((p.side_effects, p.nested, p.hidden), ([], [], []), spl)
+
+    def test_map_inside_a_subsearch_is_analysed(self):
+        p = classify('index=a [ | makeresults | map search="search x | collect index=s" ]')
+        self.assertEqual(p.side_effects, ["collect"])
+
+    def test_savedsearch_dataset_inside_map_is_hidden(self):
+        p = classify('index=a | map search="| from savedsearch:Errors"')
+        self.assertEqual(p.hidden, ["savedsearch: dataset"])
+        self.assertIn("savedsearch: dataset", p.indirect)
+
+    def test_expanded_pipeline_is_scanned_too(self):
+        parsed_search = parsed(("makeresults", ""), ("map", ' search="search x | outputlookup probe.csv"'))
+        p = classify("| makeresults | `wrapper`", parsed_search)
+        self.assertEqual(p.side_effects, ["outputlookup"])
+
+    def test_hidden_carriers_are_the_documented_set(self):
+        self.assertEqual(HIDDEN_SPL_COMMANDS, frozenset({"savedsearch", "loadjob", "dbxquery"}))
+        for cmd in sorted(HIDDEN_SPL_COMMANDS):
+            self.assertEqual(classify("| makeresults | %s x" % cmd).hidden, [cmd])
+        for cmd in ("map", "rest", "dbxlookup", "dbxinputs"):
+            self.assertNotIn(cmd, classify("| makeresults | %s x" % cmd).hidden)
+
+    def test_extra_safe_cannot_clear_nested_findings(self):
+        p = classify('index=a | map search="search b | collect index=s"', extra_safe=["collect", "map"])
+        self.assertEqual(p.side_effects, ["collect"])
 
 
 COMMAND_TABLE = [

@@ -169,9 +169,15 @@ class LiveOneshotContractTest(unittest.TestCase):
         svc = ValidationService(store, AuditService(store), SearchClient(t))
         with self.assertRaises(ValidationError) as cm:
             svc.preview("fenre:UC-9.1.1", "live")
-        self.assertEqual(cm.exception.details["indirect"], ["map"])
+        self.assertEqual(cm.exception.details["commands"], ["outputlookup"])
         status, _ = t.request("GET", "/servicesNS/nobody/sunavigator/data/lookup-table-files/" + lookup, None, None)
         self.assertEqual(status, 404)
+        raw["spl"] = '| makeresults | map search="| makeresults | eval a=1"'
+        doc["raw_json"] = encode_raw(raw)
+        store.upsert(C.CONTENT, doc)
+        with self.assertRaises(ValidationError) as cm:
+            svc.preview("fenre:UC-9.1.1", "live")
+        self.assertEqual(cm.exception.details["indirect"], ["map"])
 
     def test_idle_sourcetype_sampled_at_its_newest_event(self):
         """Indexes three events three hours old into main under a unique test sourcetype."""
@@ -247,15 +253,11 @@ class LiveWritePathTest(unittest.TestCase):
         cls.admin.request("DELETE", "/services/authentication/users/" + cls.ANALYST)
 
     def test_direct_kv_writes_are_refused(self):
-        for coll in (C.SYNC_STATE, C.READINESS, C.VALIDATION, C.ENVIRONMENT_SOURCES, C.SOURCE_MAPPINGS):
+        for coll in (C.SYNC_STATE, C.READINESS, C.VALIDATION, C.ENVIRONMENT_SOURCES, C.SOURCE_MAPPINGS,
+                     C.SELECTIONS):
             path = "/servicesNS/nobody/sunavigator/storage/collections/data/" + coll
             status, _ = self.analyst.request("POST", path, None, {"_key": "forged", "state": "ready"})
             self.assertEqual(status, 403, coll)
-        status, _ = self.analyst.request("POST", "/servicesNS/nobody/sunavigator/storage/collections/data/"
-                                         + C.SELECTIONS, None, {"_key": "sel_live_probe", "user": self.ANALYST})
-        self.assertIn(status, (200, 201))
-        self.admin.request("DELETE", "/servicesNS/nobody/sunavigator/storage/collections/data/"
-                           + C.SELECTIONS + "/sel_live_probe")
 
     def test_analyst_rest_flows_still_work(self):
         uc = "fenre:UC-9.1.1"

@@ -595,6 +595,12 @@ function ucmViewMain($, ucm) {
     function searchBox(uc, sources) {
         var searchable = sources.filter(function (x) { return x.spl; });
         if (!searchable.length) { return null; }
+        if (uc.interactive_search && uc.interactive_search.enabled === false) {
+            return el("div", { "class": "ucm-card ucm-search" },
+                el("strong", { text: "Run this search" }),
+                ucm.stateBox("info", "Not available on this server.",
+                    "An administrator has turned the interactive search off. Use the bounded preview above, or copy the SPL into Search."));
+        }
         var which = el("select", { "aria-label": "Search to run" }, searchable.map(function (x, i) { return el("option", { value: String(i), text: x.label }); }));
         var range = el("select", { "aria-label": "Time range" }, SEARCH_RANGES.map(function (r) { return el("option", { value: r[0], text: r[1] }); }));
         range.value = "-24h";
@@ -720,7 +726,7 @@ function ucmViewMain($, ucm) {
                 "The search runs in your browser through Splunk's search API, as your own Splunk user and with your own permissions. " +
                 "It is not subject to the bounded preview (forced short window, result cap, read-only command checks) that the server applies, " +
                 "and SUNavigator cannot audit it; Splunk records the search under your account. Nothing runs until you click Run search, " +
-                "and the results are shown here only. Searches with side-effect commands are not offered."),
+                "and the results are shown here only. Searches with side-effect commands (also inside a map search), or that run SPL this page cannot show (savedsearch, loadjob, dbxquery), are not offered."),
             el("div", { "class": "ucm-toolbar" },
                 searchable.length > 1 ? el("div", { "class": "ucm-field" }, el("label", { text: "Search" }), which) : null,
                 el("div", { "class": "ucm-field" }, el("label", { text: "Time range" }), range),

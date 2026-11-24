@@ -12,6 +12,7 @@ from splunk_ucm.discovery.service import new_job as new_discovery_job
 from splunk_ucm.discovery.worker import DiscoveryWorker
 from splunk_ucm.errors import PermissionDenied
 from splunk_ucm.readiness.service import new_job as new_readiness_job
+from splunk_ucm.selection.service import selection_key
 from splunk_ucm.readiness.worker import ReadinessWorker
 from splunk_ucm.storage import collections as C
 from splunk_ucm.storage.jobs import job_problem
@@ -20,7 +21,7 @@ from splunk_ucm.content.sync import new_job as new_sync_job
 from unit.test_api_worker import NoSplunkd, call
 from unit.test_selection_validation import FakeParser, discovered
 
-USER_WRITABLE = {C.SELECTIONS}
+USER_WRITABLE = set()
 
 
 class UserSessionStore:
@@ -96,11 +97,21 @@ class StoreWiringTest(unittest.TestCase):
         self.ok("POST", "mappings/delete", {"kind": "sourcetype", "value": "wineventlog"})
         self.ok("POST", "deployment/draft", {"id": uc})
         self.ok("POST", "selections", {"id": uc, "intent": "select"})
-        self.assertEqual(set(self.user.writes), {C.SELECTIONS})
+        self.assertEqual(self.user.writes, [])
+        self.assertIsNotNone(self.backend.get(C.SELECTIONS, selection_key("alice", uc)))
         self.assertIsNotNone(self.backend.get(C.VALIDATION, "fenre_UC-9.1.1"))
         self.assertIsNotNone(self.backend.get(C.READINESS, "fenre_UC-9.1.1"))
         kinds = {j.get("doc_type") for j in self.backend.query(C.SYNC_STATE)}
         self.assertTrue({"discovery_job", "readiness_job"} <= kinds)
+
+    def test_selection_writes_use_the_system_store_for_the_session_user(self):
+        uc = "fenre:UC-9.1.1"
+        self.ok("POST", "selections", {"id": uc, "intent": "bookmark", "user": "mallory"})
+        self.ok("POST", "selections/delete", {"id": uc, "user": "mallory"})
+        self.assertEqual(self.user.writes, [])
+        self.ok("POST", "selections", {"id": uc, "intent": "reject", "user": "mallory"})
+        users = {row["user"] for row in self.backend.query(C.SELECTIONS)}
+        self.assertEqual(users, {"alice"})
 
     def test_sync_enqueue_uses_the_system_store(self):
         self.ok("POST", "sync", {"categories": ["cat-09-identity-access-management"]})

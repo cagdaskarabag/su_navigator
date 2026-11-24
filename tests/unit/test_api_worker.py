@@ -72,6 +72,14 @@ class RouterTest(unittest.TestCase):
         self.assertIn("content.sync.completed", actions)
         self.assertTrue(all(e["actor"] == "alice" for e in body["events"]))
 
+    def test_use_case_carries_the_interactive_search_switch(self):
+        call(make_ctx(self.store, [CAP_MANAGE_CONTENT]), "POST", "import", body=self.bundle)
+        on = call(make_ctx(self.store, []), "GET", "usecase", {"id": "fenre:UC-9.1.1"})[1]
+        self.assertEqual(on["interactive_search"], {"enabled": True})
+        off_cfg = AppConfig({"interactive_search": {"enabled": "false"}})
+        off = call(make_ctx(self.store, [], config=off_cfg), "GET", "usecase", {"id": "fenre:UC-9.1.1"})[1]
+        self.assertEqual(off["interactive_search"], {"enabled": False})
+
     def test_post_sync_queues_job_and_validates_input(self):
         ctx = make_ctx(self.store, [CAP_MANAGE_CONTENT])
         status, body = call(ctx, "POST", "sync", body={"categories": ["9", 10], "ref": "v8.25.0"})

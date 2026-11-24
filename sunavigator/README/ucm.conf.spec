@@ -94,6 +94,14 @@ sample_window_minutes = <integer 1-10080>
 * saw for each index/sourcetype pair, so idle sourcetypes are sampled where their events
 * are. A window with no events leaves fields unverified rather than absent. Default 60.
 
+[interactive_search]
+enabled = <boolean>
+* Offers the "Run this search" box on a use case page. The search runs in the browser through
+* Splunk's search API as the signed-in user, outside the server's bounded preview (D-058).
+* Set to false to switch it off for everyone; the page then shows a note instead of the button.
+* Searches with side-effect commands (also inside a map search) or that run SPL the page cannot
+* show (savedsearch, loadjob, dbxquery, macros inside a map string) are never offered (D-062). Default true.
+
 [spl]
 extra_safe_commands = <comma-separated command names>
 * Commands you trust to be read-only, in addition to SUN's built-in allowlist

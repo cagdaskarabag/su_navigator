@@ -1,10 +1,10 @@
-# SUNavigator 0.8.5 — operator guide
+# SUNavigator 0.8.6 — operator guide
 
 **SUNavigator** (short for **Splunk use case navigator**) discovers, assesses,
 selects, validates and deploys monitoring use cases in Splunk.
 
 This is the install, usage and troubleshooting guide for **SUNavigator
-0.8.5**. It is written for a single Splunk Enterprise instance
+0.8.6**. It is written for a single Splunk Enterprise instance
 (search head + indexer on one host), including a local macOS install. Search
 head clusters and Splunk Cloud are **not** validated in this version.
 
@@ -25,6 +25,29 @@ Related documents (design, not how-to):
 The 0.8 line is a usability release. It adds no schema change and no new
 collections. An upgrade from 0.7.3 keeps your data.
 
+### 0.8.6
+
+- **Nested SPL is checked.** A `map search="..."` string is analysed like the rest
+  of the search: `collect`, `outputlookup`, `sendemail`, `delete` and the other
+  side-effect commands inside it now make the whole search a side-effect search.
+  Preview, submission and deployment refuse it, and so does **Run search**
+  (D-062). No catalogue or ESCU record changes from allowed to refused.
+- **Run search refuses SPL it cannot show.** `savedsearch`, `loadjob`,
+  `dbxquery`, a `map` whose search cannot be read and a macro inside a `map`
+  string keep the button disabled with a reason. `rest` and a clean `map` still
+  only warn. Set `[interactive_search] enabled = false` in `local/ucm.conf` to
+  switch the box off for everyone.
+- **Selections are written only by the app.** KV write on `uc_selections` is now
+  limited to `admin` and `sc_admin` (`metadata/default.meta`). The app's own
+  bookmark, select, defer and reject buttons work as before for every role. If
+  you changed this ACL in `local.meta`, your change wins. Read access is
+  unchanged.
+- **Better refusal text.** The preview no longer suggests `extra_safe_commands`
+  for indirect commands such as `map`, which that list cannot allow.
+- **Wording.** The package says Splunk Enterprise. Splunk Cloud is not validated
+  (it passes AppInspect with the `cloud` tag; runtime has not been tested).
+- No schema change, no migration, no new capability. The build number changed to 8.
+
 ### 0.8.5
 
 - **Requirement results on Readiness.** Each row of the Readiness table shows
@@ -37,7 +60,7 @@ collections. An upgrade from 0.7.3 keeps your data.
   not the same as missing data. The Overview notice that said field and SPL checks
   arrive "in a later release" was out of date and has been replaced.
 - **Documented, not changed.** `uc_selections` is app-shared metadata at KV level
-  (OD-8, `docs/SECURITY.md`). No ACL changed.
+  (OD-8, `docs/SECURITY.md`). No ACL changed in 0.8.5; 0.8.6 restricts KV write.
 - No schema change.
 
 ### 0.8.4
@@ -217,7 +240,7 @@ commands (`delete`, `outputlookup`, `collect`, script, and similar). Deployed
 searches have **no email, webhook or script alert actions**; the default
 alert mode only writes to Splunk's Triggered Alerts.
 
-**Not in 0.8.5:** PDF export of coverage, a bundled regulation-control
+**Not in 0.8.6:** PDF export of coverage, a bundled regulation-control
 catalogue, validated SHC behaviour, Splunk Cloud vetting submission.
 
 ---
@@ -229,7 +252,7 @@ catalogue, validated SHC behaviour, Splunk Cloud vetting submission.
 | Splunk | Enterprise 10.x (validated on 10.2.9 in development; tested by operators on 10.4.3 Darwin arm64). Python 3.9 or 3.13 in Splunk. |
 | KV Store | Must reach `status: ready`. The app stores catalogue, inventory, readiness, selections, deployments and audit in KV collections. |
 | Role | First-time setup needs `admin` (or `sc_admin` on Cloud). |
-| Disk | The 0.8.5 package is a few megabytes. Category 9 of Fenre is about 120 records; the full Fenre corpus is tens of thousands of records. |
+| Disk | The 0.8.6 package is a few megabytes. Category 9 of Fenre is about 120 records; the full Fenre corpus is tens of thousands of records. |
 | Network | Optional. Remote sync needs HTTPS to `api.github.com` and `raw.githubusercontent.com`. Offline import needs none. |
 | Browser | Splunk Web. The app is a set of Simple XML views plus JavaScript under `/en-US/app/sunavigator/`. |
 
@@ -246,7 +269,7 @@ Placeholders used below:
 
 ```bash
 ./tools/package.sh
-# writes dist/sunavigator-0.8.5.tar.gz
+# writes dist/sunavigator-0.8.6.tar.gz
 ```
 
 The tarball has a single top-level folder `sunavigator/`
@@ -264,11 +287,11 @@ then fails in the UI with `500 Internal Server Error` even though splunkd is
 still unpacking. Use the CLI:
 
 ```bash
-$SPLUNK_HOME/bin/splunk install app /path/to/sunavigator-0.8.5.tar.gz \
+$SPLUNK_HOME/bin/splunk install app /path/to/sunavigator-0.8.6.tar.gz \
   -auth "$SPLUNK_USER:$SPLUNK_PASSWORD"
 # first install: omit -update
 # upgrade of an existing copy:
-$SPLUNK_HOME/bin/splunk install app /path/to/sunavigator-0.8.5.tar.gz \
+$SPLUNK_HOME/bin/splunk install app /path/to/sunavigator-0.8.6.tar.gz \
   -update 1 -auth "$SPLUNK_USER:$SPLUNK_PASSWORD"
 
 $SPLUNK_HOME/bin/splunk restart
@@ -686,13 +709,20 @@ Deployment tile states which readiness states block enabling.
     produced. Results are shown only in the page. They are not stored, not
     sent to the app and cannot be exported from here.
   - The button is disabled, with the reason shown, when the SPL contains a
-    side-effect command (`outputlookup`, `collect`, `delete`, `fit … into`, …)
-    or when your role lacks the Splunk `search` capability. If the SPL uses
-    macros, the button stays disabled until **Parse and sample fields** has
-    parsed the current content: Splunk then expands the macros and the stored
-    result shows whether a side-effect command is hidden in them. Commands that
-    run other searches or reach data the text does not show (`map`, `rest`,
-    `savedsearch`, …) only produce a warning.
+    side-effect command (`outputlookup`, `collect`, `delete`, `fit … into`, …),
+    also inside a `map search="..."` string, or when your role lacks the Splunk
+    `search` capability. If the SPL uses macros, the button stays disabled until
+    **Parse and sample fields** has parsed the current content: Splunk then
+    expands the macros and the stored result shows whether a side-effect command
+    is hidden in them.
+  - It is also disabled for SPL that this page cannot show: `savedsearch`,
+    `loadjob`, `dbxquery`, the `savedsearch:` dataset, a `map` whose search is
+    not a readable quoted string, a macro inside a `map` string and `map`
+    nested more than three levels (D-062). Run those in Search after reviewing
+    the referenced search yourself. `rest`, `dbxlookup`, `dbxinputs` and a `map`
+    with a readable, clean search only produce a warning.
+  - An administrator can switch the box off with `[interactive_search] enabled
+    = false` (`local/ucm.conf`); the page then shows a note.
   - For the primary search only; the CIM search and variants are offered
     when they have no macros.
 
@@ -776,13 +806,16 @@ the same page, with `ucm_run_discovery`:
   payloads are not stored.
 
 Searches with `delete`, `outputlookup`, `collect`, `script` and similar
-commands are refused. So are searches with commands that run other searches or
+commands are refused, also when they sit inside the search string of a `map`
+(since 0.8.6, D-062). So are searches with commands that run other searches or
 reach data the SPL does not show (`map`, `savedsearch`, `loadjob`, `rest`,
 `dbxquery`), and commands outside SUN's read-only list, such as MLTK `apply` or
 an add-on's custom command. The validation panel lists them as "commands
 needing review". Approving such a deployment needs an explicit acknowledgment,
 which is audited. To trust a read-only custom command, add it to
-`[spl] extra_safe_commands` in `local/ucm.conf` (decision D-038).
+`[spl] extra_safe_commands` in `local/ucm.conf` (decision D-038). The list
+cannot allow `map`, `savedsearch`, `loadjob`, `rest` or `dbxquery`; the preview
+refuses those whatever the list says, and the refusal message says so.
 
 ![Use-case page with selection, SPL validation and deployment panels](images/09-spl-validation.png)
 
@@ -954,7 +987,7 @@ Most non-admin roles cannot. The UI then reports run status **not
 available**, not “no runs”. Tick **Include run status** only if your role
 can search `_internal`.
 
-Regulation controls have no bundled catalogue in 0.8.5; only controls that
+Regulation controls have no bundled catalogue in 0.8.6; only controls that
 appear on imported use cases are listed.
 
 **Export ATT&CK Navigator layer** (next to the legend) downloads the matrix
@@ -1079,7 +1112,7 @@ app. Do the steps in this order:
    $SPLUNK_HOME/bin/splunk restart
    ```
 
-4. **Install SUNavigator 0.8.5** as in §3.2. The first install omits
+4. **Install SUNavigator 0.8.6** as in §3.2. The first install omits
    `-update`, because `sunavigator` is a new app ID.
 5. **Re-create the GitHub token** if you use one (§3.6). It must be stored in
    realm `sunavigator`. The 0.7.0 token in realm `splunk_use_case_manager` is
@@ -1232,7 +1265,7 @@ tail -50 "$SPLUNK_HOME/var/log/splunk/sunavigator.log"
 ```
 
 On a search head cluster only the captain runs jobs (not validated in
-0.8.5). On a single instance `standalone = 1` is expected.
+0.8.6). On a single instance `standalone = 1` is expected.
 
 ### 9.4 Provider could not be reached
 
@@ -1439,7 +1472,7 @@ Full table: [ARCHITECTURE.md §6](ARCHITECTURE.md).
 
 ---
 
-## 12. Known limitations (0.8.5)
+## 12. Known limitations (0.8.6)
 
 - Catalogue total counts are bounded by KV `max_rows_per_query` (50,000).
 - Catalogue search does not rank and does not search descriptions.
@@ -1457,11 +1490,11 @@ Full table: [ARCHITECTURE.md §6](ARCHITECTURE.md).
   deployer and without indexer peers (D-055). Splunk Cloud is unvalidated.
 - On Splunk 10.2.9 earlier builds of this app ran captain-only jobs on every
   member (fixed, D-055). Upgrade if you run an SHC.
-- **Selections are readable and writable at KV level by app users (D-061).**
-  Every role that can use the app can read all users' `uc_selections` rows
-  through the KV Store REST API, and the analyst and viewer roles can also write
-  them. The app's own API only reads and writes the caller's rows. Do not put
-  anything sensitive in selection notes.
+- **Selections are readable at KV level by app users (D-061, D-062).** Every
+  role that can use the app can read all users' `uc_selections` rows through the
+  KV Store REST API. Since 0.8.6 only `admin` and `sc_admin` can write them
+  directly; the app's API writes the caller's own rows. Do not put anything
+  sensitive in selection notes.
 - Catalogue facet counts are global, not recalculated for the other active
   filters (D-059). The bookmark, availability and regulation filters join by
   `_key` up to `[catalog] max_join_keys` (2000) and otherwise scan up to 49,999
@@ -1481,7 +1514,7 @@ Full table: [ARCHITECTURE.md §6](ARCHITECTURE.md).
 
 ## 13. Quick start checklist
 
-1. `splunk install app sunavigator-0.8.5.tar.gz` then `splunk restart`.
+1. `splunk install app sunavigator-0.8.6.tar.gz` then `splunk restart`.
 2. `splunk show kvstore-status` → `ready` (macOS: §9.2 if stuck on `starting`).
 3. Open **SUNavigator → Administration**; all platform pills green.
 4. **Check provider for categories** → tick **9** → **Synchronize**, **or**

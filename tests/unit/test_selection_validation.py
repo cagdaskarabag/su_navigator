@@ -126,6 +126,30 @@ class ValidationServiceTest(unittest.TestCase):
         self.assertEqual(doc["review_commands"], ["map"])
         self.assertIn("commands needing review: map", doc["warnings"])
 
+    def test_refusal_hint_matches_what_can_be_done(self):
+        self.search.commands = ["search", "map"]
+        with self.assertRaises(ValidationError) as ctx:
+            self.svc.preview("fenre:UC-9.1.1", "alice")
+        message = str(ctx.exception)
+        self.assertIn("cannot be allowed in ucm.conf", message)
+        self.assertNotIn("list trusted read-only commands", message)
+        self.search.commands = ["search", "apply"]
+        with self.assertRaises(ValidationError) as ctx:
+            self.svc.preview("fenre:UC-9.1.1", "alice")
+        self.assertIn("extra_safe_commands", str(ctx.exception))
+        self.search.commands = ["search", "map", "apply"]
+        with self.assertRaises(ValidationError) as ctx:
+            self.svc.preview("fenre:UC-9.1.1", "alice")
+        message = str(ctx.exception)
+        self.assertIn("indirect commands (map)", message)
+        self.assertIn("(apply) in [spl] extra_safe_commands", message)
+
+    def test_nested_side_effects_count_as_side_effects(self):
+        doc = {}
+        self.svc._apply_policy(doc, 'index=a | map search="search b | collect index=s"', None)
+        self.assertEqual(doc["side_effects"], ["collect"])
+        self.assertEqual(doc["indirect_commands"], ["map"])
+
     def test_extra_safe_command_allows_preview(self):
         self.search.commands = ["search", "apply"]
         with self.assertRaises(ValidationError):

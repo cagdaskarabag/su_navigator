@@ -11,12 +11,18 @@ import unittest
 
 import helpers  # noqa: F401  (sets sys.path)
 from splunk_ucm.spl.analysis import SIDE_EFFECT_COMMANDS, analyze
-from splunk_ucm.spl.policy import INDIRECT_COMMANDS, classify
+from splunk_ucm.spl.policy import HIDDEN_SPL_COMMANDS, INDIRECT_COMMANDS, classify
 
 HERE = os.path.dirname(__file__)
 COMMON = os.path.join(HERE, "..", "..", "sunavigator", "appserver", "static", "ucm_common.js")
 CLI = os.path.join(HERE, "..", "js", "spl_guard_cli.js")
 FIXTURES = os.path.join(HERE, "..", "fixtures")
+
+
+def wrap_map(inner, prefix):
+    """``prefix | map search="inner"`` with the inner search escaped the way Splunk expects."""
+    return 'search %s | map search="%s"' % (prefix, inner.replace("\\", "\\\\").replace('"', '\\"'))
+
 
 EXTRA = [
     "", "index=main", "| makeresults | outputlookup x.csv", "index=a | stats count | Outputlookup x", 'index=a "| delete" | stats count',
@@ -24,7 +30,20 @@ EXTRA = [
     "index=a | fit LinearRegression a from b into m1", "index=a | fit LinearRegression a from b",
     "| from savedsearch:Errors", "| union datamodel:Authentication savedsearch:x", "| rest /services/server/info",
     "index=a `outputlookup_wrapper(1)` | stats count", "index=a | `m` | `n(a,b)`", "index=a | map search=\"search index=x\"",
-    "search index=a | head 1\n| sendemail to=x", "[| outputlookup z] index=a", "index=a [search index=b | delete]",
+    "search index=a | head 1\n| sendemail to=x",
+    'index=a | map search="search index=b | collect index=c"', 'index=a | map search="search index=b | outputlookup x.csv"',
+    '| rest /services/server/info | map search="| sendemail to=a@b.c"', 'index=a | map search="search index=b | delete"',
+    'index=a | map search="search index=b | head 1" maxsearches=5', 'index=a | map maxsearches=5 search="search index=b | head 1"',
+    'index=a | map search="search index=b | map search=\\"search c | outputlookup z\\""',
+    wrap_map(wrap_map(wrap_map(wrap_map('search d | outputlookup z', 'c'), 'b'), 'a'), 'x'),
+    wrap_map(wrap_map(wrap_map('search c | outputlookup z', 'b'), 'a'), 'x'),
+    'index=a | map savedsearch="Errors"', "index=a | map search=x", 'index=a | map search="search `m`"',
+    'index=a | map search="| from savedsearch:Errors"', 'index=a | map search="| savedsearch Errors"',
+    'index=a | map search="search index=b | fit LinearRegression a from b into m1"',
+    'index=a | map search="search index=b | dbxquery connection=c query=\\"select 1\\""',
+    '| loadjob savedsearch="admin:search:x"', '| dbxquery connection=c query="select 1"', '| savedsearch "Errors"',
+    'index=a | eval a="map search=\\"x | collect\\"" | table a', 'index=a | append [| makeresults | map search="search x | collect index=s"]',
+    "index=a | mapper search=\"x | collect\"", 'index=a | map search="search index=b" | map search="search index=c | sendemail to=x"', "[| outputlookup z] index=a", "index=a [search index=b | delete]",
     "| tstats count where index=x by host | where count>1 | script python x", "index=a | run foo",
     "| makeresults | eval x=\"a`b\" | outputcsv y", "index=a\n|\n  outputlookup\n  z",
 ]
@@ -82,6 +101,12 @@ class GuardListsTest(unittest.TestCase):
     def test_indirect_list_equals_python(self):
         self.assertEqual(sorted(js_list("INDIRECT_COMMANDS")), sorted(INDIRECT_COMMANDS))
 
+    def test_hidden_list_equals_python(self):
+        self.assertEqual(sorted(js_list("HIDDEN_SPL_COMMANDS")), sorted(HIDDEN_SPL_COMMANDS))
+
+    def test_hidden_is_a_subset_of_indirect(self):
+        self.assertTrue(HIDDEN_SPL_COMMANDS <= INDIRECT_COMMANDS)
+
     def test_fit_into_and_savedsearch_dataset_patterns_are_mirrored(self):
         with open(COMMON, encoding="utf-8") as handle:
             source = handle.read()
@@ -104,6 +129,8 @@ class GuardParityTest(unittest.TestCase):
                 self.assertEqual(got["commands"], analyze(spl).commands)
                 self.assertEqual(got["side"], py.side_effects)
                 self.assertEqual(got["indirect"], py.indirect)
+                self.assertEqual(got["nested"], py.nested)
+                self.assertEqual(got["hidden"], py.hidden)
                 self.assertEqual(got["macros"], bool(analyze(spl).macros))
 
 

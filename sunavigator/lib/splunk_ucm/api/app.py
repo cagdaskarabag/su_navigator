@@ -166,7 +166,9 @@ class Context:
         return MappingService(self.records())
 
     def selection_service(self) -> SelectionService:
-        return SelectionService(self.store, self.audit)
+        # Selections are written only through this handler path, with the system token (D-062);
+        # the service takes the user from the session and touches only that user's rows.
+        return SelectionService(self.records(), self.audit)
 
     def validation_service(self) -> ValidationService:
         cfg = self.config
@@ -260,6 +262,7 @@ def get_usecase(ctx: Context, req: Request) -> Response:
     detail["requirement_summary"]["assessment"] = readiness["state"] if readiness else "not_assessed"
     detail["selection"] = ctx.selection_service().for_use_case(ctx.user, req.arg("id"))
     detail["validation"] = ctx.validation_service().get(req.arg("id"))
+    detail["interactive_search"] = {"enabled": ctx.config.get_bool("interactive_search", "enabled", True)}
     svc = ctx.deployment_service()
     detail["deployment"] = _deployment_view(ctx, svc, svc.get(req.arg("id")))
     return Response(200, detail)

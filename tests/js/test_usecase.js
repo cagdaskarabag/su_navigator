@@ -89,6 +89,61 @@ var tests = {
         b.dispatch("click");
         assert.strictEqual(FakeSearchManager.instances.length, 0);
     },
+    "side effects inside a map search are refused": function () {
+        ["collect index=s", "outputlookup x.csv", "sendemail to=a@b.c", "delete"].forEach(function (cmd) {
+            var uc = fixture("fenre_plain");
+            uc.spl = 'index=a | map search="search index=b | ' + cmd + '"';
+            var v = open(uc);
+            var b = button(v, "Run search");
+            assert.strictEqual(b.disabled, true, cmd);
+            assert.ok(new RegExp(cmd.split(" ")[0]).test(b.getAttribute("title")), cmd);
+            assert.ok(/inside a map search/.test(b.getAttribute("title")));
+            b.dispatch("click");
+            assert.strictEqual(FakeSearchManager.instances.length, 0);
+        });
+    },
+    "a map search without side effects only warns": function () {
+        var uc = fixture("fenre_plain");
+        uc.spl = 'index=a | head 3 | map search="search index=b host=$host$ | head 1" maxsearches=3';
+        var v = open(uc);
+        assert.strictEqual(button(v, "Run search").disabled, false);
+        assert.ok(hasText(v, /run other searches or reach data/));
+    },
+    "commands that hide their SPL are refused": function () {
+        ['| savedsearch "Errors"', '| loadjob savedsearch="admin:search:x"', '| dbxquery connection=c query="select 1"',
+            "| from savedsearch:Errors", 'index=a | map savedsearch="x"', "index=a | map search=x",
+            'index=a | map search="search `wrapper` | head 1"', 'index=a | map search="| savedsearch Errors"'].forEach(function (spl) {
+            var uc = fixture("fenre_plain");
+            uc.spl = spl;
+            var v = open(uc);
+            var b = button(v, "Run search");
+            assert.strictEqual(b.disabled, true, spl);
+            assert.ok(/does not show/.test(b.getAttribute("title")), spl);
+            b.dispatch("click");
+            assert.strictEqual(FakeSearchManager.instances.length, 0, spl);
+        });
+    },
+    "a stored parse that found savedsearch refuses even when the text is clean": function () {
+        var uc = fixture("escu_macros");
+        uc.validation = { source_hash: uc.provenance.source_hash, parse_ok: true, side_effects: [], indirect_commands: ["savedsearch"] };
+        var v = open(uc);
+        var b = button(v, "Run search");
+        assert.strictEqual(b.disabled, true);
+        assert.ok(/savedsearch/.test(b.getAttribute("title")));
+    },
+    "the interactive search can be switched off by the administrator": function () {
+        var uc = fixture("fenre_plain");
+        uc.interactive_search = { enabled: false };
+        var v = open(uc);
+        assert.strictEqual(v.root.find(function (n) { return n.tagName === "BUTTON" && n.textContent === "Run search"; }).length, 0);
+        assert.ok(hasText(v, /turned the interactive search off/));
+        assert.strictEqual(FakeSearchManager.instances.length, 0);
+    },
+    "the search stays on when the server sends no setting": function () {
+        var uc = fixture("fenre_plain");
+        delete uc.interactive_search;
+        assert.strictEqual(button(open(uc), "Run search").disabled, false);
+    },
     "side effects found by the stored parse also refuse": function () {
         var uc = fixture("escu_macros");
         uc.validation = { source_hash: uc.provenance.source_hash, parse_ok: true, side_effects: ["collect"] };

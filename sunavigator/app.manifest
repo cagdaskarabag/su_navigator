@@ -5,7 +5,7 @@
     "id": {
       "group": null,
       "name": "sunavigator",
-      "version": "0.8.5"
+      "version": "0.8.6"
     },
     "author": [
       {
@@ -15,7 +15,7 @@
       }
     ],
     "releaseDate": null,
-    "description": "SUNavigator (Splunk use case navigator). Discover, assess, select, validate and deploy monitoring use cases across Splunk Enterprise and Splunk Cloud.",
+    "description": "SUNavigator (Splunk use case navigator). Discover, assess, select, validate and deploy monitoring use cases on Splunk Enterprise. Splunk Cloud is not validated yet.",
     "classification": {
       "intendedAudience": "IT and Security Operations",
       "categories": ["Utilities"],

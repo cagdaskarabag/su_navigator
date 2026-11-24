@@ -449,9 +449,9 @@ define(["jquery", "splunk.util"], function ($, splunkUtil) {
     }
 
     /*
-     * Client-side guard for the interactive search (D-058). It mirrors splunk_ucm.spl: the lists equal
-     * analysis.SIDE_EFFECT_COMMANDS and policy.INDIRECT_COMMANDS, and the segmentation equals
-     * analysis._split_pipeline (both checked by unit tests, including a parity run over the fixtures).
+     * Client-side guard for the interactive search (D-058, D-062). It mirrors splunk_ucm.spl: the lists equal
+     * analysis.SIDE_EFFECT_COMMANDS, policy.INDIRECT_COMMANDS and policy.HIDDEN_SPL_COMMANDS, and the segmentation
+     * equals analysis._split_pipeline (both checked by unit tests, including a parity run over the fixtures).
      * It is a convenience guard for the user's own search, not a security boundary: Splunk enforces
      * the user's permissions, and macros are only checked through the stored server-side parse.
      */
@@ -459,17 +459,23 @@ define(["jquery", "splunk.util"], function ($, splunkUtil) {
         "sendemail", "sendalert", "delete", "script", "run", "sendresults", "summaryindex",
         "dbxoutput", "runshellscript", "deletemodel", "dump", "crawl", "outputtelemetry"];
     var INDIRECT_COMMANDS = ["map", "savedsearch", "loadjob", "rest", "dbxquery", "dbxlookup", "dbxinputs"];
+    var HIDDEN_SPL_COMMANDS = ["savedsearch", "loadjob", "dbxquery"];
+    var MAX_NESTING = 3;
     var FIT_INTO = /(?:^|[|\[])\s*fit\b[^|\]]*?\binto\b/i;
     var SAVEDSEARCH_DATASET = /(?:^|[^\w.:])savedsearch:/i;
     var MACRO = /`\s*([A-Za-z0-9_\-.:]+)\s*(\(([^`]*)\))?\s*`/;
+    var MAP_SEARCH = /(?:^|[^\w.])search\s*=\s*"((?:[^"\\]|\\.)*)"/ig;
+    var MAP_SAVED = /(?:^|[^\w.])savedsearch\s*=/i;
+    var ESCAPED = /\\(["\\])/g;
 
     function maskQuotes(spl) {
         return spl.replace(/"(?:[^"\\]|\\.)*"/g, function (m) { return '"' + new Array(m.length - 1).join("\u0001") + '"'; });
     }
 
-    /* Commands in pipeline order, found the way analysis.analyze finds them. */
-    function splCommands(spl) {
-        var masked = maskQuotes(spl || "");
+    function uniq(list) { return list.filter(function (c, i) { return list.indexOf(c) === i; }); }
+
+    /* [start, end, kind] per segment, the way analysis._split_pipeline cuts them. */
+    function splitSegments(masked) {
         var segments = [];
         var starts = [[0, "level"]];
         var inMacro = false;
@@ -497,10 +503,16 @@ define(["jquery", "splunk.util"], function ($, splunkUtil) {
         }
         top = starts[starts.length - 1];
         segments.push([top[0], masked.length, top[1]]);
+        return segments.filter(function (seg) { return masked.substring(seg[0], seg[1]).trim(); });
+    }
+
+    /* Commands in pipeline order, found the way analysis.analyze finds them. */
+    function splCommands(spl) {
+        var masked = maskQuotes(spl || "");
         var commands = [];
-        segments.forEach(function (seg) {
+        splitSegments(masked).forEach(function (seg) {
             var text = masked.substring(seg[0], seg[1]);
-            if (!text.trim() || seg[2] === "cont") { return; }
+            if (seg[2] === "cont") { return; }
             if (seg[2] === "level") { commands.push("search"); return; }
             var word = /^\s*([A-Za-z_][A-Za-z0-9_]*)/.exec(text);
             if (word) { commands.push(word[1].toLowerCase()); }
@@ -508,15 +520,57 @@ define(["jquery", "splunk.util"], function ($, splunkUtil) {
         return commands;
     }
 
+    /* The quoted search="..." of every map command, and how many map calls have no readable one. */
+    function mapCalls(spl) {
+        var masked = maskQuotes(spl);
+        var searches = [];
+        var opaque = 0;
+        splitSegments(masked).forEach(function (seg) {
+            if (seg[2] !== "pipe") { return; }
+            var maskedSeg = masked.substring(seg[0], seg[1]);
+            var word = /^\s*([A-Za-z_][A-Za-z0-9_]*)/.exec(maskedSeg);
+            if (!word || word[1].toLowerCase() !== "map") { return; }
+            var found = [];
+            var m;
+            MAP_SEARCH.lastIndex = 0;
+            var raw = spl.substring(seg[0], seg[1]);
+            while ((m = MAP_SEARCH.exec(raw)) !== null) { found.push(m[1].replace(ESCAPED, "$1")); }
+            if (!found.length || MAP_SAVED.test(maskedSeg)) { opaque += 1; }
+            searches = searches.concat(found);
+        });
+        return { searches: searches, opaque: opaque };
+    }
+
+    /* Searches carried inside map strings, analysed recursively (D-062). */
+    function scanNested(spl, depth, out) {
+        var calls = mapCalls(spl);
+        if (calls.opaque) { out.hidden.push("map (search not readable)"); }
+        calls.searches.forEach(function (inner) {
+            if (depth > MAX_NESTING) { out.hidden.push("map (nested too deeply)"); return; }
+            var masked = maskQuotes(inner);
+            out.commands = out.commands.concat(splCommands(inner));
+            if (MACRO.test(masked)) { out.hidden.push("map (macro in nested search)"); }
+            if (FIT_INTO.test(masked)) { out.side.push("fit into"); }
+            if (SAVEDSEARCH_DATASET.test(masked)) { out.indirect.push("savedsearch: dataset"); }
+            scanNested(inner, depth + 1, out);
+        });
+        return out;
+    }
+
     function splPolicy(spl) {
         var masked = maskQuotes(spl || "");
-        var commands = splCommands(spl);
-        function uniq(list) { return list.filter(function (c, i) { return list.indexOf(c) === i; }); }
-        var side = uniq(commands.filter(function (c) { return SIDE_EFFECT_COMMANDS.indexOf(c) >= 0; }));
-        var indirect = uniq(commands.filter(function (c) { return INDIRECT_COMMANDS.indexOf(c) >= 0; }));
-        if (FIT_INTO.test(masked)) { side.push("fit into"); }
-        if (SAVEDSEARCH_DATASET.test(masked)) { indirect.push("savedsearch: dataset"); }
-        return { commands: commands, sideEffects: side, indirect: indirect, hasMacros: MACRO.test(masked) };
+        var commands = uniq(splCommands(spl));
+        var nested = scanNested(spl || "", 1, { commands: [], side: [], indirect: [], hidden: [] });
+        var nestedCommands = uniq(nested.commands);
+        var every = uniq(commands.concat(nestedCommands));
+        var sidePatterns = FIT_INTO.test(masked) ? ["fit into"] : [];
+        var indirectPatterns = SAVEDSEARCH_DATASET.test(masked) ? ["savedsearch: dataset"] : [];
+        var side = uniq(every.filter(function (c) { return SIDE_EFFECT_COMMANDS.indexOf(c) >= 0; }).concat(sidePatterns, nested.side));
+        var indirect = uniq(every.filter(function (c) { return INDIRECT_COMMANDS.indexOf(c) >= 0; }).concat(indirectPatterns, nested.indirect));
+        var hidden = uniq(every.filter(function (c) { return HIDDEN_SPL_COMMANDS.indexOf(c) >= 0; })
+            .concat(indirect.indexOf("savedsearch: dataset") >= 0 ? ["savedsearch: dataset"] : [], nested.hidden));
+        return { commands: splCommands(spl), sideEffects: side, indirect: indirect, nested: nestedCommands, hidden: hidden,
+            hasMacros: MACRO.test(masked) };
     }
 
     /* The form Splunk's parser needs: a leading search term needs the search command. */
@@ -538,8 +592,16 @@ define(["jquery", "splunk.util"], function ($, splunkUtil) {
         var side = p.sideEffects.slice();
         if (v) { (v.side_effects || []).forEach(function (c) { if (side.indexOf(c) < 0) { side.push(c); } }); }
         if (side.length) {
+            var inside = side.filter(function (c) { return p.nested.indexOf(c) >= 0; });
             return { ok: false, warnings: [], reason: "Not offered: the search contains side-effect commands (" + side.join(", ") +
-                "). These write or send data and are refused here as they are in the preview." };
+                ")" + (inside.length ? ", some inside a map search," : "") +
+                ". These write or send data and are refused here as they are in the preview." };
+        }
+        var hidden = p.hidden.slice();
+        if (v) { (v.indirect_commands || []).forEach(function (c) { if (HIDDEN_SPL_COMMANDS.indexOf(c) >= 0 && hidden.indexOf(c) < 0) { hidden.push(c); } }); }
+        if (hidden.length) {
+            return { ok: false, warnings: [], reason: "Not offered: the search runs SPL or reaches data that this text does not show (" +
+                hidden.join(", ") + "), so it cannot be checked for side effects here. Review the referenced search or the map search yourself and run it in Search." };
         }
         if (p.hasMacros && !(v && v.parse_ok)) {
             return { ok: false, warnings: [], reason: isPrimary
@@ -574,7 +636,7 @@ define(["jquery", "splunk.util"], function ($, splunkUtil) {
         readinessBadge: readinessBadge, statusBadge: statusBadge, resultSummary: resultSummary, resultBadges: resultBadges, helpHeader: helpHeader, legend: legend,
         selectAll: selectAll, percent: percent, readinessKpis: readinessKpis, kpiCard: kpiCard, kpiStrip: kpiStrip, rawGet: rawGet, splCommands: splCommands, splPolicy: splPolicy,
         searchableSpl: searchableSpl, searchGuard: searchGuard, SIDE_EFFECT_COMMANDS: SIDE_EFFECT_COMMANDS,
-        INDIRECT_COMMANDS: INDIRECT_COMMANDS, READINESS_HELP: READINESS_HELP, STATUS_HELP: STATUS_HELP,
+        INDIRECT_COMMANDS: INDIRECT_COMMANDS, HIDDEN_SPL_COMMANDS: HIDDEN_SPL_COMMANDS, READINESS_HELP: READINESS_HELP, STATUS_HELP: STATUS_HELP,
         STATUSES: ["met", "partial", "not_met", "unknown", "unverified", "not_applicable"],
         READINESS_STATES: ["ready", "partially_ready", "not_ready", "blocked", "insufficient_evidence"],
         DOMAINS: ["security", "infrastructure", "network", "application", "database", "cloud", "endpoint",

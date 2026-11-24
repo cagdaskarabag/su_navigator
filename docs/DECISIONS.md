@@ -517,14 +517,18 @@ as drift.
   handler's `Context` gives the sync, discovery, readiness, validation and
   mapping services the system-token store (`records()`). Every handler that
   writes checks the capability first. Searches (parse, preview, field
-  sampling, discovery dispatch) still run with the caller's session, so
-  nobody sees data they could not search themselves.
+  sampling) still run with the caller's session, so nobody sees data they
+  could not search themselves. Discovery is the exception: the worker runs it
+  with the system session, so the inventory is not filtered by the caller's
+  index permissions (D-044; corrected in D-062, the earlier text listed
+  "discovery dispatch" among the caller-session searches).
 * Workers check each queued job's structure before running it (`storage/jobs.py`:
   type, id/key, requester, source, provider, categories, ref, flags, time
   bounds). A malformed job is failed with `invalid_job` and audited.
 * `uc_selections` stays user-writable: it is per-user intent, not evidence.
   Provider collections stay writable by content managers (known limitation in
-  SECURITY.md).
+  SECURITY.md). *Superseded by D-062: selections are now written only through
+  the REST handler.*
 
 ## D-040 Fields the search produces are not raw-data requirements
 *0.7.3 (T-05, finding F-02). Normalizer `fenre-1.2.0`.*
@@ -926,7 +930,10 @@ as drift.
   invalid, 0 warnings; reimport unchanged.
 * Not covered: ESCU's own macro definitions are not imported (the installed
   ESCU app provides them); drilldowns, risk scores and the `fbd` finding-group
-  settings are kept only as raw data in the stored record; `cis20`, `nist`,
+  settings are **not imported** (D-062 correction: the bundle keeps severity,
+  schedule, detection type, analytic stories, data sources and ATT&CK ids, but
+  none of the `action.risk.*` or `action.notable.*` parameters other than the
+  security domain and severity); `cis20`, `nist`,
   `cve` and kill-chain phases are kept in `provider_extras`, not mapped to a
   framework (no ATT&CK-style registry for them in the app).
 
@@ -1036,6 +1043,9 @@ as drift.
   server-side row cap; results exist only in the page; no export.
 * Not done: a custom time range, editing the SPL before running it, running the
   deployed (approved) revision, or saving results.
+* *Amended by D-062 (0.8.6):* the guard also reads the search inside `map
+  search="..."`, refuses `savedsearch`, `loadjob`, `dbxquery` and the
+  `savedsearch:` dataset, and an administrator can switch the feature off.
 
 ## D-059 Catalogue facets, bookmarks, readiness availability and KPI cards
 
@@ -1195,4 +1205,70 @@ as drift.
   is not made here.
 * Consequences: operators are told not to put sensitive text in selection notes.
   No schema change, no new collection, no new route.
+* *Write side superseded by D-062 (0.8.6):* the handler is now the only writer.
+  Read access is unchanged.
 
+## D-062 Nested-SPL guard, interactive-search switch and handler-only selection writes
+
+*0.8.6 (assessment of 24 Nov 2026, decisions of the product owner: block hidden SPL, handler-only selections).*
+
+* Context: an independent review and a follow-up check found that `map
+  search="... | collect ..."` was classified only as `indirect` (`map`), in the
+  Python policy and in the browser guard alike. The server preview refuses every
+  indirect command, but the interactive search (D-058) only warned, so a
+  poisoned catalogue record could make a click write a lookup, send mail or
+  delete, within that user's permissions. D-061 had also shown that any
+  `ucm_viewer` could write `uc_selections` rows for another user.
+* Decision, nested SPL: the search string of every `map search="..."` is analysed
+  with the same policy, recursively up to three levels (`MAX_NESTING`).
+  Side-effect commands found inside it are side effects of the whole search
+  (`PolicyResult.side_effects`), so preview, submit and deployment refuse
+  them. Commands found inside are also listed in `PolicyResult.nested`; indirect
+  commands inside it are indirect. `fit … into` and `savedsearch:` inside the
+  string count as well. Escapes `\"` and `\\` are undone the way Splunk reads
+  them. Allowlist extensions (`extra_safe_commands`) still cannot clear a nested
+  finding.
+* Decision, hidden SPL: `PolicyResult.hidden` lists what the page cannot show or
+  check: `savedsearch`, `loadjob`, `dbxquery` (`HIDDEN_SPL_COMMANDS`), the
+  `savedsearch:` dataset, a `map` whose search is not a readable quoted string
+  (`savedsearch=`, an unquoted value), a macro inside a `map` string, and nesting
+  deeper than three levels. The interactive search refuses all of them with a
+  reason. `rest`, `dbxlookup` and `dbxinputs` stay warnings, and a `map` with a
+  readable, clean search only warns. Server side nothing else changes: these
+  commands were already indirect, so preview refuses them and approval needs an
+  acknowledgment. The stored parse (macros expanded by Splunk) is also consulted:
+  an indirect `savedsearch`, `loadjob` or `dbxquery` found there blocks the button.
+* Known limit: a side effect nested deeper than three levels is not seen as a
+  side effect; the search is reported as hidden, refused in the browser and
+  preview, and needs the approver's acknowledgment at deployment like any `map`.
+  Macros inside a `map` string are not expanded by Splunk's parser, so they stay
+  hidden (blocked in the browser, acknowledged at deployment).
+* Measured (no change expected in practice): Fenre `0e21f01` has 12 `map`
+  records, none with a nested side effect; 6 contain a macro inside the string
+  and 6 use `dbxquery` (hidden, so not offered in the browser). ESCU 6.11.1 has 7
+  `map` searches (6 with a macro inside), none with a nested side effect. No
+  record changes from allowed to refused for preview or deployment.
+* Decision, switch: `[interactive_search] enabled` (default `true`) in
+  `ucm.conf`. The use-case detail response carries it as `interactive_search`;
+  when it is `false` the page shows a note instead of the button. A missing
+  setting keeps the feature on. Removing the `search` capability from a role
+  remains the per-role control.
+* Decision, refusal hint: the preview refusal no longer suggests
+  `extra_safe_commands` for indirect commands, which that list can never clear.
+  It names the right remedy per case.
+* Decision, selections: `uc_selections` is written only by the REST handler with
+  the system token (`Context.selection_service()` uses `records()`), and
+  `default.meta` limits KV write to `admin` and `sc_admin`. The handler still
+  takes the user only from the session and ignores a `user` parameter. Reads
+  stay open to every role so that the caller-scoped filters keep working;
+  confidentiality at KV level is unchanged (D-061). No schema change and no
+  migration. A site that overrode the ACL in `local.meta` keeps its override.
+* Corrections to earlier records: D-039 listed "discovery dispatch" among the
+  caller-session searches although discovery runs as the system user (D-044);
+  D-053 said risk, drilldown and finding settings are kept as raw data, but the
+  bundle does not store them.
+* Wording: README, `app.conf` and `app.manifest` no longer claim Splunk Cloud
+  support. The package passes AppInspect with the `cloud` tag; runtime on a Cloud
+  stack is not validated (issue #3).
+* Not done: reading the scheduler account's index access (next sprint), a
+  server-side audit of interactive searches, treating `rest` as hidden.

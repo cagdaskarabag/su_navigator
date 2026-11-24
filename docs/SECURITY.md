@@ -9,10 +9,10 @@ Status: WP5 (catalogue, discovery, readiness, selection, SPL validation, deploym
 | Upstream content (GitHub, offline bundles) | Untrusted. Size-capped, git-blob-SHA verified, schema- and safety-validated, normalized by allowlisted field mapping. Stored as opaque JSON text (`raw_json`). |
 | Imported SPL | Displayed only, labelled "untrusted". Never executed by the catalogue or by discovery. SPL analysis is lexical (no search is dispatched). Side-effect commands (`delete`, `outputlookup`, `collect`, ...) are flagged, and so are indirect-execution and unknown commands (D-038). |
 | Discovery searches | Only a constructed `tstats` template over index names from `/services/data/indexes`, validated against `^[A-Za-z0-9_][A-Za-z0-9_-]{0,79}$`. Relative time window and result cap are required. |
-| Interactive search (browser) | Started only by a click on **Run search** on the use-case page. The browser dispatches the SPL through Splunk's search API (`splunkjs/mvc/searchmanager`) with the user's own session: their role, capabilities, index access and search quotas apply, and the app is not involved. This is deliberately outside the preview guard rails (D-058, below). |
+| Interactive search (browser) | Started only by a click on **Run search** on the use-case page. The browser dispatches the SPL through Splunk's search API (`splunkjs/mvc/searchmanager`) with the user's own session: their role, capabilities, index access and search quotas apply, and the app is not involved. This is deliberately outside the preview guard rails, but refuses side effects (also inside `map`) and hidden SPL (D-058, D-062, below). |
 | Imported SPL preview | Dispatched only after an explicit user action, a successful parse in the app namespace, a side-effect command gate, and a refusal of indirect-execution (`map`, `savedsearch`, `rest`, ...) and unknown commands (D-038). Time window and `max_count` are forced. Event payloads are not stored. |
 | Field sampling | Constructed `| search index=… sourcetype=… \| head N \| eval … \| fields <validated names> \| fieldsummary` over discovered pairs, in a window ending at the pair's newest event. Imported pipelines are not used. Only presence, counts and the index / sourcetype where a field was seen are kept; event values are not stored (D-044). |
-| Selections | Per-user KV rows; the app API only reads and writes the caller's `user` field. This is application-level isolation only: the collection is app-shared metadata at KV level (D-061, below). |
+| Selections | Per-user KV rows; the app API only reads and writes the caller's `user` field, with the system token (D-062). KV write is admin-only; read stays open to app roles (D-061, below). |
 | Deployment | Saved searches are written with the system token after the capability check and owned by `[deployment] scheduled_owner`, a dedicated `ucm_scheduler` account (D-051). Operators cannot edit or delete them in Splunk (verified on the lab). Disabled first, read back and compared, owner included. Only searches carrying the app's marker are modified. No alert actions. Workflow records are written with the system token after the capability check (D-029). |
 | Reference links | Rendered as links only when absolute `http(s)`; other values are dropped or shown as plain repository paths. |
 | Browser → app API | Splunk Web proxy (`/splunkd/__raw/services/ucm/*`), Splunk session + CSRF form key. All inputs are validated against allowlists; KV queries are built from structured filters, free text is regex-escaped. |
@@ -125,13 +125,29 @@ Controls that remain, and their limits:
   side-effect command. The list equals `spl.analysis.SIDE_EFFECT_COMMANDS` plus
   `fit … into`, and the segmentation equals `analysis._split_pipeline`; unit tests
   compare the lists and run both implementations over the fixture SPL.
+* **Nested SPL (D-062, 0.8.6).** The string of `map search="..."` is analysed the
+  same way, up to three levels deep, so `map search="... | collect ..."`,
+  `outputlookup`, `sendemail`, `delete` and the rest are side effects of the
+  whole search. The server applies the same rule, so preview, submit and
+  deployment refuse such a search too.
+* **Hidden SPL is refused (D-062).** The button stays disabled for `savedsearch`,
+  `loadjob`, `dbxquery`, the `savedsearch:` dataset, a `map` whose search cannot
+  be read (`savedsearch=`, unquoted), a macro inside a `map` string, and nesting
+  deeper than three levels: the page cannot show what would run. The same
+  commands were already refused by the preview and need an acknowledgment at
+  approval. `rest`, `dbxlookup`, `dbxinputs` and a `map` with a readable, clean
+  search still only warn.
+* **Switch.** `[interactive_search] enabled = false` in `local/ucm.conf` turns the
+  feature off for everyone (the page shows a note). Removing the `search`
+  capability from a role remains the per-role control.
 * SPL with macros is refused until a stored server-side parse of the current
   content (`source_hash` equal) shows that no side-effect command is hidden in
   the expanded pipeline. The parse is stored by the existing
   **Parse and sample fields** action, so a user who never ran it sees a reason,
   not a search.
-* Indirect and unknown commands (`map`, `rest`, `savedsearch`, custom
-  commands) only produce a warning, because they run with the user's permissions.
+* Other indirect and unknown commands (`map` with a clean readable search, `rest`,
+  `dbxlookup`, custom commands) only produce a warning, because they run with the
+  user's permissions.
 * The search is finalised after 120 seconds and cancelled when the user leaves
   the page.
 * These checks are a convenience guard, **not a security boundary**: a user can
@@ -165,20 +181,22 @@ A unit test checks that another user's name never appears in a response and that
 their rejects have no effect. Readiness, deployments and the catalogue are
 app-shared metadata (D-044) already readable by every app user.
 
-## Selections are app-shared metadata at KV level (D-061)
+## Selections: readable at KV level, written only by the app (D-061, D-062)
 
 `uc_selections` holds each user's bookmark, select, defer and reject intents,
-priority and notes. Its ACL (`metadata/default.meta`) gives read to every role and
-write to `admin`, `sc_admin`, `ucm_admin`, `ucm_analyst` and `ucm_viewer`. Treat it
-like the shared inventory in D-044 (decision D2): any user who can reach the app's
-KV Store REST endpoints can read every user's rows, and those with write access can
-change them. Verified on the lab with a user holding only `ucm_viewer`: listing all
-rows and creating a row for another user both succeeded (test row removed).
+priority and notes. Its ACL (`metadata/default.meta`) gives **read to every role**
+(the caller-scoped filters need it), so any user who can reach the app's KV Store
+REST endpoints can read every user's rows. Treat it like the shared inventory in
+D-044 (decision D2) and keep sensitive text out of selection notes.
 
-What the app does: its REST handler takes the user only from the session
+**Write (0.8.6, D-062):** KV write is limited to `admin` and `sc_admin`. The REST
+handler writes with the system token, takes the user only from the session
 (`ctx.user`), never from a parameter, and reads or writes that user's rows only.
-Bookmarks, recommendations and the backlog all depend on that. The ACLs were not
-changed in 0.8.5. Do not store sensitive information in selection notes.
+In 0.8.5 a user holding only `ucm_viewer` could create a row for another user
+(verified on the lab, D-061); after the change the KV endpoint answers 403 for
+every app role except the two administrative ones, while the app's own API keeps
+working for viewers and analysts. A site that overrides this ACL in `local.meta`
+keeps its override.
 
 ## Control tests write to Splunk (D-054)
 
