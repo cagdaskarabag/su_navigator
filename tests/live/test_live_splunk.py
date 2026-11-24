@@ -1484,16 +1484,16 @@ class LiveSecurityContentTest(unittest.TestCase):
         cls.es = _app_state(cls.admin, "SplunkEnterpriseSecuritySuite")
         if cls.escu is None:
             raise unittest.SkipTest("ESCU (DA-ESS-ContentUpdate) is not installed on this Splunk instance")
-        status, _ = cls.admin.request("POST", "/services/authentication/users",
-                                      form={"name": cls.VIEWER, "password": cls.VIEWER_PW, "roles": "ucm_viewer"})
-        assert status in (200, 201), status
-        cls.viewer = transport(cls.VIEWER, cls.VIEWER_PW)
         cls.kv = KVStore(cls.admin)
         status, content = cls.admin.request("GET", "/servicesNS/nobody/DA-ESS-ContentUpdate/saved/searches",
                                             {"output_mode": "json", "count": "0", "search": "ESCU"})
         entries = [e for e in json.loads(content)["entry"] if e["name"].startswith("ESCU - ") and e["name"].endswith(" - Rule")]
         assert entries, "no ESCU saved search on the lab"
         cls.stanza = entries[0]["name"]
+        status, _ = cls.admin.request("POST", "/services/authentication/users",
+                                      form={"name": cls.VIEWER, "password": cls.VIEWER_PW, "roles": "ucm_viewer"})
+        assert status in (200, 201), status
+        cls.viewer = transport(cls.VIEWER, cls.VIEWER_PW)
         cls.imported = False
 
     @classmethod
@@ -1507,6 +1507,8 @@ class LiveSecurityContentTest(unittest.TestCase):
                     cls.kv.delete_query(coll, {"catalog_key": key})
                 for coll in (C.VALIDATION, C.READINESS, C.CATALOG, C.CONTENT):
                     cls.kv.delete_query(coll, {"_key": key})
+            # The category's tree hash is what makes an import "unchanged"; restore the fixture bundle's.
+            api(cls.admin, "POST", "import", raw=json.dumps(helpers.escu_fixture_bundle()).encode("utf-8"))
             api(cls.admin, "POST", "catalog/reindex", body={})
 
     def stanza_rest(self, name):
@@ -1681,6 +1683,8 @@ class LivePopulatedTest(unittest.TestCase):
         self.assertEqual((res_no["status"], res_no["code"], res_no["populated"]), ("met", "model_present", "no"), res_no)
         self.assertEqual((doc_yes["score"], doc_yes["state"], doc_yes["counts"]), (doc_no["score"], doc_no["state"], doc_no["counts"]))
 
+    @unittest.skipUnless(os.environ.get("UCM_LIVE_CONF_WRITE") == "1",
+                         "set UCM_LIVE_CONF_WRITE=1: the test leaves a local [discovery] populated_check line in local/ucm.conf")
     def test_setting_off_records_unverified_and_runs_no_check(self):
         old = conf_value(self.admin, "discovery", "populated_check")
         self.map(self.YES)
