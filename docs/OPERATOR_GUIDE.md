@@ -1,10 +1,10 @@
-# SUNavigator 0.8.8 — operator guide
+# SUNavigator 0.8.9 — operator guide
 
 **SUNavigator** (short for **Splunk use case navigator**) discovers, assesses,
 selects, validates and deploys monitoring use cases in Splunk.
 
 This is the install, usage and troubleshooting guide for **SUNavigator
-0.8.8**. It is written for a single Splunk Enterprise instance
+0.8.9**. It is written for a single Splunk Enterprise instance
 (search head + indexer on one host), including a local macOS install. Search
 head clusters and Splunk Cloud are **not** validated in this version.
 
@@ -24,6 +24,23 @@ Related documents (design, not how-to):
 
 The 0.8 line is a usability release. It adds no schema change and no new
 collections. An upgrade from 0.7.3 keeps your data.
+
+### 0.8.9
+
+- **SPL lint (D-065).** Validation and the deployment card now point out SPL that
+  Splunk accepts or rejects in a way that surprises: an eval function such as `match()`
+  used as a search term (it never matches), `timechart ... by a, b` (Splunk rejects
+  it), a wrong number of arguments, a regex ending in one backslash, and a time
+  modifier such as `-6h@5m`. It is advice only: it changes no readiness score, no
+  approval and no deployment gate (§6.2b).
+- **The 50,000-row bound is shown (issue #14).** A catalogue total that reached the KV
+  Store's row bound reads "50000 or more", and Administration warns when the catalogue
+  is near it. `[catalog] kv_row_limit` (default 50000) tells the app the platform bound.
+- **Documentation.** Offline bundles for content larger than 50 MB (§5.2), the edit
+  rights that cause drift (§4, §6.6), and a rewritten list of known limitations (§12),
+  each with its issue number.
+- Validations stored before 0.8.9 have no lint result. The use-case page says so; press
+  **Validate** again. No schema change, no migration. The build number is 11.
 
 ### 0.8.8
 
@@ -313,8 +330,8 @@ commands (`delete`, `outputlookup`, `collect`, script, and similar). Deployed
 searches have **no email, webhook or script alert actions**; the default
 alert mode only writes to Splunk's Triggered Alerts.
 
-**Not in 0.8.8:** PDF export of coverage, a bundled regulation-control
-catalogue, validated SHC behaviour, Splunk Cloud vetting submission.
+**Not in 0.8.9:** PDF export of coverage, a bundled regulation-control
+catalogue, SHC validation with a deployer and indexer peers, Splunk Cloud vetting submission.
 
 ---
 
@@ -325,7 +342,7 @@ catalogue, validated SHC behaviour, Splunk Cloud vetting submission.
 | Splunk | Enterprise 10.x (validated on 10.2.9 in development; tested by operators on 10.4.3 Darwin arm64). Python 3.9 or 3.13 in Splunk. |
 | KV Store | Must reach `status: ready`. The app stores catalogue, inventory, readiness, selections, deployments and audit in KV collections. |
 | Role | First-time setup needs `admin` (or `sc_admin` on Cloud). |
-| Disk | The 0.8.8 package is a few megabytes. Category 9 of Fenre is about 120 records; the full Fenre corpus is tens of thousands of records. |
+| Disk | The 0.8.9 package is a few megabytes. Category 9 of Fenre is about 120 records; the full Fenre corpus is tens of thousands of records. |
 | Network | Optional. Remote sync needs HTTPS to `api.github.com` and `raw.githubusercontent.com`. Offline import needs none. |
 | Browser | Splunk Web. The app is a set of Simple XML views plus JavaScript under `/en-US/app/sunavigator/`. |
 
@@ -342,7 +359,7 @@ Placeholders used below:
 
 ```bash
 ./tools/package.sh
-# writes dist/sunavigator-0.8.7.tar.gz
+# writes dist/sunavigator-0.8.9.tar.gz
 ```
 
 The tarball has a single top-level folder `sunavigator/`
@@ -360,11 +377,11 @@ then fails in the UI with `500 Internal Server Error` even though splunkd is
 still unpacking. Use the CLI:
 
 ```bash
-$SPLUNK_HOME/bin/splunk install app /path/to/sunavigator-0.8.7.tar.gz \
+$SPLUNK_HOME/bin/splunk install app /path/to/sunavigator-0.8.9.tar.gz \
   -auth "$SPLUNK_USER:$SPLUNK_PASSWORD"
 # first install: omit -update
 # upgrade of an existing copy:
-$SPLUNK_HOME/bin/splunk install app /path/to/sunavigator-0.8.7.tar.gz \
+$SPLUNK_HOME/bin/splunk install app /path/to/sunavigator-0.8.9.tar.gz \
   -update 1 -auth "$SPLUNK_USER:$SPLUNK_PASSWORD"
 
 $SPLUNK_HOME/bin/splunk restart
@@ -465,6 +482,17 @@ account you either:
 - create a second user with `ucm_deployment_operator` (recommended), or
 - set `allow_self_approval = true` or `require_approval = false` in
   `local/ucm.conf` (lab only).
+
+**Edit rights on deployed searches and drift (D-051).** Deployed searches are owned by
+the scheduler account, and the app's own write path is the only one for the
+operator roles. Three roles can still edit or delete a `SUN - …` search in Settings:
+`admin`, `sc_admin` and `ucm_admin` (`metadata/default.meta`, `[savedsearches]`). That
+is intended, and it is why `ucm_admin` is not a role to give to day-to-day
+operators; give them `ucm_deployment_operator`. An edit made that way shows as
+**drift** on the next **Verify now** (§6.6) and in the audit log of the app; the
+app does not repair it by itself, and it does not say who made the edit. Splunk's own
+audit (`index=_audit`) is the place to look. **Roll back** writes the previous revision
+and sets the owner to the scheduler account again.
 
 Create the second user in **Settings → Users → New User**. Assign
 `ucm_deployment_operator` (it already imports `ucm_analyst` / `ucm_viewer`).
@@ -594,7 +622,43 @@ curl -k -u "$SPLUNK_USER:$SPLUNK_PASSWORD" \
 
 A bundle built with `--records` is marked **partial** and never withdraws
 records it does not list. Default maximum size is 50 MB (`[import]
-max_bundle_mb`).
+max_bundle_mb`, allowed range 1 to 500).
+
+**A bundle over 50 MB (D-065).** The full Fenre corpus is about 193 MiB as JSON, and
+category 25 alone is about 65 MB, so one file for everything is refused. Either raise
+`max_bundle_mb` in `local/ucm.conf` and restart, or import several smaller bundles one
+after the other. Bundle sizes per category on the 0e21f019 corpus (MiB, rounded):
+10 is 32, 22 is 27, 5 is 9, 1 is 8, 4 is 8, 21 is 6, 3 is 5.5, 13 is 5, 24 is 3.5,
+2, 17, 8, 14, 19 are 2 to 3 each, the rest 1 to 2, and 25 is 65. Whole categories can
+be grouped with `--categories`; importing a category checks that category against the
+file, so a record withdrawn upstream is withdrawn here:
+
+```bash
+python3 tools/ucm_cli.py build-bundle --repo /tmp/fenre --categories 10,1 --output /tmp/ucm_bundle_a.json    # 40 MiB
+python3 tools/ucm_cli.py build-bundle --repo /tmp/fenre --categories 22,4 --output /tmp/ucm_bundle_b.json    # 35 MiB
+python3 tools/ucm_cli.py build-bundle --repo /tmp/fenre --categories 5,3,13,21,24,2,6 \
+  --output /tmp/ucm_bundle_c.json                                                                           # 32 MiB
+python3 tools/ucm_cli.py build-bundle --repo /tmp/fenre \
+  --categories 7,8,9,11,12,14,15,16,17,18,19,20,23 --output /tmp/ucm_bundle_d.json                           # 21 MiB
+```
+
+`tools/ucm_cli.py` cannot cut a single category into pieces by itself, but `--records`
+can: list the record ids of category 25 and cut the list.
+
+```bash
+ls /tmp/fenre/content/cat-25-*/UC-25.*.json | sed 's#.*/UC-##; s#\.json$##' \
+  | split -l 2200 - /tmp/ids25_
+for f in /tmp/ids25_*; do
+  python3 tools/ucm_cli.py build-bundle --repo /tmp/fenre --records "$(paste -sd, "$f")" \
+    --output "$f.json"
+done
+```
+
+The 6,431 records of category 25 give three files of 22 to 23 MB. These bundles are
+partial, so they import without withdrawing anything; a category 25 record removed
+upstream stays active until a remote sync or a full category import. Import the files
+one by one (**Import bundle** or the `curl` call above); the order does not matter.
+Checked by importing the three chunks in a test run: 6,431 records, 0 withdrawn.
 
 If `python3` cannot import `splunk_ucm`, use Splunk's interpreter:
 
@@ -753,6 +817,11 @@ keys go to the KV Store in one request; a larger set is filtered inside the app
 instead. Both give the same result. If a filter would need more than about
 50,000 catalogue rows the page asks you to narrow the other filters first.
 
+The KV Store returns at most 50,000 rows per query (`limits.conf`, `[kvstore]
+max_rows_per_query`). A total that reaches it is printed as "50000 or more" with a note
+that it is a lower bound, and Administration shows a warning once the catalogue holds
+90 percent of it (§12, issue #14).
+
 Your filters are in the page URL (`?domain=security,identity&availability=ready`).
 Selected filters appear as removable chips above the table, with **Clear all
 filters**.
@@ -832,6 +901,43 @@ Deployment tile states which readiness states block enabling.
     = false` (`local/ucm.conf`); the page then shows a note.
   - For the primary search only; the CIM search and variants are offered
     when they have no macros.
+
+### 6.2b SPL lint (D-065)
+
+Validation (use-case page, **Validation** card) and **Save draft** / **Submit** (Deployment
+card) run a lint over the SPL as well as Splunk's parser. It finds constructs Splunk
+accepts or rejects in a way that is not what the author meant. It is **advice**: a
+finding does not change a readiness score, a state, an approval or what can be deployed.
+Splunk's parser, the SPL policy and the approval workflow decide as before.
+
+| Rule | What it flags | Why |
+| --- | --- | --- |
+| L001 | An eval function (`match`, `like`, `cidrmatch`, `isnull`, `isnotnull`, `lower`, `upper`, `len`, `coalesce` and others) written in a search clause: `index=x match(_raw, "a")` or `... \| search match(...)`. | The `search` command does not evaluate eval functions. The term matches nothing, and inside `( ... OR ...)` it removes the rest of its group. Splunk gives no error. Rewrite it as `\| where match(...)`. |
+| L002 | `timechart` or `sitimechart` with more than one `by` field (comma or space separated). | Splunk rejects it. Use `bin _time span=1h \| stats count by _time, a, b`, or one combined field. |
+| L003 | `match`, `like` or `cidrmatch` with the wrong number of arguments in `where`, `eval` and the like (for example `match(x, "re", "i")`). | Splunk rejects it: "The arguments to the function are invalid". Put the flag in the regex, `(?i)`. |
+| L004 | A regex string for `match` or `replace` that ends in a single backslash after eval unescaping (`"^.*\\"`). | Splunk rejects it: "Regex: \ at end of pattern". Write four backslashes. |
+| L005 | A time modifier that snaps to a number of units (`-6h@5m`, `@w8`). | `tstats` rejects it, and a plain search selects nothing. Use `-6h@m` and bin with `span=5m`. |
+
+Each finding shows the rule, the segment number and command, the text it found and a
+suggested rewrite. **Dismiss** hides one finding on that page until it is loaded again;
+nothing is stored. A finding inside a `map search="..."` string is marked as such. Quotes
+and nested strings are read with the same tokenizer as the SPL policy, so
+`where match(...)`, `eval x=match(...)` and `if(match(...), ...)` never raise a finding.
+
+Limits: the rules cover constructs shown to be wrong on Splunk Enterprise 10.2.9 and
+nothing else, so a clean result does not mean the SPL is correct. A macro is not
+expanded, so a call inside a macro is not seen. The lint reads the SPL only; it does not
+know your data. Validation results stored before 0.8.9 do not have a lint result;
+press **Validate** again. To measure a content collection offline:
+
+```bash
+python3 tools/spl_lint_corpus.py --fenre /tmp/fenre --escu /tmp/DA-ESS-ContentUpdate
+```
+
+Over the Fenre `0e21f019` corpus the lint flags 141 of 19,771 searches (L001 80, L002 56,
+L003 1, L004 3, L005 1) and none of the 2,214 ESCU detections. The lists, and why the
+counts differ from the first estimate of 51 and 54, are in
+`docs/upstream/SPL_LINT_CORPUS.md`.
 
 ### 6.3 Data Inventory
 
@@ -978,7 +1084,8 @@ failed after a deploy error; retry deploy from approved/failed
    override reason of at least 10 characters; the reason is audited.
 7. **Verify now** — compare the live saved search with the frozen revision.
    The worker also verifies on `[deployment] verify_interval_minutes`
-   (default 60). External edits show as **drift**.
+   (default 60). External edits show as **drift**. Anyone with `admin`, `sc_admin` or
+   `ucm_admin` can make such an edit (§4); the app reports it and does not undo it.
 8. **Roll back** — writes the previous deployed revision, again disabled.
 9. **Retire** — deletes the saved search from Splunk.
 
@@ -1140,7 +1247,7 @@ Most non-admin roles cannot. The UI then reports run status **not
 available**, not “no runs”. Tick **Include run status** only if your role
 can search `_internal`.
 
-Regulation controls have no bundled catalogue in 0.8.8; only controls that
+Regulation controls have no bundled catalogue in 0.8.9; only controls that
 appear on imported use cases are listed.
 
 **Export ATT&CK Navigator layer** (next to the legend) downloads the matrix
@@ -1226,6 +1333,8 @@ Common stanzas:
 | `[deployment] block_enable_states` | `blocked` | Readiness states that need an enable override. |
 | `[deployment] default_earliest` / `default_latest` | `-20m@m` / `-5m@m` | Time range proposed for new drafts. |
 | `[deployment] default_schedule_window` | `auto` | Schedule window proposed for new drafts (`auto` or 0–1440 minutes). |
+| `[catalog] kv_row_limit` | `50000` | Set to the same value as the platform's `max_rows_per_query` if you raised it, so totals and the warning follow it (issue #14). |
+| `[import] max_bundle_mb` | `50` | Offline bundle size cap, 1 to 500; see §5.2 for splitting instead. |
 | `[retention] audit_days` | `365` | `0` keeps audit forever. Also indexed in `_internal` via the app log. |
 | `[controltest] index` | `ucm_controltest` | Test index for control tests (§6.6a). Must exist. |
 
@@ -1265,7 +1374,7 @@ app. Do the steps in this order:
    $SPLUNK_HOME/bin/splunk restart
    ```
 
-4. **Install SUNavigator 0.8.8** as in §3.2. The first install omits
+4. **Install SUNavigator 0.8.9** as in §3.2. The first install omits
    `-update`, because `sunavigator` is a new app ID.
 5. **Re-create the GitHub token** if you use one (§3.6). It must be stored in
    realm `sunavigator`. The 0.7.0 token in realm `splunk_use_case_manager` is
@@ -1417,8 +1526,9 @@ $SPLUNK_HOME/bin/splunk btool inputs list ucm_sync_worker --debug
 tail -50 "$SPLUNK_HOME/var/log/splunk/sunavigator.log"
 ```
 
-On a search head cluster only the captain runs jobs (not validated in
-0.8.7). On a single instance `standalone = 1` is expected.
+On a search head cluster only the captain runs jobs (validated on a local
+three-member cluster, D-055; deployer and indexer peers are issue #2). On a single
+instance `standalone = 1` is expected.
 
 ### 9.4 Provider could not be reached
 
@@ -1622,8 +1732,10 @@ Full table: [ARCHITECTURE.md §6](ARCHITECTURE.md).
 
 - Upstream Fenre JSON is untrusted. The app size-caps, schema-validates and
   git-blob-verifies it. Do not paste it into saved searches by hand.
-- Deployed searches run as their **owner** (the operator who clicked
-  Deploy). Treat that account as you would any scheduled-search owner.
+- Deployed searches run as their **owner**, the scheduler account
+  (`[deployment] scheduled_owner`, D-051), not the operator who clicked Deploy.
+  Treat that account as you would any scheduled-search owner and keep its role
+  narrow.
 - No alert actions are configured by the app. If you add email/webhook in
   Settings afterwards, the next **Verify** will report drift; the app will
   not send those actions itself until someone copies them into a revision
@@ -1634,65 +1746,106 @@ Full table: [ARCHITECTURE.md §6](ARCHITECTURE.md).
 
 ---
 
-## 12. Known limitations (0.8.8)
+## 12. Known limitations (0.8.9)
 
-- Catalogue total counts are bounded by KV `max_rows_per_query` (50,000).
-- Catalogue search does not rank and does not search descriptions.
-- Requirements derived from SPL are lexical hypotheses, not proof the
-  search will fire.
-- Coverage is computed on read (about 0.5 s at 20,000 use cases).
-- Search head clustering was validated on a local three-member cluster (D-055); Splunk Cloud is unvalidated.
-- Regulations: only controls present on imported records are shown.
-- Settings → Searches lists only your own searches by default; set Owner to All to
-  see `SUN - …` searches (§9.14).
+Each item says where to read more. Items with an issue number are tracked there.
+
+**Platform validation**
+
+- Search head clustering was validated on a local three-member cluster without a
+  deployer and without indexer peers (D-055). Deployer, peers and rolling restarts
+  are untested: issue #2. Earlier builds ran captain-only jobs on every member (fixed, D-055); upgrade if you run an SHC.
+- Splunk Cloud is unvalidated (managed `limits.conf`, no file access, vetting): issue #3.
+- Splunk Enterprise Security 8 output (findings or risk instead of Triggered Alerts)
+  is not implemented; it needs an ES lab: issue #4. The ESCU app is supported as a
+  content source (§5.2a); ES itself was never tested.
+
+**Counts and bounds**
+
+- The KV Store returns at most 50,000 rows per query (`max_rows_per_query`). The
+  catalogue total is shown as "50000 or more" at that point and Administration warns
+  at 90 percent; filters that join readiness or bookmarks refuse above it. Raising it
+  means changing `limits.conf` and `[catalog] kv_row_limit` together. Readiness,
+  inventory and coverage counts are not yet marked when they reach the bound; the
+  catalogue is the only place that is (issue #14, §6.2).
+- Catalogue facet counts are global, not recalculated for the other active filters
+  (D-059). The bookmark, availability and regulation filters join by `_key` up to
+  `[catalog] max_join_keys` (2000) and otherwise scan up to 49,999 rows.
+- Free-text search is a substring match over a precomputed field (no ranking, only
+  the first 1,500 characters of the description). Coverage is computed on read (about
+  0.5 s at 20,000 use cases).
+
+**Readiness evidence**
+
+- Requirements derived from SPL are lexical hypotheses, not proof the search will
+  fire. Regulations show only the controls present on imported records.
+- A CIM data model counts as met when its definition is installed. The app does not
+  check that it holds events, so an empty or unaccelerated model can still show as met
+  (issue #13; plan in D-065).
 - **Scheduler index access (0.8.7, D-063):** the check reads index access only. It does
-  not evaluate search filters (`srchFilter`), search time-window limits or quotas, and
-  it cannot see inside macros that Splunk did not expand, data models, tags, event
-  types, `index=*`, `map`, `savedsearch` or `loadjob`; those are reported as not
-  verified, never as met. A role change does not mark stored assessments stale: press
-  **Assess**. Reading roles on a search head cluster or on Splunk Cloud has not been
-  validated; a failed read gives not verified and blocks nothing.
+  not evaluate search filters (`srchFilter`), time-window limits or quotas, and it
+  cannot see inside macros, data models, tags, event types, `index=*`, `map`,
+  `savedsearch` or `loadjob`; those are reported as not verified, never as met. A role
+  change does not mark stored assessments stale: press **Assess**. Reading roles on an
+  SHC or on Splunk Cloud has not been validated.
+- Discovery scans internal indexes only with `[discovery] include_internal = true`
+  (§6.4).
+- Recommended next (D-060) is an ordering heuristic with starting weights that are
+  not calibrated. MITRE gain compares technique ids exactly (a sub-technique does not
+  credit its parent). It claims no data or CIM population.
+
+**SPL checks**
+
+- The SPL lint (§6.2b) is advice and covers five rules shown wrong on 10.2.9. It does
+  not expand macros. A clean result is not proof of correct SPL.
+- The use-case page "Run search" runs in your browser with your own permissions and
+  outside the server-side guard rails and audit (issue #11). It refuses SPL it cannot
+  show (§6.2a); `[interactive_search] enabled = false` removes it. A user without the
+  `search` capability sees the button disabled; that case is covered by unit tests, not
+  by a lab check.
+
+**Deployments**
+
+- Default four-eyes blocks a single `admin` from approving their own draft (§4).
+- `admin`, `sc_admin` and `ucm_admin` can edit deployed searches in Settings; the
+  app reports drift and does not repair it (§4, D-051). The scheduler account must
+  hold `ucm_scheduler`; removing it orphans its searches.
 - "Ran without error" on Coverage and Deployments means `status=success` in
   `scheduler.log`. A search whose account cannot read its index also reports success.
-- Discovery scans internal indexes only with `[discovery] include_internal = true`;
-  otherwise a requirement on one is not verified (§6.4).
-- Default four-eyes blocks a single `admin` from approving their own draft.
-- Control tests (§6.6a): the campaign ran all 94 fixtures against the SPL on the lab
-  but only 2 use cases were deployed and tested through the app. 8 of the 94 searches
-  cannot be scoped (they filter on `source=`, call a lookup that needs the customer's
-  data, or read data the rewrite cannot redirect); 12 searches use `match()` as a search
-  term and never match, whatever the data (a Fenre content defect, FENRE_FINDINGS F-03).
-  A pass on a `timechart` or on `coalesce` defaults is weak. Test-index events are not
-  removed by the app.
-- Search head clusters were validated on a local three-member cluster without a
-  deployer and without indexer peers (D-055). Splunk Cloud is unvalidated.
-- On Splunk 10.2.9 earlier builds of this app ran captain-only jobs on every
-  member (fixed, D-055). Upgrade if you run an SHC.
-- **Selections are readable at KV level by app users (D-061, D-062).** Every
-  role that can use the app can read all users' `uc_selections` rows through the
-  KV Store REST API. Since 0.8.6 only `admin` and `sc_admin` can write them
-  directly; the app's API writes the caller's own rows. Do not put anything
-  sensitive in selection notes.
-- Catalogue facet counts are global, not recalculated for the other active
-  filters (D-059). The bookmark, availability and regulation filters join by
-  `_key` up to `[catalog] max_join_keys` (2000) and otherwise scan up to 49,999
-  rows; beyond that the catalogue asks you to narrow the other filters.
-- Recommended next (D-060) is an ordering heuristic with starting weights that are
-  not calibrated against outcomes. MITRE gain compares technique ids exactly: a
-  sub-technique is not credited to its parent, and the reverse. It claims no data
-  or CIM population beyond "data model definition installed".
 - A retired deployment can keep a stale `live_status` of `disabled`. Coverage and
   recommendations use `deployed_revision`, not that field.
-- The use-case page "Run search" runs in your browser with your own permissions;
-  a user without the `search` capability sees the button disabled with a reason.
-  That case is covered by unit tests, not by a lab check.
-- No "Add Macro" action exists (OD-4 is undecided). Macros are listed by name.
+- Settings → Searches lists only your own searches by default; set Owner to All to see
+  `SUN - …` searches (§9.14).
+- No "Add Macro" action exists; macros are listed by name. This is a product decision
+  that is still open: issue #10.
+
+**Control tests (§6.6a)**
+
+- The campaign ran all 94 fixtures against the SPL on the lab, but only 2 use cases
+  were deployed and tested through the app. 8 of the 94 searches cannot be scoped (they
+  filter on `source=`, call a lookup that needs the customer's data, or read data the
+  rewrite cannot redirect). 12 searches use `match()` as a search term and never match
+  whatever the data (a Fenre content defect, F-03 in `docs/upstream/FENRE_FINDINGS.md`;
+  the SPL lint now flags it). A pass on a `timechart` or on `coalesce` defaults is weak.
+  Test-index events are not removed by the app.
+
+**Access control**
+
+- Every role that can use the app can read all users' `uc_selections` rows through
+  the KV Store REST API (D-061, D-062). Since 0.8.6 only `admin` and `sc_admin` can
+  write them directly; the app's API writes the caller's own rows. Do not put anything
+  sensitive in selection notes: issue #12 (decision pending).
+
+**Tests**
+
+- The UI scripts have Node-based tests of their logic, not browser tests; Splunk Web
+  itself is checked by hand on the lab: issue #15. Open items overall: issue #16.
 
 ---
 
 ## 13. Quick start checklist
 
-1. `splunk install app sunavigator-0.8.7.tar.gz` then `splunk restart`.
+1. `splunk install app sunavigator-0.8.9.tar.gz` then `splunk restart`.
 2. `splunk show kvstore-status` → `ready` (macOS: §9.2 if stuck on `starting`).
 3. Open **SUNavigator → Administration**; all platform pills green.
 4. **Check provider for categories** → tick **9** → **Synchronize**, **or**

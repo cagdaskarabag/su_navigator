@@ -46,7 +46,7 @@ not packaged.
 | 5 | Data Source Mapping | `discovery/mapping.py` | WP2 | Implemented |
 | 6 | Readiness Assessment | `readiness/` | WP3 | Implemented (inventory evidence; field/SPL checks in WP4) |
 | 7 | Use Case Selection | `selection/` | WP4 | Implemented |
-| 8 | SPL Validation | `spl/parser.py`, `validation/` | WP4 | Implemented |
+| 8 | SPL Validation | `spl/parser.py`, `spl/lint.py` (advisory lint, D-065), `validation/` | WP4 | Implemented |
 | 9 | Deployment Manager | `deployment/` | WP5 | Implemented |
 | 10 | Framework Mapping | `frameworks/` (registry, coverage, operations) | WP6 | Implemented |
 | 11 | Dashboard Templates | `dashboards/` | WP6 | Implemented |
@@ -155,7 +155,7 @@ All collections are app-scoped (`nobody` owner) and replicated in SHC.
 | `uc_source_mappings` | `map_<kind>_<hash>` | shared | discovery worker / REST (system token) | Local and auto mappings. Local rows are never overwritten by discovery. |
 | `uc_readiness` | same as `uc_catalog` | shared | readiness worker / REST (system token) | `state`, `score`, `coverage`, `blockers`, `gaps`, `counts`, per-requirement `results[]` (status, code, detail, observed, via_mapping), `engine_version`, `discovery_at`, `source_hash`. ~3 KB. Staleness computed on read. |
 | `uc_selections` | `sel_<user>_<content_id>` | per-user rows, app-shared at KV level (D-061) | user | Bookmark / select / defer / reject. Sync never writes this collection. The API isolates users; the ACL does not. |
-| `uc_validation` | same as `uc_catalog` | shared | REST (system token) | Parser outcome, side-effects, bounded preview metadata (no event payloads), field samples. |
+| `uc_validation` | same as `uc_catalog` | shared | REST (system token) | Parser outcome, side-effects, advisory lint findings (`lint`, absent before 0.8.9), bounded preview metadata (no event payloads), field samples. |
 | `uc_control_fixtures` | `cf_<catalog key>` | shared | REST (system token), import only | Control-test fixture: sourcetype, host, `min_count`, raw positive and negative text, import `batch` (D-054). |
 | `uc_deployments` | `dep_<catalog key>` | shared | REST (system token), worker | Workflow `state`, `revisions[]` (frozen SPL, schedule, parse result, submitter, approver, deploy time), `deployed_revision`, `live` (status, drift, owner, next run), `history[]` (last 100), `version`. |
 | `uc_frameworks` | `fw_<id>_<version>` / `active_<id>` | shared | REST (system token) | Imported framework definitions (`ucm.framework/1`) and the active version per framework. Bundled versions are files, not documents. |
@@ -284,7 +284,11 @@ Full model: `docs/SECURITY.md`.
 ## 9. Known limitations
 
 * Total counts use a keys-only KV query and are therefore bounded by
-  `max_rows_per_query` (50,000 by default).
+  `max_rows_per_query` (50,000 by default). The catalogue marks a total at the
+  bound (`total_capped`) and Administration warns near it; `[catalog] kv_row_limit`
+  tells the app the platform value (issue #14, D-065).
+* The SPL lint (`spl/lint.py`) is advisory, covers five rules shown wrong on Splunk
+  10.2.9, does not expand macros and never changes a gate or score (D-065).
 * Free-text search is a case-insensitive substring match (all terms must
   match) over a precomputed `search_text` field holding id, title,
   sourcetypes, tags and MITRE ids; descriptions are not searched. No ranking.

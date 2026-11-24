@@ -231,6 +231,54 @@ class LiveOneshotContractTest(unittest.TestCase):
 
 
 @unittest.skipUnless(LIVE, "set UCM_LIVE_SPLUNK=1 to run against a real Splunk instance")
+class LiveLintTest(unittest.TestCase):
+    """D-065: a use case whose SPL uses match() as a search term is validated by the real parser and shows L001."""
+
+    RECORD = "9.99.901"
+    UC = "fenre:UC-9.99.901"
+    KEY = "fenre_UC-9.99.901"
+    SPL = 'index=wineventlog sourcetype="WinEventLog:Security" (EventCode=4625 OR match(_raw, "(?i)brute")) | stats count by Account_Name'
+
+    @classmethod
+    def setUpClass(cls):
+        from splunk_ucm.util import git_blob_sha
+        cls.admin = transport()
+        bundle = helpers.fixture_bundle(record_ids=["9.1.1"])
+        record = bundle["records"][0]
+        content = json.loads(record["content"])
+        content.update({"id": cls.RECORD, "title": "Lint probe %s: match used as a search term" % uuid.uuid4().hex[:8], "spl": cls.SPL, "cimSpl": ""})
+        text = json.dumps(content, indent=2) + "\n"
+        record.update({"record_id": cls.RECORD, "content": text, "blob_sha": git_blob_sha(text.encode("utf-8")),
+                       "path": record["path"].replace("UC-9.1.1.json", "UC-%s.json" % cls.RECORD)})
+        bundle["records"] = [record]
+        status, body = api(cls.admin, "POST", "import", raw=json.dumps(bundle).encode("utf-8"))
+        assert status == 200 and body["job"]["totals"]["invalid"] == 0, body
+        cls.kv = KVStore(cls.admin)
+
+    @classmethod
+    def tearDownClass(cls):
+        for coll in (C.VALIDATION, C.READINESS, C.CATALOG, C.CONTENT):
+            cls.kv.delete_query(coll, {"_key": cls.KEY})
+        api(cls.admin, "POST", "catalog/reindex", body={})
+
+    def test_validation_shows_the_finding_and_gates_are_unchanged(self):
+        status, body = api(self.admin, "POST", "validate", body={"id": self.UC, "sample": False})
+        self.assertEqual(status, 200, body)
+        self.assertTrue(body["parse_ok"], body)
+        self.assertEqual([(f["rule"], f["segment"], f["severity"]) for f in body["lint"]], [("L001", 1, "warning")], body["lint"])
+        self.assertIn("match(", body["lint"][0]["call"])
+        self.assertIn("where", body["lint"][0]["suggestion"])
+        status, stored = api(self.admin, "GET", "validation", {"id": self.UC})
+        self.assertEqual((status, stored["lint"]), (200, body["lint"]))
+        self.assertEqual(self.kv.get(C.VALIDATION, self.KEY)["lint"], body["lint"])
+
+    def test_a_clean_search_has_no_finding(self):
+        status, body = api(self.admin, "POST", "validate", body={"id": "fenre:UC-9.1.1", "sample": False})
+        self.assertEqual(status, 200, body)
+        self.assertEqual(body["lint"], [])
+
+
+@unittest.skipUnless(LIVE, "set UCM_LIVE_SPLUNK=1 to run against a real Splunk instance")
 class LiveWritePathTest(unittest.TestCase):
     """D-039: analysts cannot write evidence or jobs directly; REST flows still work."""
     ANALYST = "ucm_test_analyst_" + uuid.uuid4().hex[:6]
