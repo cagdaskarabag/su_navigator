@@ -66,11 +66,14 @@ class RbacReviewTest(unittest.TestCase):
 
 
 class FakeShcTransport:
-    def __init__(self, member_status=200, member_label="sh1", captain_label="sh1", fail=False):
+    """member_label=None models Splunk 10.2.9, whose member/info has no label; server_name then decides."""
+
+    def __init__(self, member_status=200, member_label="sh1", captain_label="sh1", fail=False, server_name=None):
         self.member_status = member_status
         self.member_label = member_label
         self.captain_label = captain_label
         self.fail = fail
+        self.server_name = server_name or member_label or "sh1"
 
     def request(self, method, path, query=None, json_body=None, form=None, timeout=60.0):
         from splunk_ucm.errors import StorageError
@@ -79,9 +82,12 @@ class FakeShcTransport:
         if path.endswith("member/info"):
             if self.member_status != 200:
                 return self.member_status, b"{}"
-            return 200, json.dumps({"entry": [{"content": {"label": self.member_label}}]}).encode()
+            content = {} if self.member_label is None else {"label": self.member_label}
+            return 200, json.dumps({"entry": [{"content": content}]}).encode()
         if path.endswith("captain/info"):
             return 200, json.dumps({"entry": [{"content": {"label": self.captain_label}}]}).encode()
+        if path.endswith("server/info"):
+            return 200, json.dumps({"entry": [{"content": {"serverName": self.server_name}}]}).encode()
         return 404, b"{}"
 
     def json(self, method, path, query=None, json_body=None, form=None, timeout=60.0):
@@ -103,6 +109,12 @@ class LeaderElectionTest(unittest.TestCase):
     def test_captain_runs_and_members_do_not(self):
         self.assertTrue(self.leader(PlatformProbe(FakeShcTransport())))
         self.assertFalse(self.leader(PlatformProbe(FakeShcTransport(captain_label="sh2"))))
+
+    def test_splunk_10_2_member_without_label_is_identified_by_server_name(self):
+        self.assertTrue(self.leader(PlatformProbe(FakeShcTransport(member_label=None, server_name="sh1",
+                                                                   captain_label="sh1"))))
+        self.assertFalse(self.leader(PlatformProbe(FakeShcTransport(member_label=None, server_name="sh2",
+                                                                    captain_label="sh1"))))
 
     def test_unknown_when_splunkd_fails(self):
         self.assertIsNone(self.leader(PlatformProbe(FakeShcTransport(fail=True))))

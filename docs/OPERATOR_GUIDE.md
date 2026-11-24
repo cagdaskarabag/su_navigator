@@ -1231,13 +1231,17 @@ Full table: [ARCHITECTURE.md §6](ARCHITECTURE.md).
 - Requirements derived from SPL are lexical hypotheses, not proof the
   search will fire.
 - Coverage is computed on read (about 0.5 s at 20,000 use cases).
-- Search head clustering and Splunk Cloud are unvalidated.
+- Search head clustering was validated on a local three-member cluster (D-055); Splunk Cloud is unvalidated.
 - Regulations: only controls present on imported records are shown.
 - The Settings → Searches listing did not show `SUN - …` searches in the lab
   (§9.14). Use the REST search in §6.6.
 - Default four-eyes blocks a single `admin` from approving their own draft.
 - Control tests (§6.6a) run on the lab with 2 deployed use cases. Other use
   cases with fixtures are unverified until deployed and run.
+- Search head clusters were validated on a local three-member cluster without a
+  deployer and without indexer peers (D-055). Splunk Cloud is unvalidated.
+- On Splunk 10.2.9 earlier builds of this app ran captain-only jobs on every
+  member (fixed, D-055). Upgrade if you run an SHC.
 
 ---
 

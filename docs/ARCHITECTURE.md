@@ -52,7 +52,7 @@ not packaged.
 | 11 | Dashboard Templates | `dashboards/` | WP6 | Implemented |
 | 12 | Audit | `audit.py` | WP1 | Implemented (retention in WP7) |
 | 14 | Maintenance (migrations, retention) | `maintenance/` | WP7 | Implemented |
-| 13 | Platform Capability Adapter | `platform/` | WP1 / WP2 | Implemented (captain gate unit-tested; real SHC and Cloud stack not validated) |
+| 13 | Platform Capability Adapter | `platform/` | WP1 / WP2 | Implemented (captain gate validated on a local three-member SHC, D-055; Splunk Cloud not validated) |
 
 ## 3. Content flow
 
@@ -144,7 +144,7 @@ a job while another job for the same provider is queued or running; the worker
 runs jobs sequentially, and on a search head cluster only the captain runs
 them. A stale `running` job older than `job_timeout_seconds` is marked failed.
 KV Store has no conditional update, so two workers racing on one job are
-prevented by these guards, not by an atomic claim (SHC validation pending).
+prevented by these guards, not by an atomic claim. The captain gate was validated on a local three-member SHC (D-055).
 
 Upgrades: every document carries `schema_version`; the normalizer version is
 stored per content document so a newer app can re-derive catalogue summaries

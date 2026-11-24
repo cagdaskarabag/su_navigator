@@ -867,6 +867,40 @@ as drift.
   schedule. Only the 2 deployed use cases above were run on the lab; the
   remaining 92 fixtures were imported and not deployed.
 
+## D-055 SHC captain detection on Splunk 10.2.9
+*0.7.3+ (T-19).*
+* Finding: on Splunk 10.2.9, `GET shcluster/member/info` no longer returns a
+  `label`. `PlatformProbe.is_shc_captain()` returned `None` on every member, and
+  `_leader()` treats `None` as "run". So every member ran the sync, discovery,
+  readiness, maintenance and deployment-verify jobs, which are meant for the
+  captain only (D-035).
+* Fix: the member's name is `server/info` `serverName` when `member/info` has no
+  label. SHC members must have unique server names, so the comparison with
+  `captain/info` `label` is exact. Old splunkd builds that do return a label
+  keep the old path.
+* Validation (local three-member SHC, see T-19 below): captain `True`, members
+  `False`, `False` after the fix; `None` on all three before it.
+* Unknown still runs the job. That is deliberate for standalone instances and
+  for splunkd errors, which keeps single instances working.
+
+### T-19 SHC validation on this VM (lab only)
+* Topology: three Splunk 10.2.9 copies of the lab install (`/opt/sh1`..`/opt/sh3`,
+  ports 8100/8200/8300 web, 8189/8289/8389 management, 9887-9889 replication,
+  8491/8591/8691 KV Store), one SHC `shc_sun`, replication factor 3, no deployer.
+  The app was copied into each member (identical code, no deployer push).
+* Results: the cluster formed with captain `sh1` and KV Store `ready` on all
+  three. App REST answered on every member. An offline import on `sh1` was
+  visible in the catalogue on `sh2` and `sh3`. A deployment drafted and
+  submitted on `sh2`, approved on `sh3` and deployed on `sh2` appeared as a
+  disabled saved search owned by `ucm_scheduler` on all three. A control test
+  passed on `sh2` and `sh3`.
+* Not validated: Splunk Cloud (no environment); a deployer-managed bundle push;
+  real indexer peers (the members searched only their own indexes); scheduled
+  execution of deployed searches across members; ESCU on the cluster.
+* Blocked by the environment: none for the local SHC. The first attempt used the
+  lab's default kvstore and appserver ports, which clash on one host; the copies
+  use distinct ports.
+
 ## D-053 ESCU as an offline-bundle provider
 *0.7.3+ (T-22).*
 * Source: the Splunk ES Content Update package (`DA-ESS-ContentUpdate`, 6.11.1

@@ -74,13 +74,21 @@ class PlatformProbe:
         return None
 
     def is_shc_captain(self) -> Optional[bool]:
+        """Whether this member is the captain. Splunk 10.2.9 omits ``label`` from
+        ``shcluster/member/info``, so the member's own name comes from ``server/info``
+        ``serverName``, which SHC members must make unique. Unknown means run."""
         try:
             member = self.t.json("GET", "/services/shcluster/member/info")
             captain = self.t.json("GET", "/services/shcluster/captain/info")
         except StorageError:
             return None
-        member_label = _first_content(member).get("label")
         captain_label = _first_content(captain).get("label")
+        member_label = _first_content(member).get("label")
+        if not member_label:
+            try:
+                member_label = _first_content(self.t.json("GET", "/services/server/info")).get("serverName")
+            except StorageError:
+                return None
         if not member_label or not captain_label:
             return None
         return member_label == captain_label
