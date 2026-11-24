@@ -265,6 +265,13 @@ The app adds capabilities and roles in `default/authorize.conf`. `admin` and
 | `ucm_deployment_operator` | Deployer | Analyst plus approve/reject/deploy/enable/disable/rollback/retire, generated dashboards. Also gets `schedule_search`. |
 | `ucm_admin` | App admin | Content manager + deployment operator + `ucm_admin`. |
 
+The discovery inventory (index and sourcetype names, counts, apps, data
+models), readiness evidence and validation results are shared app metadata:
+every user who can open the app sees them, regardless of their own index
+permissions. Field values are never stored. To limit who sees them, narrow
+the app's read permission to the `ucm_*` roles (docs/SECURITY.md, "Shared
+environment metadata"; D-044).
+
 **Four-eyes:** the user who **submits** a draft cannot **approve** it, unless
 you change configuration (see §8). For a laptop with a single `admin`
 account you either:

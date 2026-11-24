@@ -6,7 +6,6 @@ search has no side-effect commands. Field sampling uses a constructed
 pipeline (docs/DECISIONS.md D-026, D-027).
 """
 
-import json
 import re
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
@@ -241,7 +240,7 @@ class ValidationService:
         complete = truncated = empty = 0
         wanted = " ".join('"%s"' % f for f in fields)
         for index, st, last_time in pairs[: self.settings.max_pairs]:
-            spl = '| search index=%s sourcetype="%s" | head %d | eval %s=1 | fields %s %s | fieldsummary maxvals=5' % (
+            spl = '| search index=%s sourcetype="%s" | head %d | eval %s=1 | fields %s %s | fieldsummary maxvals=1' % (
                 index, st.replace('"', ""), self.settings.sample_events, SAMPLE_MARKER, SAMPLE_MARKER, wanted)
             earliest, latest = self._window(last_time)
             try:
@@ -264,21 +263,9 @@ class ValidationService:
                     continue
                 n = _count(row)
                 counts[name] += n
+                # Event values are not kept: uc_validation is readable by every app user (D-044).
                 if n and name not in observed:
-                    values = row.get("values") or "[]"
-                    if isinstance(values, str):
-                        try:
-                            parsed_vals = json.loads(values)
-                        except ValueError:
-                            parsed_vals = []
-                    else:
-                        parsed_vals = values
-                    sample = []
-                    if isinstance(parsed_vals, list):
-                        for item in parsed_vals[:3]:
-                            if isinstance(item, dict) and "value" in item:
-                                sample.append(str(item["value"])[:80])
-                    observed[name] = {"index": index, "sourcetype": st, "count": n, "values": sample}
+                    observed[name] = {"index": index, "sourcetype": st, "count": n}
         out = []
         for f in fields:
             hit = observed.get(f)
@@ -291,7 +278,6 @@ class ValidationService:
                 "field": f, "present": counts[f] > 0, "sampled": True, "count": counts[f],
                 "index": None if not hit else hit["index"],
                 "sourcetype": None if not hit else hit["sourcetype"],
-                "values": [] if not hit else hit["values"],
             })
         return out
 

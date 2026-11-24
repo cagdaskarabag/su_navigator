@@ -209,6 +209,7 @@ class LiveOneshotContractTest(unittest.TestCase):
         self.assertEqual((out["user"]["present"], out["user"]["count"]), (True, 3))
         self.assertTrue(out["action"]["present"])
         self.assertEqual((out["sun_no_such_field"]["sampled"], out["sun_no_such_field"]["present"]), (True, False))
+        self.assertNotIn("u0", json.dumps(out), "sampled event values must not be kept")
 
     def test_event_search_truncation(self):
         from splunk_ucm.platform.search import SearchClient

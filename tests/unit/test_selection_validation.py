@@ -161,6 +161,10 @@ class ValidationServiceTest(unittest.TestCase):
         self.assertNotIn("outputlookup", self.search.oneshot_calls[0])
         names = {r["field"]: r["present"] for r in sampled["field_samples"]}
         self.assertTrue(names.get("host") or names.get("_time") or sampled["field_samples"])
+        stored = json.dumps([self.store.get(C.VALIDATION, "fenre_UC-13.1.1"),
+                             self.store.get(C.READINESS, "fenre_UC-13.1.1")])
+        self.assertNotIn('"values"', stored)
+        self.assertNotIn('"idx"', stored)
 
 
 class FieldSampleCompletenessTest(unittest.TestCase):
@@ -258,14 +262,16 @@ class EvaluatorValidationTest(unittest.TestCase):
         snap = EnvironmentSnapshot([], [], {"last_completed_at": "t", "splunk_version": "10.2.9"}, [{
             "_key": "fenre_UC-x", "content_id": "fenre:UC-x", "parse_ok": True, "commands": ["search"],
             "side_effects": [], "field_samples": [
-                {"field": "user", "present": True, "sampled": True, "count": 4, "sourcetype": "st", "index": "main"},
+                {"field": "user", "present": True, "sampled": True, "count": 4, "sourcetype": "st", "index": "main",
+                 "values": ["alice"]},
                 {"field": "missing_f", "present": False, "sampled": True, "count": 0},
             ]}])
         settings = EvaluationSettings()
         self.assertEqual(evaluate({"type": "spl_validity", "value": "primary"}, snap, settings,
                                   "fenre:UC-x", "fenre_UC-x")["status"], MET)
-        self.assertEqual(evaluate({"type": "field", "value": "user"}, snap, settings,
-                                  "fenre:UC-x", "fenre_UC-x")["status"], MET)
+        user = evaluate({"type": "field", "value": "user"}, snap, settings, "fenre:UC-x", "fenre_UC-x")
+        self.assertEqual(user["status"], MET)
+        self.assertNotIn("alice", json.dumps(user))
         self.assertEqual(evaluate({"type": "field", "value": "missing_f"}, snap, settings,
                                   "fenre:UC-x", "fenre_UC-x")["status"], NOT_MET)
         self.assertEqual(evaluate({"type": "field", "value": "user"}, snap, settings, "other", "other")["status"],

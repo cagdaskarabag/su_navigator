@@ -612,3 +612,22 @@ as drift.
   manual sync costs one compare call. Offline bundles are not affected.
 * Verified against GitHub: an old `main` commit and tips of merged branches
   are accepted; the tip of an unmerged (diverged) branch is refused.
+
+## D-044 The environment inventory is shared app metadata
+*0.7.3+ (T-13, finding F-14, decision D2 = b).*
+* Index and sourcetype names, counts, times, installed apps, data models,
+  knowledge objects, source mappings, readiness evidence and validation
+  results are readable by every user who can open the app, through the views,
+  the REST API and the KV collections. They are not filtered by the caller's
+  index permissions: discovery runs as the system user.
+* Accepted because the app is installed for the people who plan detection
+  coverage, and index names already appear in imported SPL. SECURITY.md lists
+  exactly what is visible and how to restrict who can open the app.
+* Field sampling no longer keeps example values (it kept up to three per
+  field, 80 characters each, in `uc_validation` and copied them into readiness
+  evidence). Those were event contents, not metadata, and no view showed them.
+  Samples keep presence, counts and the index / sourcetype only. Existing
+  documents lose the values the next time a use case is sampled.
+* Not chosen: option (a), redacting names for viewers. It would need
+  per-caller filtering in inventory, readiness, validation and detail
+  responses and tighter collection ACLs.

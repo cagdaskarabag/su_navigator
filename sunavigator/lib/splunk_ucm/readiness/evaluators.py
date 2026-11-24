@@ -305,7 +305,7 @@ def eval_field(req, snap: EnvironmentSnapshot, settings: EvaluationSettings,
     if sample is None:
         return result(UNVERIFIED, "not_sampled", "Field has not been sampled. Run validation on this use case.")
     row = {"field": sample.get("field"), "count": sample.get("count"), "index": sample.get("index"),
-           "sourcetype": sample.get("sourcetype"), "values": sample.get("values") or []}
+           "sourcetype": sample.get("sourcetype")}
     if not sample.get("sampled"):
         reason = sample.get("reason") or "not_sampled"
         return result(UNVERIFIED, reason, _UNSAMPLED_DETAIL.get(
