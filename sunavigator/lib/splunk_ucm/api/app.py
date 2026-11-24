@@ -50,6 +50,7 @@ from ..spl.policy import parse_extra_safe
 from ..validation.service import ValidationService, ValidationSettings
 from ..log import get_logger
 from ..platform.capabilities import PlatformProbe
+from ..platform.security_content import SecurityContentReader, deploy_record, handoff_for
 from ..secrets import get_secret
 from ..storage.kvstore import DocumentStore, KVStore
 from ..storage.repositories import CategoryRepository, ContentRepository, SyncStateRepository
@@ -164,6 +165,9 @@ class Context:
         return ReadinessService(self.records(), self.audit, readiness_settings(self.config),
                                 principal_reader=lambda owner: read_principal(self.system_transport, owner))
 
+    def security_content(self) -> SecurityContentReader:
+        return SecurityContentReader(self.system_transport)
+
     def mapping_service(self) -> MappingService:
         return MappingService(self.records())
 
@@ -198,10 +202,14 @@ class Context:
         writer = self.system_transport or self.user_transport
         test_index = self.config.get("controltest", "index", DEFAULT_TEST_INDEX).strip() or DEFAULT_TEST_INDEX
         runner = splunk_runner(writer, SearchClient(self.user_transport), APP_NAME, test_index)
+        reader = self.security_content()
         return DeploymentService(self.records(), self.audit, SearchClient(self.user_transport),
                                  SavedSearchClient(writer, owner=owner), deployment_settings(self.config),
                                  control_runner=runner,
-                                 access=SchedulerAccess(self.records(), self.system_transport, owner))
+                                 access=SchedulerAccess(self.records(), self.system_transport, owner),
+                                 handoff=lambda uc: deploy_record(handoff_for(
+                                     reader, uc.provenance.provider, uc.provenance.provider_record_id, uc.title,
+                                     uc.provider_extras)))
 
     def dashboard_service(self) -> DashboardService:
         views = ViewClient(self.system_transport) if self.system_transport else self.view_client
@@ -274,6 +282,9 @@ def get_usecase(ctx: Context, req: Request) -> Response:
     detail["selection"] = ctx.selection_service().for_use_case(ctx.user, req.arg("id"))
     detail["validation"] = ctx.validation_service().get(req.arg("id"))
     detail["interactive_search"] = {"enabled": ctx.config.get_bool("interactive_search", "enabled", True)}
+    detail["escu_handoff"] = handoff_for(ctx.security_content(), detail["provenance"]["provider"],
+                                         detail["provenance"]["provider_record_id"], detail["title"],
+                                         detail.get("provider_extras") or {})
     svc = ctx.deployment_service()
     detail["deployment"] = _deployment_view(ctx, svc, svc.get(req.arg("id")))
     return Response(200, detail)
@@ -362,7 +373,12 @@ def post_reindex(ctx: Context, req: Request) -> Response:
 def get_platform(ctx: Context, req: Request) -> Response:
     report = PlatformProbe(ctx.user_transport).report(
         ctx.config.get_bool("provider:fenre", "remote_sync_enabled", True))
-    return Response(200, report.to_dict())
+    out = report.to_dict()
+    overview = ctx.security_content().overview()
+    out["security_content"] = {"es": overview["es"], "escu": overview["escu"], "read_at": overview["read_at"],
+                               "note": "Read-only presence check with the app's system session. Behaviour with ES "
+                                       "installed is unvalidated (no ES lab)."}
+    return Response(200, out)
 
 
 def get_audit(ctx: Context, req: Request) -> Response:

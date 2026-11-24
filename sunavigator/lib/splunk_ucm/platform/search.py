@@ -46,10 +46,11 @@ class SearchClient:
         self.t = transport
 
     def oneshot(self, search: str, timeout: float = 120.0, max_count: int = 5000,
-                earliest: str = "", latest: str = "") -> SearchResult:
+                earliest: str = "", latest: str = "", max_time: int = 0) -> SearchResult:
+        """``max_time`` (seconds, 0 = none) makes splunkd finalize the job and return what it has."""
         if not search.startswith("|"):
             raise ValidationError("only generating searches are permitted")
-        return self._oneshot(search, timeout, max_count, earliest, latest)
+        return self._oneshot(search, timeout, max_count, earliest, latest, max_time=max_time)
 
     def preview(self, search: str, timeout: float = 30.0, max_count: int = 100,
                 earliest: str = "-15m", latest: str = "now", app: str = "",
@@ -98,7 +99,7 @@ class SearchClient:
 
     def _oneshot(self, search: str, timeout: float, max_count: int,
                  earliest: str, latest: str, path: str = "/services/search/jobs",
-                 level: str = "fast") -> SearchResult:
+                 level: str = "fast", max_time: int = 0) -> SearchResult:
         """Return at most ``max_count`` rows; ``truncated`` is True only if more existed.
 
         A oneshot returns ``count`` rows (splunkd default 100) whatever ``max_count``
@@ -114,6 +115,8 @@ class SearchClient:
             "timeout": str(max(1, int(timeout))),
             "adhoc_search_level": level,
         }
+        if max_time:
+            form["max_time"] = str(int(max_time))
         if earliest:
             form["earliest_time"] = earliest
         if latest:

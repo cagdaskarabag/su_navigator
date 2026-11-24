@@ -71,6 +71,26 @@ function ucmViewMain($, ucm) {
     var SOURCE_HELP = "Where the requirement came from: stated by the content provider, or derived from the SPL.";
     var CONFIDENCE_HELP = "How sure the app is that the requirement is real. Requirements derived from SPL are hypotheses with lower confidence and weight.";
 
+    var POPULATED_KIND = { yes: "ok", no: "warn", unverified: "neutral" };
+    var POPULATED_HELP = "Informational. Discovery ran one bounded search over the last 24 hours to see whether this data " +
+        "model holds events. It does not change the requirement's status, the score or the readiness state.";
+
+    function populatedChip(res) {
+        if (!res || !res.populated) { return null; }
+        var b = ucm.badge("populated: " + res.populated, POPULATED_KIND[res.populated] || "neutral");
+        b.setAttribute("title", POPULATED_HELP);
+        return b;
+    }
+
+    function populatedLine(rd) {
+        var seen = {};
+        var parts = [];
+        ((rd && rd.results) || []).forEach(function (r) {
+            if (r.type === "cim_model" && r.populated && !seen[r.value]) { seen[r.value] = true; parts.push(r.value + ": " + r.populated); }
+        });
+        return parts.length ? el("div", { "class": "ucm-sub", text: "Data model populated flags (informational, not part of the score): " + parts.join("; ") + "." }) : null;
+    }
+
     function requirementRow(r, res) {
         var evidence = res ? evidenceText(res) : (r.notes || "");
         return el("tr", {},
@@ -80,7 +100,7 @@ function ucmViewMain($, ucm) {
             el("td", { text: r.source.replace("_", " ") }),
             el("td", { text: r.confidence }),
             el("td", {}, res ? ucm.statusBadge(res.status) : ucm.badge("not assessed", "neutral")),
-            el("td", { "class": "ucm-sub" }, evidence,
+            el("td", { "class": "ucm-sub" }, evidence, populatedChip(res),
                 res && res.observed && res.observed.length
                     ? el("details", { "class": "ucm-details" }, el("summary", { text: "Observed (" + res.observed.length + ")" }),
                         el("pre", { "class": "ucm-pre ucm-mono", text: res.observed.map(function (o) {
@@ -205,6 +225,7 @@ function ucmViewMain($, ucm) {
                 rd.blockers.map(function (b) { return ucm.badge(b.type + ": " + b.value, "critical"); })) : null,
             rd.gaps && rd.gaps.length ? el("div", {}, el("strong", { text: "Unmet required: " }),
                 rd.gaps.map(function (g) { return ucm.badge(g.type + ": " + g.value, "high"); })) : null,
+            populatedLine(rd),
             el("div", { "class": "ucm-sub", text: "Readiness is inventory and validation evidence, not a guarantee that the search returns results." }));
         return box;
     }
@@ -429,7 +450,7 @@ function ucmViewMain($, ucm) {
             dep ? ucm.badge("saved search: " + ((dep.live && dep.live.status) || "absent"), LIVE_KIND[(dep.live && dep.live.status) || "absent"]) : null,
             dep && dep.content_changed ? ucm.badge("provider content changed since this revision", "warn") : null,
             dep ? ucm.accessBadge(view.scheduler_access) : null);
-        var card = el("div", { "class": "ucm-card" }, head);
+        var card = el("div", { "class": "ucm-card" }, head, parallelWarning(uc));
         if (!dep) {
             if (allowed.indexOf("draft") < 0) {
                 card.appendChild(el("div", { "class": "ucm-sub", text: "Not deployed. Preparing a deployment needs the ucm_run_discovery or ucm_deploy capability." }));
@@ -457,6 +478,8 @@ function ucmViewMain($, ucm) {
                 (latest.acknowledged_by ? " (acknowledged by " + latest.acknowledged_by + ")" : "") + "." : "") +
             (latest.submitted_by ? " Submitted by " + latest.submitted_by + "." : "") +
             (latest.approved_by ? " Approved by " + latest.approved_by + "." : "") }));
+        var recorded = recordedParallel(latest);
+        if (recorded) { card.appendChild(recorded); }
         if (latest.spl_time_bounds) {
             card.appendChild(ucm.stateBox("warn", "Time range set inside the SPL",
                 "The search sets earliest/latest itself, which overrides the schedule's " + latest.earliest + " → " +
@@ -913,6 +936,77 @@ function ucmViewMain($, ucm) {
     }
 
     /* Twins share the primary SPL text after whitespace normalisation; nothing more is claimed. */
+    var STANZA_KIND = { enabled: "ok", disabled: "neutral", not_found: "neutral", unverified: "warn" };
+
+    function appText(app, name) {
+        if (!app) { return name + ": unknown"; }
+        if (app.state === "installed") { return name + " " + (app.version || "(version unknown)") + " installed"; }
+        if (app.state === "disabled") { return name + " " + (app.version || "") + " installed but disabled"; }
+        if (app.state === "not_installed") { return name + " not installed"; }
+        return name + " unverified" + (app.reason ? " (" + app.reason + ")" : "");
+    }
+
+    /* Same-origin link to another app's view: the locale and web root come from this page's own path. */
+    function appViewUrl(appId, view) {
+        var m = /^(.*?\/app\/)[^\/]+(\/|$)/.exec(window.location.pathname || "");
+        if (!m || !/^[A-Za-z0-9_][A-Za-z0-9_.-]*$/.test(appId || "") || (view && !/^[A-Za-z0-9_]+$/.test(view))) { return ""; }
+        return window.location.protocol + "//" + window.location.host + m[1] + appId + (view ? "/" + view : "");
+    }
+
+    function handoffBox(uc) {
+        var h = uc.escu_handoff;
+        if (!h) { return null; }
+        var st = h.stanza;
+        var state = st ? st.state : (h.code === "escu_not_installed" ? "not installed" : "unverified");
+        var head = el("div", { "class": "ucm-readiness-head" }, el("strong", { text: "Shipped by ESCU" }),
+            ucm.badge("state: " + state.replace("_", " "), st ? (STANZA_KIND[st.state] || "neutral") : "neutral"),
+            h.es && h.es.state === "installed" ? ucm.badge("Enterprise Security installed", "info") : null);
+        var rows = [];
+        if (st) {
+            var actions = [];
+            if (st.notable !== null && st.notable !== undefined) { actions.push("notable " + (st.notable ? "yes" : "no")); }
+            if (st.risk !== null && st.risk !== undefined) { actions.push("risk " + (st.risk ? "yes" : "no")); }
+            rows.push(["Saved search", el("span", { "class": "ucm-mono", text: st.name })]);
+            rows.push(["Schedule", st.state === "unverified" || st.state === "not_found" ? "" :
+                (st.scheduled ? "scheduled" : "not scheduled") + (st.cron ? ", cron " + st.cron : "") +
+                (st.earliest ? ", " + st.earliest + " → " + st.latest : "")]);
+            rows.push(["Actions configured", actions.join(", ")]);
+            rows.push(["Detail", st.reason]);
+        }
+        rows.push(["Apps", appText(h.escu, "ESCU") + "; " + appText(h.es, "Enterprise Security")]);
+        var link = h.es_link;
+        var box = el("div", { "class": "ucm-card ucm-handoff" }, head,
+            el("div", { "class": "ucm-pre", text: h.text }),
+            kv(rows),
+            link ? el("div", { "class": "ucm-actions" },
+                el("a", { "class": "btn", href: appViewUrl(link.app_id, link.content_management_view), target: "_blank",
+                    rel: "noopener noreferrer", text: "Open ES Content Management" }),
+                el("a", { href: appViewUrl(link.app_id, ""), target: "_blank", rel: "noopener noreferrer", text: "Open the ES app" })) : null,
+            link ? el("div", { "class": "ucm-sub", text: link.note }) : null,
+            el("div", { "class": "ucm-sub", text: h.coverage_note }),
+            h.validated ? el("div", { "class": "ucm-sub", text: h.validated }) : null);
+        return section("Enterprise Security hand-off", box);
+    }
+
+    function parallelWarning(uc) {
+        var h = uc.escu_handoff;
+        if (!h || !h.parallel_copy || !h.parallel_copy.warn) { return null; }
+        var why = [];
+        if (h.parallel_copy.es_installed) { why.push("Enterprise Security is installed"); }
+        if (h.parallel_copy.escu_enabled) { why.push("ESCU's own copy of this search is enabled"); }
+        return ucm.stateBox("warn", "A SUN deployment would be a parallel copy (" + why.join("; ") + ")", h.parallel_copy.text +
+            " This is a warning only; it does not block the workflow.");
+    }
+
+    function recordedParallel(rev) {
+        var pc = rev && rev.parallel_copy;
+        if (!pc || !pc.warned) { return null; }
+        return el("div", { "class": "ucm-sub", text: "Recorded when this revision was drafted: " +
+            (pc.es_installed ? "Enterprise Security was installed" : "") +
+            (pc.es_installed && pc.escu_enabled ? "; " : "") +
+            (pc.escu_enabled ? "ESCU's copy was enabled" : "") + " (" + (pc.stanza || "ESCU saved search") + ", read " + (pc.read_at || "") + " UTC)." });
+    }
+
     function lineageBox(uc) {
         var twins = uc.spl_twins || [];
         var twinIds = twins.map(function (t) { return t.content_id; });
@@ -1003,6 +1097,8 @@ function ucmViewMain($, ucm) {
             el("details", { "class": "ucm-details" }, el("summary", { text: "Provider data-source description" }), text(uc.data_sources_text)),
             uc.required_fields.length ? el("div", {}, el("strong", { text: "Required fields: " }), ucm.chips(uc.required_fields)) : null,
             uc.datamodel_acceleration_text ? el("details", { "class": "ucm-details" }, el("summary", { text: "Data model acceleration notes" }), text(uc.datamodel_acceleration_text)) : null)));
+        var handoff = handoffBox(uc);
+        if (handoff) { root.appendChild(handoff); }
         var lineage = lineageBox(uc);
         if (lineage) { root.appendChild(lineage); }
         var sources = [{ label: "Primary search", spl: uc.spl, primary: true }, { label: "CIM search", spl: uc.cim_spl, primary: false }]
