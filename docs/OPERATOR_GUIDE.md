@@ -822,6 +822,14 @@ Add **local source mappings** when a catalogue sourcetype name does not
 match yours (for example CIM-normalized names). Auto mappings are not
 readiness evidence.
 
+If **Data Inventory** shows "The last discovery hit its result limit", the
+run found more index/sourcetype pairs than `[discovery] max_pairs`
+(default 5000). Pairs beyond the limit are not in the inventory, and that run
+marked nothing missing. Raise `max_pairs` (at most 20000) in
+`local/ucm.conf`, or narrow the window, and run discovery again. Fields
+shown as `sample_truncated` or `sample_failed` are unverified, not absent;
+run **Validate** again once the sourcetype has data.
+
 ### 9.8 No Approve button on a pending deployment
 
 You are logged in as the submitter and `allow_self_approval` is false. Sign
@@ -853,6 +861,10 @@ requirement and re-assess first.
 The role cannot search `index=_internal`. Use an admin account, grant
 `indexes._internal`, or ignore run status. This is intentional (D-031):
 the app never discloses scheduler data the user could not search themselves.
+
+"The scheduler log result was truncated" means more than 5000 managed
+searches had scheduler rows in the window. Searches without a row are shown
+as `unknown` rather than "no runs". Pick a shorter window.
 
 ### 9.12 App looks installed but nav is missing
 

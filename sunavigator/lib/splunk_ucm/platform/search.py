@@ -12,6 +12,10 @@ from urllib.parse import quote
 from ..errors import StorageError, UnsupportedOperation, ValidationError
 from ..storage.transport import SplunkdTransport
 
+# limits.conf [restapi] maxresultrows default. splunkd never returns more rows than
+# this from one request, so a limit must stay below it for the sentinel row to fit.
+ONESHOT_ROW_CEILING = 50000
+
 
 class SearchResult:
     def __init__(self, rows: List[Dict[str, Any]], messages: List[Dict[str, str]], truncated: bool):
@@ -84,10 +88,18 @@ class SearchClient:
 
     def _oneshot(self, search: str, timeout: float, max_count: int,
                  earliest: str, latest: str) -> SearchResult:
+        """Return at most ``max_count`` rows; ``truncated`` is True only if more existed.
+
+        A oneshot returns ``count`` rows (splunkd default 100) whatever ``max_count``
+        says; ``max_count`` bounds only the events a search may retain. Both are set to
+        one row past the limit so the extra row proves truncation.
+        """
+        limit = max(1, min(int(max_count), ONESHOT_ROW_CEILING - 1))
         form: Dict[str, Any] = {
             "search": search,
             "exec_mode": "oneshot",
-            "max_count": str(int(max_count)),
+            "count": str(limit + 1),
+            "max_count": str(limit + 1),
             "timeout": str(max(1, int(timeout))),
             "adhoc_search_level": "fast",
         }
@@ -106,8 +118,8 @@ class SearchClient:
             raise StorageError("unexpected search response")
         rows = data.get("results") if isinstance(data.get("results"), list) else []
         messages = [m for m in (data.get("messages") or []) if isinstance(m, dict)]
-        truncated = len(rows) >= int(max_count)
-        result = SearchResult(rows, messages, truncated)
+        truncated = len(rows) > limit
+        result = SearchResult(rows[:limit], messages, truncated)
         if result.errors:
             raise UnsupportedOperation("search failed: %s" % result.errors[0][:300],
                                        {"messages": result.errors[:5]})

@@ -157,10 +157,11 @@ class CoverageTest(unittest.TestCase):
 
 
 class FakeHealthSearch:
-    def __init__(self, rows=None, fail=None, internal_events=100):
+    def __init__(self, rows=None, fail=None, internal_events=100, truncated=False):
         self.rows = rows or []
         self.fail = fail
         self.internal_events = internal_events
+        self.truncated = truncated
         self.calls = []
 
     def oneshot(self, spl, **kw):
@@ -169,7 +170,7 @@ class FakeHealthSearch:
             raise self.fail
         if spl.startswith("| tstats"):
             return SearchResult([{"count": str(self.internal_events)}], [], False)
-        return SearchResult(self.rows, [], False)
+        return SearchResult(self.rows, [], self.truncated)
 
 
 class OperationsTest(unittest.TestCase):
@@ -207,6 +208,19 @@ class OperationsTest(unittest.TestCase):
         self.assertFalse(out["available"])
         self.assertIn("_internal", out["reason"])
         self.assertEqual(out["counts"], {"unknown": 1})
+
+    def test_truncated_health_does_not_report_no_runs(self):
+        svc, store, _ = service()
+        approved(svc)
+        svc.deploy("bob", UC)
+        svc.enable("bob", UC)
+        out = OperationsService(store, FakeHealthSearch(truncated=True)).health(24)
+        self.assertTrue(out["available"])
+        self.assertTrue(out["truncated"])
+        self.assertEqual(out["items"][0]["health"], "unknown")
+        out = OperationsService(store, FakeHealthSearch()).health(24)
+        self.assertFalse(out["truncated"])
+        self.assertEqual(out["items"][0]["health"], "no_runs")
 
 
 class FakeViews:

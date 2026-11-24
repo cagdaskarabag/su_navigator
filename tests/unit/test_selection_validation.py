@@ -44,11 +44,16 @@ class FakeParser:
         self.preview_calls.append(search)
         return SearchResult(list(self.preview_rows), [], False)
 
+    field_truncated = False
+    field_error = None
+
     def oneshot(self, search, timeout=30, max_count=50, earliest="", latest=""):
         self.oneshot_calls.append(search)
         if not search.startswith("|"):
             raise ValidationError("only generating searches are permitted")
-        return SearchResult(list(self.field_rows), [], False)
+        if self.field_error:
+            raise self.field_error
+        return SearchResult(list(self.field_rows), [], self.field_truncated)
 
 
 def discovered():
@@ -129,6 +134,44 @@ class ValidationServiceTest(unittest.TestCase):
         self.assertNotIn("outputlookup", self.search.oneshot_calls[0])
         names = {r["field"]: r["present"] for r in sampled["field_samples"]}
         self.assertTrue(names.get("host") or names.get("_time") or sampled["field_samples"])
+
+
+class FieldSampleCompletenessTest(unittest.TestCase):
+    def setUp(self):
+        from splunk_ucm.discovery.keys import source_key
+        self.store = discovered()
+        self.search = FakeParser()
+        self.svc = ValidationService(self.store, AuditService(self.store), self.search)
+        self.store.upsert(C.ENVIRONMENT_SOURCES, {
+            "_key": source_key("pair", "wineventlog", "st_a"), "kind": "pair", "status": "active",
+            "index": "wineventlog", "sourcetype": "st_a", "window_count": 10})
+
+    def sample(self):
+        return {r["field"]: r for r in self.svc._sample(["host", "user"], ["st_a"])}
+
+    def test_complete_sample_can_show_absence(self):
+        out = self.sample()
+        self.assertTrue(out["host"]["present"])
+        self.assertTrue(out["user"]["sampled"])
+        self.assertFalse(out["user"]["present"])
+
+    def test_truncated_sample_is_not_absence(self):
+        self.search.field_truncated = True
+        out = self.sample()
+        self.assertTrue(out["host"]["present"])
+        self.assertEqual((out["user"]["sampled"], out["user"]["reason"]), (False, "sample_truncated"))
+        snap = EnvironmentSnapshot([], [], {"last_completed_at": "t"}, [{
+            "_key": "k", "content_id": "c", "field_samples": [out["user"]]}])
+        res = evaluate({"type": "field", "value": "user"}, snap, EvaluationSettings(), "c", "k")
+        self.assertEqual((res["status"], res["code"]), (UNVERIFIED, "sample_truncated"))
+        self.assertIn("truncated", res["detail"])
+
+    def test_failed_sample_is_not_absence(self):
+        from splunk_ucm.errors import UnsupportedOperation
+        self.search.field_error = UnsupportedOperation("search failed")
+        out = self.sample()
+        self.assertEqual((out["user"]["sampled"], out["user"]["reason"]), (False, "sample_failed"))
+        self.assertEqual(out["host"]["reason"], "sample_failed")
 
 
 class EvaluatorValidationTest(unittest.TestCase):

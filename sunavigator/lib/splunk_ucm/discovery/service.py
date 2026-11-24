@@ -186,7 +186,7 @@ class DiscoveryService:
                 break
             try:
                 result = self.search.oneshot(spl, timeout=float(self.settings.search_timeout),
-                                             max_count=remaining + 1)
+                                             max_count=remaining)
             except UcmError as exc:
                 errors.append(dict(exc.to_dict(), indexes=group[:5]))
                 continue

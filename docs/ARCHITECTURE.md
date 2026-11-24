@@ -227,6 +227,12 @@ status, the caller's capabilities (`authentication/current-context`), and
 configured outbound access. Results are reported to the UI; unsupported
 operations return HTTP 409 with a machine-readable reason, never silent failure.
 
+`platform/search.py` (`SearchClient`) is the only path to `search/jobs`. A
+oneshot returns at most `max_count` rows, and `truncated` is true only when
+more rows existed (D-037). Every evidence producer (discovery, field
+sampling, run status) treats an absence inside a truncated result as
+unknown, never as proof.
+
 ## 8. Security
 
 Full model: `docs/SECURITY.md`.

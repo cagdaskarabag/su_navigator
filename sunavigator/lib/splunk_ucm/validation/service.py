@@ -195,6 +195,7 @@ class ValidationService:
                     for f in fields]
         counts: Dict[str, int] = {f: 0 for f in fields}
         observed: Dict[str, Dict[str, Any]] = {}
+        complete = truncated = 0
         for index, st in pairs[: self.settings.max_pairs]:
             spl = '| search index=%s sourcetype="%s" | head %d | fieldsummary maxvals=5' % (
                 index, st.replace('"', ""), self.settings.sample_events)
@@ -205,6 +206,10 @@ class ValidationService:
                     earliest=self.settings.earliest, latest=self.settings.latest)
             except (UnsupportedOperation, ValidationError):
                 continue
+            if result.truncated:
+                truncated += 1
+            else:
+                complete += 1
             for row in result.rows:
                 name = str(row.get("field") or "")
                 if name not in counts:
@@ -232,6 +237,11 @@ class ValidationService:
         out = []
         for f in fields:
             hit = observed.get(f)
+            if counts[f] == 0 and not complete:
+                # Only a complete sample can show a field is absent.
+                out.append({"field": f, "present": False, "sampled": False,
+                            "reason": "sample_truncated" if truncated else "sample_failed"})
+                continue
             out.append({
                 "field": f, "present": counts[f] > 0, "sampled": True, "count": counts[f],
                 "index": None if not hit else hit["index"],

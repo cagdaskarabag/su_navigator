@@ -58,12 +58,13 @@ class OperationsService:
                                        fields=["content_id", "catalog_key", "title", "saved_search",
                                                "live_status"], limit=2000)
         rows: Dict[str, Dict[str, Any]] = {}
-        available, reason = True, ""
+        available, reason, truncated = True, "", False
         if deployments:
             try:
                 result = self.search.oneshot(HEALTH_SPL, timeout=60.0, max_count=5000,
                                              earliest="-%dh" % hours, latest="now")
                 rows = {str(r.get("savedsearch_name") or ""): r for r in result.rows}
+                truncated = result.truncated
                 if not rows and not self._can_read_internal():
                     available, reason = False, NO_ACCESS
             except (UnsupportedOperation, ValidationError) as exc:
@@ -74,7 +75,11 @@ class OperationsService:
             name = (d.get("saved_search") or {}).get("name", "")
             row = rows.get(name, {})
             enabled = d.get("live_status") == "enabled"
-            status = classify(enabled, row) if available else ("disabled" if not enabled else "unknown")
+            if not available or (truncated and not row):
+                # A row cut from a truncated result is not evidence that the search never ran.
+                status = "disabled" if not enabled else "unknown"
+            else:
+                status = classify(enabled, row)
             counts[status] = counts.get(status, 0) + 1
             items.append({
                 "content_id": d.get("content_id"), "catalog_key": d.get("catalog_key"), "title": d.get("title"),
@@ -85,7 +90,8 @@ class OperationsService:
                 "last_run": _num(row.get("last_run")) or None, "last_status": row.get("last_status"),
                 "last_result_count": int(_num(row.get("last_result_count"))) if row else None,
             })
-        return {"available": available, "reason": reason, "hours": hours, "items": items, "counts": counts}
+        return {"available": available, "reason": reason, "truncated": truncated, "hours": hours,
+                "items": items, "counts": counts}
 
     def _can_read_internal(self) -> bool:
         result = self.search.oneshot(VISIBILITY_SPL, timeout=30.0, max_count=1, earliest="-1h", latest="now")

@@ -43,6 +43,10 @@ require([
                 el("label", {}, el("input", { type: "checkbox", id: "ucm-inc-int" }), " Include internal indexes"),
                 el("button", { "class": "btn btn-primary", type: "button", id: "ucm-run-disc", text: "Run discovery" })),
             el("div", { "class": "ucm-sub", text: "Discovery runs a constructed tstats over indexes listed by the management API. Imported SPL is never searched." }));
+        if ((s.totals || {}).truncated) {
+            box.appendChild(ucm.stateBox("warn", "The last discovery hit its result limit.",
+                "Some index/sourcetype pairs may be missing from the inventory, and none were marked missing in that run. Raise max_pairs in [discovery] or narrow the indexes searched."));
+        }
         if (jobs.length) {
             var head = el("tr", {});
             ["Requested", "Status", "Pairs", "Indexes", "Missing", "Errors"].forEach(function (h) {
@@ -54,7 +58,7 @@ require([
                 body.appendChild(el("tr", {},
                     el("td", { text: j.requested_at }),
                     el("td", {}, ucm.badge(j.status, j.status === "succeeded" ? "ok" : (j.status === "failed" ? "error" : "info"))),
-                    el("td", { text: t.pairs === undefined ? "" : t.pairs }),
+                    el("td", { text: t.pairs === undefined ? "" : t.pairs + (t.truncated ? " (truncated)" : "") }),
                     el("td", { text: t.indexes_eligible === undefined ? "" : t.indexes_eligible }),
                     el("td", { text: t.missing === undefined ? "" : t.missing }),
                     el("td", { "class": "ucm-sub", text: (j.errors || []).map(function (e) { return e.message; }).slice(0, 2).join("; ") })));

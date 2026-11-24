@@ -282,6 +282,12 @@ def eval_spl_validity(req, snap: EnvironmentSnapshot, settings: EvaluationSettin
                   observed)
 
 
+_UNSAMPLED_DETAIL = {
+    "sample_truncated": "The sample result was truncated, so absence of this field is not evidence.",
+    "sample_failed": "The sample search failed for every matching sourcetype.",
+}
+
+
 def eval_field(req, snap: EnvironmentSnapshot, settings: EvaluationSettings,
                content_id: str = "", key: str = ""):
     sample = snap.field_sample(content_id, req.get("value") or "", key)
@@ -290,8 +296,9 @@ def eval_field(req, snap: EnvironmentSnapshot, settings: EvaluationSettings,
     row = {"field": sample.get("field"), "count": sample.get("count"), "index": sample.get("index"),
            "sourcetype": sample.get("sourcetype"), "values": sample.get("values") or []}
     if not sample.get("sampled"):
-        return result(UNVERIFIED, sample.get("reason") or "not_sampled",
-                      "No active sourcetype was available to sample this field.", [row])
+        reason = sample.get("reason") or "not_sampled"
+        return result(UNVERIFIED, reason, _UNSAMPLED_DETAIL.get(
+            reason, "No active sourcetype was available to sample this field."), [row])
     if sample.get("present"):
         where = sample.get("sourcetype") or "sample"
         return result(MET, "sampled_present", "Field seen in the bounded sample (%s, %s events)."

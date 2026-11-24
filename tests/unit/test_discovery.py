@@ -83,7 +83,7 @@ class FakeSearch:
         self.calls.append(search)
         if self.error:
             raise self.error
-        return SearchResult(list(self.rows), [], self.truncated or len(self.rows) >= max_count)
+        return SearchResult(list(self.rows[:max_count]), [], self.truncated or len(self.rows) > max_count)
 
 
 INDEXES = [
@@ -168,6 +168,42 @@ class DiscoveryServiceTest(unittest.TestCase):
         doc = self.store.get(C.ENVIRONMENT_SOURCES, key)
         self.assertEqual(doc["status"], "missing")
         self.assertTrue(doc["window_count"])
+
+    def _splunkd_service(self, rows, **settings):
+        from splunk_ucm.platform.search import SearchClient
+        from unit.test_platform_search import SplunkdOneshot
+        splunkd = SplunkdOneshot(rows)
+        svc = DiscoveryService(self.store, AuditService(self.store), self.inv, SearchClient(splunkd),
+                               DiscoverySettings(include_internal=False, **settings),
+                               now_epoch=lambda: 1795163600)
+        return svc, splunkd
+
+    def test_more_than_100_pairs_per_chunk_are_kept(self):
+        many = [dict(ROWS[0], sourcetype="st_%03d" % i) for i in range(250)]
+        svc, splunkd = self._splunkd_service(many)
+        job = svc.run(new_djob("alice"))
+        self.assertEqual(job["status"], "succeeded")
+        self.assertFalse(job["totals"]["truncated"])
+        self.assertEqual(job["totals"]["pairs"], 250)
+        self.assertEqual(len(self.store.query(C.ENVIRONMENT_SOURCES, {"kind": "pair", "status": "active"})), 250)
+        splunkd.rows = many[:249]
+        job = svc.run(new_djob("alice"))
+        self.assertEqual(job["totals"]["missing"], 1)
+        gone = self.store.get(C.ENVIRONMENT_SOURCES, source_key("pair", "wineventlog", "st_249"))
+        self.assertEqual(gone["status"], "missing")
+
+    def test_truncated_discovery_marks_nothing_missing(self):
+        many = [dict(ROWS[0], sourcetype="st_%03d" % i) for i in range(250)]
+        svc, _ = self._splunkd_service(many)
+        svc.run(new_djob("alice"))
+        svc.settings.max_pairs = 100
+        job = svc.run(new_djob("alice"))
+        self.assertEqual(job["status"], "partial")
+        self.assertTrue(job["totals"]["truncated"])
+        self.assertEqual(job["totals"]["pairs"], 100)
+        self.assertEqual(job["totals"]["missing"], 0)
+        self.assertEqual(len(self.store.query(C.ENVIRONMENT_SOURCES, {"kind": "pair", "status": "active"})), 250)
+        self.assertTrue(svc.state.state()["totals"]["truncated"])
 
     def test_auto_mapping_exact_and_skips_local(self):
         MappingService(self.store).upsert_local("sourcetype", "WinEventLog:Security",

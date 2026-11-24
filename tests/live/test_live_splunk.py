@@ -87,6 +87,26 @@ class LiveKVStoreParityTest(unittest.TestCase):
 
 
 @unittest.skipUnless(LIVE, "set UCM_LIVE_SPLUNK=1 to run against a real Splunk instance")
+class LiveOneshotContractTest(unittest.TestCase):
+    """splunkd returns 100 oneshot rows unless ``count`` is sent; the client must not lose rows."""
+
+    def test_rows_beyond_100_and_exact_truncation(self):
+        from splunk_ucm.platform.search import SearchClient
+        client = SearchClient(transport())
+        full = client.oneshot("| makeresults count=250", max_count=5000)
+        self.assertEqual((len(full.rows), full.truncated), (250, False))
+        exact = client.oneshot("| makeresults count=250", max_count=250)
+        self.assertEqual((len(exact.rows), exact.truncated), (250, False))
+        cut = client.oneshot("| makeresults count=250", max_count=100)
+        self.assertEqual((len(cut.rows), cut.truncated), (100, True))
+
+    def test_event_search_truncation(self):
+        from splunk_ucm.platform.search import SearchClient
+        cut = SearchClient(transport()).preview("search index=_internal", max_count=5, earliest="-24h")
+        self.assertEqual((len(cut.rows), cut.truncated), (5, True))
+
+
+@unittest.skipUnless(LIVE, "set UCM_LIVE_SPLUNK=1 to run against a real Splunk instance")
 class LiveApiTest(unittest.TestCase):
     VIEWER = "ucm_test_viewer_" + uuid.uuid4().hex[:6]
     VIEWER_PW = "T3st!" + uuid.uuid4().hex

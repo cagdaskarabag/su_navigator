@@ -413,3 +413,22 @@ as drift.
 * Deployed saved searches are named `SUN - <id> - <title>`. Generated
   dashboards and managed markers say SUNavigator. The secret realm follows
   `APP_NAME`.
+
+## D-037 Oneshot result contract: exact limit, explicit truncation
+*0.7.2. Supersedes the row-count inference in D-023 and D-026.*
+* Measured on 10.2.9: `POST search/jobs exec_mode=oneshot` returns `count`
+  rows (default **100**) whatever `max_count` says; `max_count` bounds only
+  the events an event search retains; nothing above `[restapi] maxresultrows`
+  (50000) is returned. Before 0.7.2 the client sent no `count` and inferred
+  truncation from `len(rows) >= max_count`, so results were cut at 100 rows
+  and reported complete. Discovery then dropped pairs and marked them
+  `missing`, and run status and field sampling were capped the same way.
+* `SearchClient` sends `count` and `max_count` as limit + 1 (limit clamped
+  below `maxresultrows`), returns at most `limit` rows and sets `truncated`
+  only when the extra row arrived. No server-side job statistics are needed.
+* Consumers: discovery marks nothing missing after a truncated run (D-023);
+  run status reports `truncated` and shows searches without a row as
+  `unknown`; field sampling reports a field absent only from a complete
+  sample. A truncated or failed sample makes the field `unverified`
+  (`sample_truncated`, `sample_failed`). The inventory and coverage views
+  show the truncation.

@@ -202,6 +202,10 @@ require([
                 box.appendChild(ucm.stateBox("empty", "No searches are deployed yet.", ""));
                 return;
             }
+            if (data.truncated) {
+                box.appendChild(ucm.stateBox("warn", "The scheduler log result was truncated.",
+                    "Searches without a row are shown as unknown, not as never run."));
+            }
             var body = el("tbody", {});
             data.items.forEach(function (i) {
                 body.appendChild(el("tr", {},
