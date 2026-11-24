@@ -131,9 +131,10 @@ class LiveOneshotContractTest(unittest.TestCase):
         from splunk_ucm.spl.policy import classify, command_exists
         t = transport()
         name = "sun_live_se_" + uuid.uuid4().hex[:6]
+        lookup = "sun_live_probe_%s.csv" % uuid.uuid4().hex[:6]
         base = "/servicesNS/nobody/sunavigator/admin/macros"
         status, _ = t.request("POST", base, None, None,
-                              form={"name": name, "definition": "| makeresults | outputlookup sun_live_probe.csv"})
+                              form={"name": name, "definition": "| makeresults | outputlookup %s" % lookup})
         self.assertIn(status, (200, 201))
         try:
             t.request("POST", base + "/" + name + "/acl", None, None, form={"sharing": "app", "owner": "nobody"})
@@ -149,6 +150,9 @@ class LiveOneshotContractTest(unittest.TestCase):
             self.assertTrue(command_exists(client, "stats", "sunavigator"))
         finally:
             t.request("DELETE", base + "/" + name)
+            t.request("DELETE", "/servicesNS/nobody/sunavigator/data/lookup-table-files/" + lookup)
+            status, _ = t.request("GET", "/servicesNS/nobody/sunavigator/data/lookup-table-files/" + lookup, None, None)
+            self.assertEqual(status, 404, "the probe lookup must not be left behind")
 
     def test_map_probe_is_refused_and_writes_nothing(self):
         import json as _json
@@ -1438,3 +1442,258 @@ class LiveScheduledRunTest(unittest.TestCase):
         status, body = self.act(self.approver, "retire")
         self.assertEqual((status, body["deployment"]["state"]), (200, "retired"))
         self.assertIsNone(self.saved(name))
+
+
+def _app_state(t, app):
+    status, content = t.request("GET", "/services/apps/local/" + app, {"output_mode": "json"})
+    if status == 404:
+        return None
+    return json.loads(content)["entry"][0]["content"]
+
+
+def _wait_discovery(admin, **body):
+    for _ in range(60):
+        _, state = api(admin, "GET", "discovery")
+        if not any(j["status"] in ("queued", "running") for j in state["jobs"]):
+            break
+        time.sleep(5)
+    status, posted = api(admin, "POST", "discovery", body=body)
+    assert status == 202, posted
+    job_id = posted["job"]["job_id"]
+    for _ in range(90):
+        _, state = api(admin, "GET", "discovery")
+        job = next((j for j in state["jobs"] if j["job_id"] == job_id), None)
+        if job and job["status"] not in ("queued", "running"):
+            return job
+        time.sleep(5)
+    raise AssertionError("discovery job did not finish")
+
+
+@unittest.skipUnless(LIVE, "set UCM_LIVE_SPLUNK=1 to run against a real Splunk instance")
+class LiveSecurityContentTest(unittest.TestCase):
+    """D-067: ES/ESCU read-only hand-off on a lab with ESCU and without ES. The ES-present branch is not covered here."""
+
+    VIEWER = "ucm_test_sc_viewer_" + uuid.uuid4().hex[:6]
+    VIEWER_PW = "T3st!" + uuid.uuid4().hex
+    RECORDS = ("99999999-0000-4000-8000-000000000001", "99999999-0000-4000-8000-000000000002")
+
+    @classmethod
+    def setUpClass(cls):
+        cls.admin = transport()
+        cls.escu = _app_state(cls.admin, "DA-ESS-ContentUpdate")
+        cls.es = _app_state(cls.admin, "SplunkEnterpriseSecuritySuite")
+        if cls.escu is None:
+            raise unittest.SkipTest("ESCU (DA-ESS-ContentUpdate) is not installed on this Splunk instance")
+        cls.kv = KVStore(cls.admin)
+        status, content = cls.admin.request("GET", "/servicesNS/nobody/DA-ESS-ContentUpdate/saved/searches",
+                                            {"output_mode": "json", "count": "0", "search": "ESCU"})
+        entries = [e for e in json.loads(content)["entry"] if e["name"].startswith("ESCU - ") and e["name"].endswith(" - Rule")]
+        assert entries, "no ESCU saved search on the lab"
+        cls.stanza = entries[0]["name"]
+        status, _ = cls.admin.request("POST", "/services/authentication/users",
+                                      form={"name": cls.VIEWER, "password": cls.VIEWER_PW, "roles": "ucm_viewer"})
+        assert status in (200, 201), status
+        cls.viewer = transport(cls.VIEWER, cls.VIEWER_PW)
+        cls.imported = False
+
+    @classmethod
+    def tearDownClass(cls):
+        if getattr(cls, "VIEWER", None) and cls.escu is not None:
+            cls.admin.request("DELETE", "/services/authentication/users/" + cls.VIEWER)
+        if getattr(cls, "imported", False):
+            for rid in cls.RECORDS:
+                key = "escu_UC-" + rid
+                for coll in (C.DEPLOYMENTS, ):
+                    cls.kv.delete_query(coll, {"catalog_key": key})
+                for coll in (C.VALIDATION, C.READINESS, C.CATALOG, C.CONTENT):
+                    cls.kv.delete_query(coll, {"_key": key})
+            # The category's tree hash is what makes an import "unchanged"; restore the fixture bundle's.
+            api(cls.admin, "POST", "import", raw=json.dumps(helpers.escu_fixture_bundle()).encode("utf-8"))
+            api(cls.admin, "POST", "catalog/reindex", body={})
+
+    def stanza_rest(self, name):
+        from urllib.parse import quote
+        status, content = self.admin.request(
+            "GET", "/servicesNS/nobody/DA-ESS-ContentUpdate/saved/searches/" + quote(name, safe=""), {"output_mode": "json"})
+        self.assertEqual(status, 200)
+        return json.loads(content)["entry"][0]["content"]
+
+    def import_records(self):
+        from splunk_ucm.util import git_blob_sha
+        bundle = helpers.escu_fixture_bundle()
+        keep = []
+        for rid, stanza in zip(self.RECORDS, (self.stanza, "ESCU - SUN live missing stanza - Rule")):
+            entry = dict(bundle["records"][0])
+            raw = json.loads(entry["content"])
+            raw.update({"id": rid, "stanza": stanza, "title": "SUN live hand-off " + rid[-1]})
+            entry.update({"record_id": rid, "path": "detections/endpoint/%s.json" % rid,
+                          "content": json.dumps(raw, indent=2) + "\n"})
+            entry["blob_sha"] = git_blob_sha(entry["content"].encode("utf-8"))
+            keep.append(entry)
+        bundle["records"] = keep
+        status, body = api(self.admin, "POST", "import", raw=json.dumps(bundle).encode("utf-8"))
+        self.assertEqual(status, 200, body)
+        self.assertEqual(body["job"]["status"], "succeeded", body)
+        type(self).imported = True
+
+    def test_platform_card_data_for_a_viewer(self):
+        status, body = api(self.viewer, "GET", "platform")
+        self.assertEqual(status, 200, body)
+        sc = body["security_content"]
+        self.assertEqual((sc["escu"]["state"], sc["escu"]["version"]), ("installed", self.escu["version"]), sc)
+        if self.es is None:
+            self.assertEqual(sc["es"]["state"], "not_installed", sc)
+            self.assertEqual(sc["es"]["app_id"], "SplunkEnterpriseSecuritySuite")
+        else:
+            self.assertEqual((sc["es"]["state"], sc["es"]["version"]), ("installed", self.es["version"]))
+
+    def test_card_shows_the_stanza_state_read_from_the_real_escu_app(self):
+        self.import_records()
+        rest = self.stanza_rest(self.stanza)
+        status, detail = api(self.viewer, "GET", "usecase", {"id": "escu:UC-" + self.RECORDS[0]})
+        self.assertEqual(status, 200, detail)
+        card = detail["escu_handoff"]
+        stanza = card["stanza"]
+        self.assertEqual(stanza["name"], self.stanza)
+        self.assertEqual(stanza["state"], "disabled" if rest["disabled"] in (True, "1", 1) else "enabled")
+        self.assertEqual(stanza["cron"], rest.get("cron_schedule"))
+        self.assertEqual(stanza["earliest"], rest.get("dispatch.earliest_time"))
+        self.assertEqual(stanza["notable"], str(rest.get("action.notable")) == "1" or "notable" in str(rest.get("actions")))
+        self.assertEqual(stanza["risk"], str(rest.get("action.risk")) == "1" or "risk" in str(rest.get("actions")))
+        self.assertEqual(card["escu"]["version"], self.escu["version"])
+        if self.es is None:
+            self.assertEqual(card["es"]["state"], "not_installed")
+            self.assertIsNone(card["es_link"])
+            self.assertEqual(card["code"], "escu_without_es")
+            self.assertEqual(card["parallel_copy"]["warn"], stanza["state"] == "enabled")
+        self.assertIn("does not count as enabled in SUN coverage", card["coverage_note"])
+
+    def test_missing_stanza_and_other_providers(self):
+        self.import_records()
+        status, detail = api(self.viewer, "GET", "usecase", {"id": "escu:UC-" + self.RECORDS[1]})
+        self.assertEqual(status, 200, detail)
+        self.assertEqual((detail["escu_handoff"]["code"], detail["escu_handoff"]["stanza"]["state"]),
+                         ("stanza_not_found", "not_found"))
+        status, fenre = api(self.admin, "POST", "import",
+                            raw=json.dumps(helpers.fixture_bundle(record_ids=["9.1.1"])).encode("utf-8"))
+        self.assertEqual(status, 200, fenre)
+        status, detail = api(self.viewer, "GET", "usecase", {"id": "fenre:UC-9.1.1"})
+        self.assertEqual(status, 200, detail)
+        self.assertIsNone(detail["escu_handoff"])
+
+    def test_draft_records_nothing_when_there_is_no_parallel_copy_to_warn_about(self):
+        self.import_records()
+        rest = self.stanza_rest(self.stanza)
+        status, body = api(self.admin, "POST", "deployment/draft", body={"id": "escu:UC-" + self.RECORDS[0]})
+        self.assertEqual(status, 200, body)
+        rev = body["deployment"]["revisions"][-1]
+        warns = self.es is not None or rest["disabled"] not in (True, "1", 1)
+        self.assertEqual("parallel_copy" in rev, warns, rev.get("parallel_copy"))
+        self.assertEqual(body["deployment"]["state"], "draft")
+
+
+@unittest.skipUnless(LIVE, "set UCM_LIVE_SPLUNK=1 to run against a real Splunk instance")
+class LivePopulatedTest(unittest.TestCase):
+    """D-067 / issue #13: the populated check on real data models. The lab has no CIM add-on, so two temporary
+    models stand in: one that matches events and one that matches none."""
+
+    YES = "sun_live_pop_yes_" + uuid.uuid4().hex[:6]
+    NO = "sun_live_pop_no_" + uuid.uuid4().hex[:6]
+
+    @staticmethod
+    def model_json(name, constraint):
+        return json.dumps({
+            "modelName": name, "displayName": name, "description": "temporary SUN live test model",
+            "objectSummary": {"Event-Based": 1, "Transaction-Based": 0, "Search-Based": 0},
+            "objects": [{"objectName": "Events", "displayName": "Events", "parentName": "BaseEvent", "comment": "",
+                         "fields": [{"fieldName": "_time", "owner": "BaseEvent", "type": "timestamp", "fieldSearch": "",
+                                     "required": True, "multivalue": False, "hidden": False, "editable": False,
+                                     "displayName": "_time", "comment": ""}],
+                         "calculations": [], "constraints": [{"search": constraint, "owner": "Events"}],
+                         "lineage": "Events"}]})
+
+    @classmethod
+    def setUpClass(cls):
+        cls.admin = transport()
+        for name, constraint in ((cls.YES, "index=_internal"), (cls.NO, "index=_internal sourcetype=sun_live_no_such_sourcetype")):
+            status, content = cls.admin.request("POST", "/servicesNS/nobody/search/data/models", None, None,
+                                                form={"name": name, "eai:data": cls.model_json(name, constraint)})
+            assert status in (200, 201), (status, content[:300])
+        status, body = api(cls.admin, "POST", "import",
+                           raw=json.dumps(helpers.fixture_bundle(record_ids=["9.1.1"])).encode("utf-8"))
+        assert status == 200, body
+        cls.mapped = []
+
+    @classmethod
+    def tearDownClass(cls):
+        for value in list(cls.mapped):
+            api(cls.admin, "POST", "mappings/delete", body={"kind": "datamodel", "value": value})
+        for name in (cls.YES, cls.NO):
+            cls.admin.request("DELETE", "/servicesNS/nobody/search/data/models/" + name)
+
+    def map(self, value, canonical="Authentication"):
+        status, body = api(self.admin, "POST", "mappings", body={"kind": "datamodel", "value": value,
+                                                                  "canonical_value": canonical, "notes": "live test"})
+        self.assertEqual(status, 200, body)
+        self.mapped.append(value)
+
+    def unmap(self, value):
+        status, body = api(self.admin, "POST", "mappings/delete", body={"kind": "datamodel", "value": value})
+        self.assertEqual(status, 200, body)
+        self.mapped.remove(value)
+
+    def model_doc(self, name):
+        status, inv = api(self.admin, "GET", "inventory", {"kind": "datamodel", "q": name})
+        self.assertEqual(status, 200, inv)
+        docs = [i for i in inv["items"] if i["name"] == name]
+        self.assertEqual(len(docs), 1, inv)
+        return docs[0]
+
+    def cim_result(self):
+        status, doc = api(self.admin, "POST", "readiness/assess", body={"id": "fenre:UC-9.1.1"})
+        self.assertEqual(status, 200, doc)
+        rows = [r for r in doc["results"] if r["type"] == "cim_model"]
+        self.assertEqual(len(rows), 1, rows)
+        return doc, rows[0]
+
+    def test_populated_yes_no_unverified_and_readiness_unchanged(self):
+        self.map(self.YES)
+        self.map(self.NO)
+        job = _wait_discovery(self.admin, include_internal=True, earliest="-15m")
+        self.assertEqual(job["status"], "succeeded", job)
+        pop = job["totals"]["populated"]
+        self.assertTrue(pop["enabled"])
+        self.assertEqual(pop["models"], pop["yes"] + pop["no"] + pop["unverified"])
+        yes, no = self.model_doc(self.YES), self.model_doc(self.NO)
+        self.assertEqual(yes["populated"], "yes", yes)
+        self.assertGreater(yes["populated_count"], 0)
+        self.assertEqual((no["populated"], no["populated_count"]), ("no", 0), no)
+        self.assertEqual(yes["populated_window"], "-24h")
+        status, inv = api(self.admin, "GET", "inventory", {"kind": "datamodel", "q": "internal_server"})
+        reasons = {i["name"]: (i["populated"], i["populated_reason"]) for i in inv["items"]}
+        self.assertEqual(reasons.get("internal_server"), ("unverified", "not_referenced"), reasons)
+
+        self.unmap(self.NO)
+        doc_yes, res_yes = self.cim_result()
+        self.assertEqual((res_yes["status"], res_yes["code"], res_yes["populated"]), ("met", "model_present", "yes"), res_yes)
+        self.assertEqual(res_yes["via_mapping"]["value"], self.YES)
+        self.map(self.NO)
+        self.unmap(self.YES)
+        doc_no, res_no = self.cim_result()
+        self.assertEqual((res_no["status"], res_no["code"], res_no["populated"]), ("met", "model_present", "no"), res_no)
+        self.assertEqual((doc_yes["score"], doc_yes["state"], doc_yes["counts"]), (doc_no["score"], doc_no["state"], doc_no["counts"]))
+
+    @unittest.skipUnless(os.environ.get("UCM_LIVE_CONF_WRITE") == "1",
+                         "set UCM_LIVE_CONF_WRITE=1: the test leaves a local [discovery] populated_check line in local/ucm.conf")
+    def test_setting_off_records_unverified_and_runs_no_check(self):
+        old = conf_value(self.admin, "discovery", "populated_check")
+        self.map(self.YES)
+        set_conf_value(self.admin, "discovery", "populated_check", "false")
+        try:
+            job = _wait_discovery(self.admin, include_internal=True, earliest="-15m")
+            self.assertEqual(job["status"], "succeeded", job)
+            self.assertFalse(job["totals"]["populated"]["enabled"])
+            doc = self.model_doc(self.YES)
+            self.assertEqual((doc["populated"], doc["populated_reason"]), ("unverified", "check_disabled"), doc)
+        finally:
+            set_conf_value(self.admin, "discovery", "populated_check", old or "true")

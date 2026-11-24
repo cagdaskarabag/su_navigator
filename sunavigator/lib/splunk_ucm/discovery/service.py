@@ -8,12 +8,14 @@ from ..audit import AuditService
 from ..errors import UcmError, ValidationError
 from ..log import get_logger
 from ..platform.search import SearchClient
+from ..storage import collections as C
 from ..storage.collections import DOC_SCHEMA
 from ..storage.kvstore import DocumentStore
 from ..util import epoch_now, new_id, utc_now_iso
 from .inventory import SplunkInventory
 from .keys import source_key
 from .mapping import MappingService
+from .populated import WINDOW, PopulatedSettings, check_models, summarize
 from .repositories import DiscoveryStateRepository, SourceRepository
 from .spl import tstats_searches, validate_index_name, validate_time
 
@@ -33,6 +35,7 @@ class DiscoverySettings:
     max_pairs: int = 5000
     search_timeout: int = 120
     job_timeout_seconds: int = 600
+    populated: PopulatedSettings = dataclasses.field(default_factory=PopulatedSettings)
 
 
 def new_job(requested_by: str, include_internal: Optional[bool] = None, earliest: str = "",
@@ -114,6 +117,7 @@ class DiscoveryService:
             validate_index_name(name)
 
         pairs, truncated, search_errors, searched = self._tstats(event_indexes, earliest, latest)
+        populated = check_models(self.search, models, self._referenced_models(), self.settings.populated)
         imported = utc_now_iso()
         now = self.now_epoch()
 
@@ -121,7 +125,7 @@ class DiscoveryService:
         docs.extend(_index_docs(indexes, pairs, now, imported, job["job_id"]))
         docs.extend(_pair_docs(pairs, now, imported, job["job_id"]))
         docs.extend(_app_docs(apps, imported, job["job_id"]))
-        docs.extend(_model_docs(models, imported, job["job_id"]))
+        docs.extend(_model_docs(models, imported, job["job_id"], populated))
         docs.extend(_knowledge_docs(knowledge, imported, job["job_id"]))
         self.sources.save(docs)
 
@@ -150,6 +154,7 @@ class DiscoveryService:
             "indexes": len(indexes), "indexes_eligible": len(eligible),
             "pairs": len(pairs), "apps": len(apps), "datamodels": len(models),
             "knowledge_objects": len(knowledge),
+            "populated": summarize(populated, self.settings.populated.enabled),
             "missing": missing, "truncated": truncated, "auto_mappings": auto,
         }
         job["totals"] = totals
@@ -173,6 +178,20 @@ class DiscoveryService:
         if job["status"] == JOB_SUCCEEDED:
             state["last_success_at"] = imported
         self.state.save_state(state)
+
+    def _referenced_models(self) -> List[str]:
+        """Data model names catalogue requirements ask for, plus the local names mapped to them."""
+        names: set = set()
+        try:
+            for row in self.store.query(C.CATALOG, {"provider_status": "active"}, fields=["datamodels"]):
+                names.update(str(n) for n in row.get("datamodels") or [])
+            lowered = {n.lower() for n in names}
+            for m in self.store.query(C.SOURCE_MAPPINGS, {"kind": "datamodel"}):
+                if str(m.get("canonical_value") or "").lower() in lowered and m.get("value"):
+                    names.add(str(m["value"]))
+        except Exception as exc:
+            log.warning("referenced data models could not be read", extra={"error": str(exc)[:200]})
+        return sorted(names)
 
     def _tstats(self, indexes: Sequence[str], earliest: str, latest: str):
         pairs: List[Dict[str, Any]] = []
@@ -294,17 +313,23 @@ def _app_docs(apps, imported, job_id) -> List[Dict[str, Any]]:
     return docs
 
 
-def _model_docs(models, imported, job_id) -> List[Dict[str, Any]]:
+def _model_docs(models, imported, job_id, populated=None) -> List[Dict[str, Any]]:
     docs = []
     for model in models:
         if model.get("disabled"):
             continue
-        docs.append(_doc(
+        doc = _doc(
             kind="datamodel", name=model["name"], index="", sourcetype="",
             extra={"app": model.get("app"), "display_name": model.get("display_name"),
                    "objects": model.get("objects") or [], "accelerated": model.get("accelerated")},
             window_count=0, last_time=None, now=0, imported=imported, job_id=job_id,
-            identity=(model["name"],)))
+            identity=(model["name"],))
+        outcome = (populated or {}).get(model["name"])
+        if outcome is not None:
+            doc.update({"populated": outcome["populated"], "populated_reason": outcome["reason"],
+                        "populated_count": outcome["count"], "populated_window": WINDOW,
+                        "populated_at": imported})
+        docs.append(doc)
     return docs
 
 

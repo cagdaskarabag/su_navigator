@@ -3,7 +3,7 @@
 [![Version](https://img.shields.io/badge/version-0.9.x-blue.svg)](docs/OPERATOR_GUIDE.md#what-changed-in-09x)
 [![Splunk Compatibility](https://img.shields.io/badge/splunk-Enterprise%2010.x%20%7C%20Cloud%3A%20not%20validated-orange.svg)](docs/OPERATOR_GUIDE.md#2-requirements)
 [![Python Support](https://img.shields.io/badge/python-3.9%20%7C%203.13-brightgreen.svg)](docs/DECISIONS.md#d-005-stdlib-only-python-compatible-with-39313)
-[![Tests](https://img.shields.io/badge/unit%20tests-677%20passed-success.svg)](tests/)
+[![Tests](https://img.shields.io/badge/unit%20tests-757%20passed-success.svg)](tests/)
 [![AppInspect](https://img.shields.io/badge/Splunk%20AppInspect-Clean-brightgreen.svg)](docs/DECISIONS.md#d-019-packaging-constraints-from-appinspect)
 
 **SUNavigator** is a native Splunk application for Splunk Enterprise (Splunk Cloud: the package passes AppInspect, but runtime on a Cloud stack is not validated yet) that bridges the gap between external security detection catalogues and live production environments. It empowers SOC and detection engineering teams to **discover**, **assess**, **backlog**, **validate**, and **safely deploy** monitoring use cases with built-in four-eyes governance.
@@ -43,9 +43,9 @@ Content is ingested from pluggable detection providers, with out-of-the-box supp
 
 - 📥 **Curated Content Ingestion**: Synchronizes use cases from GitHub pinned to immutable commit hashes with per-record git blob SHA-1 verification. Each category is fetched and validated in full before anything is written (last-known-good), syncs are incremental, and records removed upstream are marked withdrawn. KV Store has no transactions: an interrupted write marks the category failed, and the next sync rewrites the affected records (D-009).
 - 🔍 **Safe Bounded Data Discovery**: Discovers active index and sourcetype pairs, event volume, and data freshness using constructed, bounded `tstats` queries—never running untrusted imported SPL. Preserves local source mappings without overwriting operator customizations.
-- 📊 **Evidence-Based Readiness Engine**: Evaluates whether required sourcetypes, fields, CIM data models, macros, and add-ons exist in your environment. Produces deterministic readiness scores (0–100) and enforces a veto when critical requirements are missing. Since 0.8.7 it also checks that the scheduler account (`[deployment] scheduled_owner`) is allowed to search the indexes a use case reads, so a scheduled search does not run blind (D-063).
+- 📊 **Evidence-Based Readiness Engine**: Evaluates whether required sourcetypes, fields, CIM data models, macros, and add-ons exist in your environment. Produces deterministic readiness scores (0–100) and enforces a veto when critical requirements are missing. Since 0.8.7 it also checks that the scheduler account (`[deployment] scheduled_owner`) is allowed to search the indexes a use case reads, so a scheduled search does not run blind (D-063). Since 0.9.1 a CIM data model requirement also shows whether the model held events in the last 24 hours at discovery (`populated: yes / no / unverified`, a separate chip that never changes a score, D-067).
 - 🎯 **Operator Backlog & Syntax Validation**: Provides per-user selection, bookmarking, and triage. Validates SPL against Splunk's native search parser, adds an advisory lint for constructs Splunk accepts but never evaluates (an eval function used as a search term, D-065), inspects command syntax, and provides safe, bounded previews with `fieldsummary` sampling.
-- 🛡️ **Four-Eyes Guided Deployment**: Maker-checker inside the app: a draft is submitted by one operator, approved by a second (unless `allow_self_approval` is set), and deployed as a disabled saved search. Live activation is gated on environment readiness and audited. The deploying operator owns the saved search and can still edit it in Splunk directly; the app reports such edits as drift but cannot prevent them.
+- 🛡️ **Four-Eyes Guided Deployment**: Maker-checker inside the app: a draft is submitted by one operator, approved by a second (unless `allow_self_approval` is set), and deployed as a disabled saved search. Live activation is gated on environment readiness and audited. The saved search is owned by a dedicated scheduler account (`ucm_scheduler`, D-051), so it runs as that account; administrators can still edit it in Splunk directly and the app reports such edits as drift. Since 0.9.1 an ESCU use case shows, read-only, the state of the search ESCU ships for it and what to do (enable it in ES Content Management when Enterprise Security is installed); SUN never creates ES-managed content and always deploys a plain scheduled search, with a non-blocking warning when a parallel copy would run. The ES-installed behaviour is unvalidated (no ES lab, issue #4).
 - 🔄 **Drift Detection & Rollback**: Compares live saved searches against frozen deployment revisions. Automatically detects external modifications and provides one-click rollback to prior revisions or safe retirement.
 - 🗺️ **Framework & Regulation Coverage**: Maps catalogue holdings and deployed detections against MITRE ATT&CK® Enterprise 20.1 and ICS 20.1 technique matrices, as well as compliance obligations, with execution run-status tracking.
 - 📈 **Dynamic Domain Dashboards**: Generates Simple XML monitoring dashboards from vetted templates without embedding arbitrary upstream SPL.
@@ -127,7 +127,7 @@ Package the production `.tar.gz` bundle from this repository:
 git clone https://github.com/cagdaskarabag/sun_navigator.git
 cd sun_navigator
 ./tools/package.sh
-# Output: dist/sunavigator-0.9.0.tar.gz
+# Output: dist/sunavigator-0.9.1.tar.gz
 ```
 
 ### CLI Installation (Recommended)
@@ -135,7 +135,7 @@ cd sun_navigator
 Splunk Web's UI upload times out on packages over standard browser HTTP limits. Install via the Splunk CLI:
 
 ```bash
-$SPLUNK_HOME/bin/splunk install app dist/sunavigator-0.9.0.tar.gz \
+$SPLUNK_HOME/bin/splunk install app dist/sunavigator-0.9.1.tar.gz \
   -auth "$SPLUNK_USER:$SPLUNK_PASSWORD"
 
 $SPLUNK_HOME/bin/splunk restart
@@ -221,8 +221,9 @@ SUNavigator implements a safe, four-eyes deployment state machine:
 | 📖 **[Operator Guide](docs/OPERATOR_GUIDE.md)** | Comprehensive manual covering installation, configuration, role assignment, first-run sync, view-by-view usage, upgrading, and troubleshooting. |
 | 🏗️ **[Architecture Specification](docs/ARCHITECTURE.md)** | Technical reference for software components, KV Store collection schemas, and REST endpoints. |
 | 🔒 **[Security & RBAC Model](docs/SECURITY.md)** | Detailed trust boundaries, Splunk capability definitions, and credential handling. |
-| 📜 **[Architecture Decision Records (ADRs)](docs/DECISIONS.md)** | Recorded technical decisions and trade-offs (D-001 through D-036). |
-| 📋 **[Implementation Plan](docs/IMPLEMENTATION_PLAN.md)** | Work package breakdown (WP0–WP7) and validation test matrices. |
+| 🗂️ **[Pending issues](docs/ISSUES_PENDING.md)** | Which GitHub issues the code resolves (with ready closing comments), which stay open, and drafts of new issues. |
+| 📜 **[Architecture Decision Records (ADRs)](docs/DECISIONS.md)** | Recorded technical decisions and trade-offs (D-001 through D-067). |
+| 📋 **[Implementation Plan](docs/IMPLEMENTATION_PLAN.md)** | Work package breakdown (WP0–WP8), what is deferred and why, and validation test matrices. |
 
 ---
 
@@ -244,7 +245,8 @@ sun_navigator/
 │   └── appserver/static/         # Simple XML JS modules and styles
 ├── tools/                        # Development, packaging, and bundle CLI tools
 ├── tests/                        # Automated test suites
-│   ├── unit/                     # 677 mocked unit tests (runs without Splunk)
+│   ├── unit/                     # 757 mocked unit tests (runs without Splunk)
+│   ├── js/                       # Node tests of the browser modules (run by the unit suite when Node is present)
 │   ├── fixtures/readiness/       # Readiness regression corpus and its baseline
 │   └── live/                     # Integration tests against live Splunk instances
 └── docs/                         # Specifications, ADRs, operator guide, and screenshots
@@ -268,7 +270,9 @@ counts move from `baseline.json`; print the per-case report with
 `python3 unit/test_readiness_corpus.py` and rewrite the baseline with `--write`
 in the same change.
 
-To run live integration tests against a test Splunk Enterprise instance:
+The Node tests of the browser modules (`tests/js/`, no dependencies; they use a small fake DOM that throws on `innerHTML`) run inside the unit suite when `node` is on the path, and a static test fails the build if any view script uses `innerHTML`, `outerHTML`, `insertAdjacentHTML`, `document.write` or `eval`. Run one directly with `node tests/js/test_handoff.js`. They are not browser tests; Splunk Web itself is checked by hand on the lab (issue #15).
+
+To run live integration tests against a test Splunk Enterprise instance (the ESCU-only tests need the ES Content Update app on that instance and skip without it; nothing covers an instance with Enterprise Security):
 
 ```bash
 UCM_LIVE_SPLUNK=1 \
@@ -289,6 +293,7 @@ SPLUNK_HOME=/opt/splunk ./tools/dev_deploy.sh --restart
 ## Upgrades & Migrations
 
 - **Upgrading from 0.7.0 (`splunk_use_case_manager`)**: Version 0.7.1 introduces the official `sunavigator` app ID. Because Splunk treats this as a distinct application, follow the migration procedure in [Operator Guide §8](docs/OPERATOR_GUIDE.md#8-upgrade-and-uninstall) (retire previous deployments, remove old app, install SUNavigator, and resync).
+- **Upgrading to 0.9.1**: install over the existing app as in the operator guide. No schema change. Run discovery once so data models get their `populated` value, and (from 0.8.x) press **Reindex catalogue summaries** once for the 0.9.0 filters. `[discovery] populated_check = false` turns the new per-model search off.
 - **Upgrades within 0.7.1+**: Upgrades preserve `local/` configurations and automatically execute pending KV Store migrations via the background maintenance worker.
 
 ---

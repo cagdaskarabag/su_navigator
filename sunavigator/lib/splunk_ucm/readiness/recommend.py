@@ -18,6 +18,7 @@ measured, and are returned with every response.
 from typing import Any, Dict, Iterable, List, Optional, Sequence, Set
 
 from ..catalog.quality import QUALITY_FLAGS
+from ..discovery.populated import reason_text
 from ..errors import ValidationError
 from ..frameworks.coverage import CoverageService
 from ..model.canonical import CRITICALITY_RANK
@@ -64,6 +65,37 @@ def draft_score(readiness_score: float, criticality_rank: int, mitre_gain: float
     parts = {k: round(v, 4) for k, v in parts.items()}
     parts["total"] = round(sum(parts.values()), 2)
     return parts
+
+
+def _data_model_reasons(results: Sequence[Dict[str, Any]]) -> List[str]:
+    """One line per installed data model requirement, stating what the stored result says about its data.
+
+    ``populated`` is informational (issue #13): it never changes a state or score, and a result
+    stored before the check existed has no such field and keeps the original wording.
+    """
+    lines: List[str] = []
+    seen: Set[str] = set()
+    for r in results:
+        if r.get("type") != "cim_model" or r.get("code") != "model_present" or r.get("value") in seen:
+            continue
+        seen.add(r.get("value"))
+        name = r.get("value") or "model"
+        populated = r.get("populated")
+        if populated == "yes":
+            count = ((r.get("observed") or [{}])[0] or {}).get("populated_count")
+            lines.append("Data model %s: installed and populated in the last 24 h at discovery%s." % (
+                name, " (%s events)" % count if count is not None else ""))
+        elif populated == "no":
+            lines.append("Data model %s: installed, but the discovery check found no events in the last 24 h "
+                         "(populated: no). The requirement still counts as met." % name)
+        elif populated == "unverified":
+            lines.append("Data model %s: definition installed (populated data not verified%s)."
+                         % (name, ": " + reason_text(r.get("populated_reason") or "") if r.get("populated_reason") else ""))
+        else:
+            lines.append("Data model definition installed (populated data not verified).")
+        if len(lines) >= 3:
+            break
+    return lines
 
 
 class RecommendationService:
@@ -216,7 +248,6 @@ class RecommendationService:
             reasons.append("No requirements are left unverified.")
         if c["gaps"]:
             reasons.append("Unmet required: %s." % ", ".join("%s %s" % (g["type"], g["value"]) for g in c["gaps"]))
-        if any(r.get("type") == "cim_model" and r.get("code") == "model_present" for r in doc.get("results") or []):
-            reasons.append("Data model definition installed (populated data not verified).")
+        reasons.extend(_data_model_reasons(doc.get("results") or []))
         c["reasons"] = reasons
         return c

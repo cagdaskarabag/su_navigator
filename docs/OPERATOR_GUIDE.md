@@ -1,10 +1,10 @@
-# SUNavigator 0.9.0 — operator guide
+# SUNavigator 0.9.1 — operator guide
 
 **SUNavigator** (short for **Splunk use case navigator**) discovers, assesses,
 selects, validates and deploys monitoring use cases in Splunk.
 
 This is the install, usage and troubleshooting guide for **SUNavigator
-0.9.0**. It is written for a single Splunk Enterprise instance
+0.9.1**. It is written for a single Splunk Enterprise instance
 (search head + indexer on one host), including a local macOS install. Search
 head clusters and Splunk Cloud are **not** validated in this version.
 
@@ -17,10 +17,47 @@ Related documents (design, not how-to):
 | [SECURITY.md](SECURITY.md) | Trust boundaries, roles, ACLs |
 | [DECISIONS.md](DECISIONS.md) | Recorded product decisions |
 | [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md) | Work packages and validation status |
+| [ISSUES_PENDING.md](ISSUES_PENDING.md) | Issues the code resolves, issues that stay open, drafts of new issues |
 
 ---
 
 ## What changed in 0.9.x
+
+### 0.9.1
+
+0.9.1 adds a read-only hand-off to Enterprise Security (ES) and the ES Content Update app
+(ESCU) and a populated check for CIM data models (D-067). It adds no collection, no route
+and no schema change. After an upgrade, run discovery once so the data models get their
+populated value; until then they read "populated: unverified (predates the check)".
+
+- **Security content apps.** Content Administration → Platform has a row "security content
+  apps": whether Enterprise Security and ESCU are installed, and their versions ("not
+  installed" and "unverified (reason)" are different answers). It is read with the app's
+  system session, so a user who cannot read other apps sees it too.
+- **Shipped by ESCU.** An ESCU use-case page has a box "Shipped by ESCU" with the state of the
+  saved search ESCU itself ships for that detection: enabled or disabled, its schedule and time
+  range, and whether it has the notable and risk actions. With ES installed it says to enable the
+  detection in ES Content Management, so ES manages it, and links to the ES app. With ESCU but
+  without ES it says the shipped search is disabled (or enabled) and that SUN can deploy an
+  independent copy. If the state cannot be read it says "unverified" and not "disabled".
+- **Parallel-copy warning.** On the Deployment panel of an ESCU use case, when ESCU's search is
+  already enabled or ES is installed, a note says that a SUN deployment is a separate plain
+  scheduled search without ES actions, and that both would run. It does not block anything
+  and changes no approval step; it is recorded on the draft revision and in the audit event.
+- **Coverage.** "Enabled in ES" or "enabled in ESCU" is shown in that box only. It never counts
+  as enabled in SUN coverage, which counts what SUN deployed.
+- **Populated check for data models (issue #13).** Discovery runs, for each CIM data model it
+  checks, `| tstats count from datamodel=<model> where earliest=-24h` and stores `populated:
+  yes`, `no` or `unverified` with the model. It is shown as a separate chip on the CIM
+  requirement, in the readiness explanation and in the Recommended next reasons. **A model
+  that is installed stays "met" whatever the check says; scores and states do not change.**
+  `[discovery] populated_check = false` switches it off. Details in §6.4.
+- **Not validated:** everything that depends on ES being installed (the ES wording, the link,
+  the warning with ES) was tested only with mocked app lists; the lab has ESCU and no ES.
+  The Content Management link is built from the app id and its path varies by ES version
+  (issue #4).
+- **Housekeeping.** The live macro-probe test removes its lookup. Reindex is still
+  synchronous (issue draft in `docs/ISSUES_PENDING.md`). The build number is 13.
 
 ### 0.9.0
 
@@ -383,8 +420,10 @@ commands (`delete`, `outputlookup`, `collect`, script, and similar). Deployed
 searches have **no email, webhook or script alert actions**; the default
 alert mode only writes to Splunk's Triggered Alerts.
 
-**Not in 0.9.0:** PDF export of coverage, a bundled regulation-control
-catalogue, SHC validation with a deployer and indexer peers, Splunk Cloud vetting submission.
+**Not in 0.9.1:** PDF export of coverage, a bundled regulation-control
+catalogue, SHC validation with a deployer and indexer peers (issue #2), Splunk Cloud
+vetting submission (issue #3), and any Enterprise Security output mode (issue #4; 0.9.1 only
+reads ES and ESCU state and hands off, §5.2b).
 
 ---
 
@@ -395,7 +434,7 @@ catalogue, SHC validation with a deployer and indexer peers, Splunk Cloud vettin
 | Splunk | Enterprise 10.x (validated on 10.2.9 in development; tested by operators on 10.4.3 Darwin arm64). Python 3.9 or 3.13 in Splunk. |
 | KV Store | Must reach `status: ready`. The app stores catalogue, inventory, readiness, selections, deployments and audit in KV collections. |
 | Role | First-time setup needs `admin` (or `sc_admin` on Cloud). |
-| Disk | The 0.9.0 package is a few megabytes. Category 9 of Fenre is about 120 records; the full Fenre corpus is tens of thousands of records. |
+| Disk | The 0.9.1 package is a few megabytes. Category 9 of Fenre is about 120 records; the full Fenre corpus is tens of thousands of records. |
 | Network | Optional. Remote sync needs HTTPS to `api.github.com` and `raw.githubusercontent.com`. Offline import needs none. |
 | Browser | Splunk Web. The app is a set of Simple XML views plus JavaScript under `/en-US/app/sunavigator/`. |
 
@@ -412,7 +451,7 @@ Placeholders used below:
 
 ```bash
 ./tools/package.sh
-# writes dist/sunavigator-0.9.0.tar.gz
+# writes dist/sunavigator-0.9.1.tar.gz
 ```
 
 The tarball has a single top-level folder `sunavigator/`
@@ -430,11 +469,11 @@ then fails in the UI with `500 Internal Server Error` even though splunkd is
 still unpacking. Use the CLI:
 
 ```bash
-$SPLUNK_HOME/bin/splunk install app /path/to/sunavigator-0.9.0.tar.gz \
+$SPLUNK_HOME/bin/splunk install app /path/to/sunavigator-0.9.1.tar.gz \
   -auth "$SPLUNK_USER:$SPLUNK_PASSWORD"
 # first install: omit -update
 # upgrade of an existing copy:
-$SPLUNK_HOME/bin/splunk install app /path/to/sunavigator-0.9.0.tar.gz \
+$SPLUNK_HOME/bin/splunk install app /path/to/sunavigator-0.9.1.tar.gz \
   -update 1 -auth "$SPLUNK_USER:$SPLUNK_PASSWORD"
 
 $SPLUNK_HOME/bin/splunk restart
@@ -755,7 +794,38 @@ case, `escu:UC-<detection id>`:
 
 Installing the ESCU app itself is optional for the catalogue. It is needed for
 the macro requirements, and when installed, discovery matches it by
-Splunkbase id 3449 and package id `DA-ESS-ContentUpdate`.
+Splunkbase id 3449 and package id `DA-ESS-ContentUpdate`. SUN deploys
+ESCU detections as plain scheduled searches, not as ES correlation searches (§5.2b).
+
+### 5.2b Enterprise Security and ESCU: read-only hand-off (D-067)
+
+SUN is not an ES content manager. It never creates ES-managed content (correlation searches,
+notable events, risk rules) and never writes into another app. Deployed searches stay plain
+scheduled saved searches (§6.6). What 0.9.1 adds is a **read**:
+
+- **Detection.** The app reads, with the handler's system token, whether `SplunkEnterpriseSecuritySuite`
+  (ES) and `DA-ESS-ContentUpdate` (ESCU) are installed and which version. Content
+  Administration shows it as "security content apps". A missing system session or a 403 shows
+  "unverified (reason)", never "not installed". Results are cached for one minute.
+- **The shipped search.** For an ESCU use case the page reads the saved search ESCU ships for the
+  detection (`ESCU - <name> - Rule`, normally disabled) and shows its state, schedule, time
+  range and whether it has notable and risk actions. It never shows the search text from the
+  ESCU app. If the installed ESCU version has no such search (renamed or removed), the box says so.
+- **What to do.** With ES installed: enable the detection in ES Content Management (link in
+  the box; the path is built from the app id and varies by ES version, so it is not
+  verified; in ES 8 the menu is Security content, then Content management). Without ES: the
+  shipped search is a disabled stanza that nothing manages, and SUN can deploy an independent
+  copy. The box never says that a SUN copy is an ES detection.
+- **Parallel copies.** If ESCU's search is enabled, or ES is installed, deploying from SUN
+  creates a second search next to it. The Deployment panel says so (non-blocking) and the
+  draft revision records that the warning applied. Nothing about approval changed.
+- **Coverage.** What is enabled in ES or ESCU never counts as enabled in SUN coverage.
+
+**Validation status.** Checked on a lab with ESCU 6.11.1 and no ES: ESCU detection and version,
+the real shipped state, schedule and actions, the stanza-not-found case, and the viewer's
+view. **Everything with ES installed was tested only with mocked responses and is
+unvalidated** (no ES lab): the ES version strings, the ES wording, the link, the warning with
+ES. Please report differences on issue #4.
 
 ### 5.3 Scheduled sync
 
@@ -802,9 +872,10 @@ state only and runs no search:
   technique ids that no deployed use case covers) + 15% requirement coverage.
   These weights are a starting point, not measured; the page shows the four
   parts for every item. The reasons are built from stored fields only,
-  including how many requirements are not verified yet. The only statement about
-  data models is "Data model definition installed (populated data not
-  verified)", and only when the stored result says so.
+  including how many requirements are not verified yet. The statement about a data
+  model comes from the stored result: "installed and populated in the last 24 h at
+  discovery", "installed, but the discovery check found no events" or "definition
+  installed (populated data not verified)". It never changes the score.
 
   If the list is empty the page says why: no catalogue, discovery not completed,
   not assessed, or no use case eligible (with counts of what was left out).
@@ -940,6 +1011,11 @@ Deployment tile states which readiness states block enabling.
   the provider roles (ESCU: detection content source; Fenre: compliance and mapping context),
   that only the primary SPL is known to be identical, and that deploying both creates two
   saved searches. SPL identical inside the same provider keeps its own warning.
+- **Shipped by ESCU (0.9.1).** On an ESCU use case, a box shows the state of the saved search
+  ESCU ships for the detection and what to do (enable it in ES Content Management when ES is
+  installed; deploy an independent copy when it is not), and the Deployment panel carries the
+  parallel-copy note. Read-only; see §5.2b. A data model requirement also shows a
+  "populated" chip (§6.4).
 - **Deployment.** The buttons you can use are shown as before. A collapsed
   list, "Actions not available to you right now", gives the reason for each
   action that is not offered (for example "Needs an approved revision"). The
@@ -1077,6 +1153,33 @@ indexes are not scanned"), not "index not defined" (0.8.7). A sourcetype that is
 found gets the same note. Set it to `true` in `local/ucm.conf` if you want those
 indexes inventoried; that does not change who can search them. The scheduler
 requirement ("runs as ...: index access", §4) is separate and does not depend on it.
+
+**Data models: installed is not populated (issue #13, 0.9.1).** A CIM data model
+requirement is **met** when the model's definition is installed (code `model_present`),
+as before. Discovery now also checks, for the models it selects, whether the model holds
+events: one `| tstats count from datamodel=<model> where earliest=-24h` per model, through
+the discovery worker's system session, in the model's own app. The result is a separate
+`populated` value, shown as a chip next to the requirement ("populated: yes", "no" or
+"unverified"), in the readiness explanation and in the Recommended next reasons. It is never
+part of the score: a model with `populated: no` is still met and the state is unchanged.
+
+| Value | Meaning |
+| --- | --- |
+| `yes` | The search finished and counted events in the last 24 hours before discovery ran. |
+| `no` | The search finished and counted none. Often the add-on is installed but the data is not CIM-tagged, or the model is not accelerated and its constraint matches nothing. |
+| `unverified` | Not checked or not finished. The reason is shown: check switched off, model not referenced, cap reached, time budget used, timeout, search failed, search not available. Never read as `no`. |
+
+Which models: those a catalogue requirement or one of your data model mappings names, then the
+models of the CIM add-on (`Splunk_SA_CIM`), at most `[discovery] populated_max_models` (30);
+the others are `unverified` ("not referenced"). Limits: `populated_timeout_seconds` (30) per
+search (Splunk finalizes it; a finalized count of 0 is `unverified`, not `no`), a total budget of
+half the discovery job timeout, and a stop after three failures in a row. `[discovery]
+populated_check = false` switches it off (models are `unverified: check_disabled`). What it
+does **not** say: that the fields a search needs exist, that acceleration is current, that the
+sourcetype is tagged for the dataset you need, or what the data looks like now (it is the
+state when discovery ran). On a non-accelerated model the search runs the model's constraint
+search over 24 hours and can be slow, which is what the limits are for. Results from before
+0.9.1 read `unverified` until discovery is run again.
 
 ![Readiness overview: ready, partially ready and not ready counts with the most common unmet requirements](images/07-readiness.png)
 
@@ -1320,7 +1423,7 @@ Most non-admin roles cannot. The UI then reports run status **not
 available**, not “no runs”. Tick **Include run status** only if your role
 can search `_internal`.
 
-Regulation controls have no bundled catalogue in 0.9.0; only controls that
+Regulation controls have no bundled catalogue in 0.9.1; only controls that
 appear on imported use cases are listed.
 
 **Export ATT&CK Navigator layer** (next to the legend) downloads the matrix
@@ -1399,6 +1502,7 @@ Common stanzas:
 | `[sync] schedule_interval_hours` | `0` | Periodic Fenre pull. |
 | `[sync] max_invalid_ratio` | `0.2` | Category is not updated if more than this share of records fail validation. |
 | `[discovery] earliest` | `-7d` | Inventory window. |
+| `[discovery] populated_check` | `true` | `false` stops the per-model populated search (§6.4). `populated_max_models` (30) and `populated_timeout_seconds` (30) bound it. |
 | `[readiness] ready_threshold` | `90` | What “Ready” means. |
 | `[readiness] stale_hours` | `24` | When discovered data is treated as stale. |
 | `[deployment] require_approval` | `true` | `false` skips four-eyes (submit auto-approves). |
@@ -1447,7 +1551,7 @@ app. Do the steps in this order:
    $SPLUNK_HOME/bin/splunk restart
    ```
 
-4. **Install SUNavigator 0.9.0** as in §3.2. The first install omits
+4. **Install SUNavigator 0.9.1** as in §3.2. The first install omits
    `-update`, because `sunavigator` is a new app ID.
 5. **Re-create the GitHub token** if you use one (§3.6). It must be stored in
    realm `sunavigator`. The 0.7.0 token in realm `splunk_use_case_manager` is
@@ -1826,9 +1930,11 @@ Full table: [ARCHITECTURE.md §6](ARCHITECTURE.md).
 
 ---
 
-## 12. Known limitations (0.9.0)
+## 12. Known limitations (0.9.1)
 
-Each item says where to read more. Items with an issue number are tracked there.
+Each item says where to read more and ends with its tracking: an issue number on GitHub, a draft
+(`N-nn`) in `docs/ISSUES_PENDING.md` that has not been filed yet, or "no issue" for a limit that is
+by design.
 
 **Platform validation**
 
@@ -1837,8 +1943,13 @@ Each item says where to read more. Items with an issue number are tracked there.
   are untested: issue #2. Earlier builds ran captain-only jobs on every member (fixed, D-055); upgrade if you run an SHC.
 - Splunk Cloud is unvalidated (managed `limits.conf`, no file access, vetting): issue #3.
 - Splunk Enterprise Security 8 output (findings or risk instead of Triggered Alerts)
-  is not implemented; it needs an ES lab: issue #4. The ESCU app is supported as a
-  content source (§5.2a); ES itself was never tested.
+  is not implemented; it needs an ES lab: issue #4. ESCU is supported as a content source
+  (§5.2a). Since 0.9.1 the app reads whether ES and ESCU are installed and the state of ESCU's
+  shipped search, and hands off to ES Content Management (§5.2b). **Everything with ES
+  installed is unvalidated**: it was tested with mocked responses only. SUN deploys ESCU
+  detections as plain scheduled searches, never as ES correlation searches, and a SUN copy
+  can run next to an enabled ESCU or ES copy (the Deployment panel warns). Validating the
+  ES-present behaviour is draft N-11.
 
 **Counts and bounds**
 
@@ -1847,59 +1958,68 @@ Each item says where to read more. Items with an issue number are tracked there.
   at 90 percent; filters that join readiness or bookmarks refuse above it. Raising it
   means changing `limits.conf` and `[catalog] kv_row_limit` together. Readiness,
   inventory and coverage counts are not yet marked when they reach the bound; the
-  catalogue is the only place that is (issue #14, §6.2).
+  catalogue is the only place that is, and the join scan is not paged (issue #14, draft N-08, §6.2).
 - Catalogue facet counts are global, not recalculated for the other active filters
   (D-059). The bookmark, availability and regulation filters join by `_key` up to
-  `[catalog] max_join_keys` (2000) and otherwise scan up to 49,999 rows.
+  `[catalog] max_join_keys` (2000) and otherwise scan up to 49,999 rows. No issue: by design.
+  Facet values are capped (top 600 stored) and a facet name with a comma loses it (draft N-10).
 - Twin links compare the primary SPL after whitespace is normalised, so a search rewritten
   with the same meaning is not linked, and a link does not prove the records are otherwise
   equal (D-066). Wave, analytic-story and data-source filters need Reindex after an upgrade
-  from 0.8.x; Reindex is synchronous (about 5 ms per use case).
+  from 0.8.x; Reindex is synchronous (about 5 ms per use case) and blocks one REST call
+  (draft N-09). Twin comparison is by design (no issue).
 - Free-text search is a substring match over a precomputed field (no ranking, only
   the first 1,500 characters of the description). Coverage is computed on read (about
-  0.5 s at 20,000 use cases).
+  0.5 s at 20,000 use cases). No issue: by design.
 
 **Readiness evidence**
 
 - Requirements derived from SPL are lexical hypotheses, not proof the search will
-  fire. Regulations show only the controls present on imported records.
-- A CIM data model counts as met when its definition is installed. The app does not
-  check that it holds events, so an empty or unaccelerated model can still show as met
-  (issue #13; plan in D-065).
+  fire. Regulations show only the controls present on imported records. No issue: by design.
+- A CIM data model counts as met when its definition is installed. Since 0.9.1 discovery also
+  records whether the model held events in the last 24 hours (`populated`: yes, no or
+  unverified, §6.4); it is shown beside the requirement and never changes a score or state.
+  It does not check fields, acceleration freshness or CIM tagging, and it is a snapshot from
+  the last discovery. Models nothing references, models beyond the cap and models whose search
+  timed out are `unverified`. Whether a `no` should ever lower a score is an open product
+  decision (issue #13 stays open for it and for the field checks).
 - **Scheduler index access (0.8.7, D-063):** the check reads index access only. It does
   not evaluate search filters (`srchFilter`), time-window limits or quotas, and it
   cannot see inside macros, data models, tags, event types, `index=*`, `map`,
   `savedsearch` or `loadjob`; those are reported as not verified, never as met. A role
   change does not mark stored assessments stale: press **Assess**. Reading roles on an
-  SHC or on Splunk Cloud has not been validated.
+  SHC or on Splunk Cloud has not been validated (drafts N-01 and N-02).
 - Discovery scans internal indexes only with `[discovery] include_internal = true`
-  (§6.4).
+  (§6.4); until then requirements on internal indexes stay `unverified` (draft N-03).
 - Recommended next (D-060) is an ordering heuristic with starting weights that are
   not calibrated. MITRE gain compares technique ids exactly (a sub-technique does not
-  credit its parent). It claims no data or CIM population.
+  credit its parent). It claims no data or CIM population. No issue: by design.
 
 **SPL checks**
 
 - The SPL lint (§6.2b) is advice and covers five rules shown wrong on 10.2.9. It does
-  not expand macros. A clean result is not proof of correct SPL.
+  not expand macros. A clean result is not proof of correct SPL. More rules only with evidence from the lab
+  (draft N-13).
 - The use-case page "Run search" runs in your browser with your own permissions and
   outside the server-side guard rails and audit (issue #11). It refuses SPL it cannot
   show (§6.2a); `[interactive_search] enabled = false` removes it. A user without the
   `search` capability sees the button disabled; that case is covered by unit tests, not
-  by a lab check.
+  by a lab check (issue #15). Required mitigations of issue #11 are implemented (D-058, D-062); what
+  remains is the accepted residual risk of no SUN audit.
 
 **Deployments**
 
-- Default four-eyes blocks a single `admin` from approving their own draft (§4).
+- Default four-eyes blocks a single `admin` from approving their own draft (§4). No issue: by design.
 - `admin`, `sc_admin` and `ucm_admin` can edit deployed searches in Settings; the
   app reports drift and does not repair it (§4, D-051). The scheduler account must
-  hold `ucm_scheduler`; removing it orphans its searches.
+  hold `ucm_scheduler`; removing it orphans its searches. No issue: by design.
 - "Ran without error" on Coverage and Deployments means `status=success` in
-  `scheduler.log`. A search whose account cannot read its index also reports success.
+  `scheduler.log`. A search whose account cannot read its index also reports success; the access
+  check (§6.4) is the way to find that. No issue.
 - A retired deployment can keep a stale `live_status` of `disabled`. Coverage and
-  recommendations use `deployed_revision`, not that field.
+  recommendations use `deployed_revision`, not that field. No issue.
 - Settings → Searches lists only your own searches by default; set Owner to All to see
-  `SUN - …` searches (§9.14).
+  `SUN - …` searches (§9.14). Explained, not a defect (issue #9).
 - No "Add Macro" action exists; macros are listed by name. This is a product decision
   that is still open: issue #10.
 
@@ -1911,14 +2031,18 @@ Each item says where to read more. Items with an issue number are tracked there.
   rewrite cannot redirect). 12 searches use `match()` as a search term and never match
   whatever the data (a Fenre content defect, F-03 in `docs/upstream/FENRE_FINDINGS.md`;
   the SPL lint now flags it). A pass on a `timechart` or on `coalesce` defaults is weak.
-  Test-index events are not removed by the app.
+  Test-index events are not removed by the app. Tracking: issues #5 and #6 are resolved by
+  the 0.8.8 campaign; what is left is drafts N-04 (upstream report), N-05 (`source=` searches), N-06 (weak passes) and N-07 (re-run
+  with add-ons). Action profiles (email, webhook) are not built: draft N-12.
 
 **Access control**
 
 - Every role that can use the app can read all users' `uc_selections` rows through
   the KV Store REST API (D-061, D-062). Since 0.8.6 only `admin` and `sc_admin` can
   write them directly; the app's API writes the caller's own rows. Do not put anything
-  sensitive in selection notes: issue #12 (decision pending).
+  sensitive in selection notes. The decision to document the read access instead of
+  restricting it is recorded (D-061, D-062); issue #12 can be closed or re-opened as an
+  option 2 task if you want read isolation.
 
 **Tests**
 
@@ -1929,7 +2053,7 @@ Each item says where to read more. Items with an issue number are tracked there.
 
 ## 13. Quick start checklist
 
-1. `splunk install app sunavigator-0.9.0.tar.gz` then `splunk restart`.
+1. `splunk install app sunavigator-0.9.1.tar.gz` then `splunk restart`.
 2. `splunk show kvstore-status` → `ready` (macOS: §9.2 if stuck on `starting`).
 3. Open **SUNavigator → Administration**; all platform pills green.
 4. **Check provider for categories** → tick **9** → **Synchronize**, **or**

@@ -1,6 +1,6 @@
 # Security model
 
-Status: WP5 (catalogue, discovery, readiness, selection, SPL validation, deployment).
+Status: 0.9.1 (catalogue, discovery, readiness, selection, SPL validation, deployment, control tests, ES/ESCU hand-off).
 
 ## Trust boundaries
 
@@ -8,7 +8,7 @@ Status: WP5 (catalogue, discovery, readiness, selection, SPL validation, deploym
 | --- | --- |
 | Upstream content (GitHub, offline bundles) | Untrusted. Size-capped, git-blob-SHA verified, schema- and safety-validated, normalized by allowlisted field mapping. Stored as opaque JSON text (`raw_json`). |
 | Imported SPL | Displayed only, labelled "untrusted". Never executed by the catalogue or by discovery. SPL analysis is lexical (no search is dispatched). Side-effect commands (`delete`, `outputlookup`, `collect`, ...) are flagged, and so are indirect-execution and unknown commands (D-038). |
-| Discovery searches | Only a constructed `tstats` template over index names from `/services/data/indexes`, validated against `^[A-Za-z0-9_][A-Za-z0-9_-]{0,79}$`. Relative time window and result cap are required. |
+| Discovery searches | Only constructed `tstats` templates: over index names from `/services/data/indexes`, validated against `^[A-Za-z0-9_][A-Za-z0-9_-]{0,79}$`, and, since 0.9.1, `\| tstats count from datamodel=<model> where earliest=-24h` for a data model name that matches `^[A-Za-z0-9_][A-Za-z0-9_.-]{0,79}$` (D-067). Relative time window, result cap and a per-search time limit are required. |
 | Interactive search (browser) | Started only by a click on **Run search** on the use-case page. The browser dispatches the SPL through Splunk's search API (`splunkjs/mvc/searchmanager`) with the user's own session: their role, capabilities, index access and search quotas apply, and the app is not involved. This is deliberately outside the preview guard rails, but refuses side effects (also inside `map`) and hidden SPL (D-058, D-062, below). |
 | Imported SPL preview | Dispatched only after an explicit user action, a successful parse in the app namespace, a side-effect command gate, and a refusal of indirect-execution (`map`, `savedsearch`, `rest`, ...) and unknown commands (D-038). Time window and `max_count` are forced. Event payloads are not stored. |
 | Field sampling | Constructed `| search index=… sourcetype=… \| head N \| eval … \| fields <validated names> \| fieldsummary` over discovered pairs, in a window ending at the pair's newest event. Imported pipelines are not used. Only presence, counts and the index / sourcetype where a field was seen are kept; event values are not stored (D-044). |
@@ -232,6 +232,32 @@ What is exposed to app users:
 The enable gate for a search the scheduler cannot read uses the existing audited
 override reason (at least 10 characters) and the existing `ucm_deploy` capability. It
 adds a refusal; it removes none.
+
+## The system token reads ES and ESCU state (D-067)
+
+Since 0.9.1 the REST handler's system token makes read-only requests so that the app can say
+what Enterprise Security (ES) and the ES Content Update app (ESCU) have on the search head. The
+reason for the system token is the same as for D-063: a viewer cannot read other apps.
+
+- `GET apps/local/SplunkEnterpriseSecuritySuite` and `GET apps/local/DA-ESS-ContentUpdate`:
+  whether the app is installed and enabled, its version and label.
+- `GET servicesNS/nobody/DA-ESS-ContentUpdate/saved/searches/<stanza>`: for an ESCU use case,
+  the stanza ESCU shipped (`disabled`, `cron_schedule`, the time range and whether the notable
+  and risk actions are set). The stanza name is the one the importer stored, capped at 300
+  characters, with control characters refused.
+
+Nothing is written, in ES, in ESCU or in any other app. SUN does not create ES-managed content.
+The responses are cached for 60 seconds in the handler process. A failure (403, transport,
+missing session) gives `unverified` with a reason, never "not installed" and never an
+exception.
+
+What is exposed to app users: `GET platform` (`security_content`) and `GET usecase`
+(`escu_handoff`, for ESCU records only) return app names, versions, the stanza's name, state,
+schedule and two action flags. They never return the stanza's search text. The parallel-copy
+warning adds an informational `parallel_copy` object to a draft revision and its audit event.
+It is not a gate: the deployment workflow, the four-eyes rule, the capabilities and the ACLs are
+unchanged. Behaviour with ES installed is unvalidated (no ES lab); only the ESCU-without-ES case
+was checked on a real instance.
 
 ## Control tests write to Splunk (D-054)
 

@@ -52,7 +52,7 @@ not packaged.
 | 11 | Dashboard Templates | `dashboards/` | WP6 | Implemented |
 | 12 | Audit | `audit.py` | WP1 | Implemented (retention in WP7) |
 | 14 | Maintenance (migrations, retention) | `maintenance/` | WP7 | Implemented |
-| 13 | Platform Capability Adapter | `platform/` | WP1 / WP2 | Implemented (captain gate validated on a local three-member SHC, D-055; Splunk Cloud not validated) |
+| 13 | Platform Capability Adapter | `platform/` | WP1 / WP2 | Implemented (captain gate validated on a local three-member SHC, D-055; Splunk Cloud not validated). `platform/security_content.py` (0.9.1, D-067) reads ES and ESCU presence and the state of ESCU's shipped saved search with the system token, read-only, cached for 60 s; ES-present behaviour is mocked-only and unvalidated. |
 
 ## 3. Content flow
 
@@ -67,12 +67,16 @@ Mark disappeared records `withdrawn`; record job in uc_sync_state; audit
 ```
 
 Imported SPL is data. It is never dispatched by the content subsystem.
-Discovery searches are a constructed ``tstats`` template over index names
-returned by ``/services/data/indexes`` (D-020, D-021).
+Discovery searches are constructed ``tstats`` templates: over index names
+returned by ``/services/data/indexes`` (D-020, D-021) and, since 0.9.1, one
+``| tstats count from datamodel=<model> where earliest=-24h`` per selected data model
+(`discovery/populated.py`, D-067, issue #13): bounded by a model cap, a per-search
+`max_time`, a total budget and a stop after repeated failures; the outcome is stored as
+`populated` on the model's `uc_environment_sources` row and is informational only.
 
 Deployment flow (WP5, D-028/D-029, owner D-051): draft (parse) ─▶ submit ─▶ approve (other
 user) ─▶ deploy: create or update the saved search **disabled** with the
-operator's session ─▶ read back and compare ─▶ `deployed` or `failed` ─▶
+system session (owner `ucm_scheduler`, D-051) ─▶ read back and compare ─▶ `deployed` or `failed` ─▶
 enable / disable / rollback (each read back) ─▶ retire (delete). The worker
 re-verifies deployed searches periodically.
 
@@ -151,7 +155,7 @@ All collections are app-scoped (`nobody` owner) and replicated in SHC.
 | `uc_categories` | `fenre_cat-01` | shared | sync | Category metadata, `tree_sha`, `selected`, counts, `last_synced_at`. |
 | `uc_sync_state` | `provider::fenre` / `job::<uuid>` | shared | REST (system token), worker | Provider state (pin, last-good commit/version, schema version) and job records (status, counts, errors). Retain last 200 jobs. |
 | `uc_audit` | uuid | shared (append) | all services | `time, actor, action, object_type, object_id, outcome, details`. Purged after `[retention] audit_days` (default 365, D-034). |
-| `uc_environment_sources` | `src_<kind>_<hash>` | shared | discovery worker | Index, index/sourcetype pair, app (name, label, version, `package_id`) and data-model rows with window counts and data age. Missing sources are marked, never deleted. |
+| `uc_environment_sources` | `src_<kind>_<hash>` | shared | discovery worker | Index, index/sourcetype pair, app (name, label, version, `package_id`) and data-model rows with window counts and data age; since 0.9.1 data-model rows also carry `populated` (`yes`, `no`, `unverified`), `populated_reason`, `populated_count`, `populated_window` and `populated_at` (additive, D-067). Missing sources are marked, never deleted. |
 | `uc_source_mappings` | `map_<kind>_<hash>` | shared | discovery worker / REST (system token) | Local and auto mappings. Local rows are never overwritten by discovery. |
 | `uc_readiness` | same as `uc_catalog` | shared | readiness worker / REST (system token) | `state`, `score`, `coverage`, `blockers`, `gaps`, `counts`, per-requirement `results[]` (status, code, detail, observed, via_mapping), `engine_version`, `discovery_at`, `source_hash`. ~3 KB. Staleness computed on read. |
 | `uc_selections` | `sel_<user>_<content_id>` | per-user rows, app-shared at KV level (D-061) | user | Bookmark / select / defer / reject. Sync never writes this collection. The API isolates users; the ACL does not. |
@@ -204,14 +208,14 @@ Downgrades are not supported (D-033).
 | `GET ucm/catalog` | read collections | Filtered, paged catalogue (`q, domain, category, criticality, difficulty, sourcetype, mitre, status, quality, review, regulation, availability, bookmarked, sort, offset, count`). Facet parameters take several comma-separated values (OR within a facet, AND between facets). `availability` is a readiness state or `not_assessed`; `bookmarked=1` uses the caller's own bookmark selections (user from the session). Both are joined by `_key` (D-059). `provider`, `wave`, `story` and `data_source` are `$in` clauses on summary fields, so they take the same join or scan path (D-066); `exclude_quality` is one `quality_flags $ne` clause per flag (`$nin` and `$nor` are invalid on the KV Store). |
 | `GET ucm/catalog/facets` | read | Review statuses, regulations, quality flags and counts per domain, category, criticality and difficulty in the active catalogue (stored `catalog::facets` v3, whole-catalogue counts) plus, since 0.9.0, `providers`, `waves`, `analytic_stories`, `data_sources` and `summary: {version, outdated}`. |
 | `GET ucm/readiness/recommendations` | read collections | Up to 10 recommended use cases for the calling user (`exclude_quality` leaves out flagged use cases; off by default), with draft-score parts, reasons, flags, the formula and one of four empty states (D-060). Read-only. |
-| `GET ucm/usecase?id=` | read | Canonical detail (normalized on read) + provenance. |
+| `GET ucm/usecase?id=` | read | Canonical detail (normalized on read) + provenance. For an ESCU record, since 0.9.1, `escu_handoff`: the shipped stanza's state, schedule, actions, the ES link data, the parallel-copy warning and the coverage note (D-067); `null` for other providers. |
 | `GET ucm/categories` | read | Category list with sync state. |
 | `GET ucm/sync` | read | Provider state + recent jobs. |
 | `POST ucm/sync` | `ucm_manage_content` | Queue a sync job (`categories`, optional `ref`). |
 | `POST ucm/import` | `ucm_manage_content` | Import an offline bundle (JSON body). |
 | `POST ucm/catalog/reindex` | `ucm_manage_content` | Re-derive summaries from stored raw records, then duplicate-SPL and cross-provider twin flags and facets. |
 | `GET ucm/provider/manifest` | `ucm_manage_content` | Resolve the remote manifest (optional `ref`) without importing. |
-| `GET ucm/platform` | read | Capability report. |
+| `GET ucm/platform` | read | Capability report. Since 0.9.1 also `security_content`: ES and ESCU `state` (`installed`, `disabled`, `not_installed`, `unverified`), version and reason (D-067). |
 | `GET ucm/audit` | `ucm_manage_content` or `ucm_admin` | Recent audit events (`limit`, `prefix`). |
 | `GET ucm/inventory` | read | Filtered, paged environment sources (`kind, status, q, index, sourcetype, stale_hours, sort, offset, count`). |
 | `GET ucm/inventory/coverage` | read | Catalogue requirement values vs discovered sources. |
@@ -298,6 +302,12 @@ Full model: `docs/SECURITY.md`.
   match) over a precomputed `search_text` field holding id, title,
   sourcetypes, tags and MITRE ids; descriptions are not searched. No ranking.
 * Derived requirements are lexical hypotheses (D-013), not evidence.
+* `populated` (0.9.1) is a snapshot from the last discovery: one 24-hour count per model, not a
+  field, tagging or acceleration check, and it never changes a score (D-067, issue #13).
+* ES and ESCU state (0.9.1) is read, never written. Everything that needs ES installed is mocked in
+  tests and unvalidated (no ES lab, issue #4); SUN deploys plain scheduled searches, not ES
+  correlation searches.
+* Reindex runs inside one REST call (about 5 ms per use case); there is no background job (draft N-09).
 * Coverage is computed on read over the whole active catalogue (no cache):
   about 0.5 s per request at 20,000 use cases on a single instance.
 * Catalogue facet counts are global; bookmark / availability / regulation filters

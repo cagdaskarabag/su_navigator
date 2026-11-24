@@ -15,7 +15,7 @@ Approved SPL is copied into the revision, so later upstream changes never
 alter what was approved.
 """
 
-from typing import Any, Dict, List, Optional, Sequence
+from typing import Any, Callable, Dict, List, Optional, Sequence
 
 from ..audit import AuditService
 from ..catalog.detail import key_from_id
@@ -81,8 +81,10 @@ class DeploymentService:
     def __init__(self, store: DocumentStore, audit: AuditService, search: SearchClient,
                  saved: SavedSearchClient, settings: Optional[DeploymentSettings] = None,
                  control_runner: Optional[ControlTestRunner] = None,
-                 access: Optional[SchedulerAccess] = None):
+                 access: Optional[SchedulerAccess] = None,
+                 handoff: Optional[Callable[[UseCase], Optional[Dict[str, Any]]]] = None):
         self.access = access
+        self.handoff = handoff
         self.store = store
         self.audit = audit
         self.search = search
@@ -204,6 +206,9 @@ class DeploymentService:
             "created_by": actor, "created_at": utc_now_iso(),
         }
         revision.update(check)
+        parallel = self._parallel_copy(uc)
+        if parallel:
+            revision["parallel_copy"] = parallel
         revisions.append(revision)
         doc["revision"] = rev_no
         doc["state"] = DRAFT
@@ -212,11 +217,22 @@ class DeploymentService:
         self._trim_revisions(doc)
         self._history(doc, actor, "draft", prev_state, DRAFT, rev_no, spec["notes"][:200])
         self._save(doc, actor)
-        self.audit.record(actor, "deployment.draft", "deployment", uc.content_id,
-                          details={"revision": rev_no, "spl_source": spec["spl_source"],
-                                   "parse_ok": check["parse_ok"], "side_effects": check["side_effects"],
-                                   "review_commands": check["review_commands"]})
+        details = {"revision": rev_no, "spl_source": spec["spl_source"],
+                   "parse_ok": check["parse_ok"], "side_effects": check["side_effects"],
+                   "review_commands": check["review_commands"]}
+        if parallel:
+            details["parallel_copy"] = parallel
+        self.audit.record(actor, "deployment.draft", "deployment", uc.content_id, details=details)
         return self._decorate(doc)
+
+    def _parallel_copy(self, uc: UseCase) -> Optional[Dict[str, Any]]:
+        """Informational record that ESCU's own copy was enabled or ES present at draft time (D-067)."""
+        if self.handoff is None:
+            return None
+        try:
+            return self.handoff(uc)
+        except Exception:
+            return None
 
     def submit(self, actor: str, content_id: str, note: str = "", acknowledge_commands: bool = False) -> Dict[str, Any]:
         doc = self._require(content_id)

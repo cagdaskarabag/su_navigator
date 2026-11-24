@@ -79,7 +79,7 @@ class FakeSearch:
         self.truncated = truncated
         self.calls = []
 
-    def oneshot(self, search, timeout=120.0, max_count=5000):
+    def oneshot(self, search, timeout=120.0, max_count=5000, **kw):
         self.calls.append(search)
         if self.error:
             raise self.error
@@ -156,7 +156,7 @@ class DiscoveryServiceTest(unittest.TestCase):
     def test_no_tstats_when_no_eligible_indexes(self):
         self.inv.indexes = [INDEXES[-1]]
         job = self.run_job()
-        self.assertEqual(self.search.calls, [])
+        self.assertEqual([c for c in self.search.calls if "from datamodel=" not in c], [])
         self.assertEqual(job["totals"]["pairs"], 0)
 
     def test_marks_missing_without_deleting(self):

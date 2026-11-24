@@ -17,6 +17,7 @@ import re
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from ..discovery.apps import app_candidates
+from ..discovery.populated import NO as POPULATED_NO, UNVERIFIED as POPULATED_UNVERIFIED, YES as POPULATED_YES, reason_text
 from .principal import check_access, known_index_docs
 from .snapshot import EnvironmentSnapshot
 
@@ -132,16 +133,39 @@ def eval_index(req, snap: EnvironmentSnapshot, settings: EvaluationSettings):
     return result(NOT_MET, "not_found", "Index is not defined on this deployment.")
 
 
+def populated_text(doc: Dict[str, Any]) -> Tuple[str, str]:
+    """(populated, sentence) from the discovery fields of a data model; absent fields mean unverified."""
+    state = doc.get("populated")
+    if state not in (POPULATED_YES, POPULATED_NO):
+        reason = doc.get("populated_reason") or "predates_check"
+        why = reason_text(reason)
+        return POPULATED_UNVERIFIED, "populated: unverified%s" % (" (%s)" % why if why else "")
+    window = doc.get("populated_window") or "-24h"
+    span = "the last %s" % window.lstrip("-").replace("h", " h").replace("d", " d")
+    if state == POPULATED_YES:
+        return state, "populated: yes (%s events in %s at discovery)" % (doc.get("populated_count"), span)
+    return state, "populated: no (the discovery check found no events in %s)" % span
+
+
 def eval_cim_model(req, snap: EnvironmentSnapshot, settings: EvaluationSettings):
     value = (req.get("value") or "").strip()
     names = [(value, None)] + [(m.get("value") or "", m) for m in snap.aliases("datamodel", value)]
     for name, mapping in names:
         doc = snap.datamodels.get(name.lower())
         if doc:
-            row = {"name": doc.get("name"), "app": doc.get("app"), "accelerated": doc.get("accelerated")}
-            return result(MET, "model_present",
-                          "Data model definition is installed (populated data is not verified).",
-                          [row], _via(mapping))
+            populated, sentence = populated_text(doc)
+            row = {"name": doc.get("name"), "app": doc.get("app"), "accelerated": doc.get("accelerated"),
+                   "populated": populated}
+            if populated != POPULATED_UNVERIFIED:
+                row["populated_count"] = doc.get("populated_count")
+            out = result(MET, "model_present",
+                         "Data model definition is installed; %s. Which fields it holds and whether its acceleration "
+                         "is current are not verified. The populated flag is informational and does not change this "
+                         "status." % sentence, [row], _via(mapping))
+            out["populated"] = populated
+            if populated == POPULATED_UNVERIFIED:
+                out["populated_reason"] = doc.get("populated_reason") or "predates_check"
+            return out
     return result(NOT_MET, "model_missing", "Data model is not installed (install the CIM add-on).")
 
 

@@ -13,6 +13,7 @@ from ..storage.kvstore import DocumentStore
 from ..storage.transport import SplunkdTransport
 from ..util import utc_now
 from .inventory import SplunkInventory
+from .populated import PopulatedSettings
 from .service import (JOB_FAILED, JOB_RUNNING, DiscoveryService, DiscoverySettings,
                       new_job)
 
@@ -27,13 +28,19 @@ def _parse_iso(value: str) -> Optional[datetime.datetime]:
 
 
 def settings_from_config(config: AppConfig) -> DiscoverySettings:
+    job_timeout = config.get_int("discovery", "job_timeout_seconds", 600, 60, 3600)
     return DiscoverySettings(
         earliest=config.get("discovery", "earliest", "-7d") or "-7d",
         latest=config.get("discovery", "latest", "now") or "now",
         include_internal=config.get_bool("discovery", "include_internal", False),
         max_pairs=config.get_int("discovery", "max_pairs", 5000, 100, 20000),
         search_timeout=config.get_int("discovery", "search_timeout_seconds", 120, 15, 600),
-        job_timeout_seconds=config.get_int("discovery", "job_timeout_seconds", 600, 60, 3600))
+        job_timeout_seconds=job_timeout,
+        populated=PopulatedSettings(
+            enabled=config.get_bool("discovery", "populated_check", True),
+            max_models=config.get_int("discovery", "populated_max_models", 30, 1, 100),
+            timeout_seconds=config.get_int("discovery", "populated_timeout_seconds", 30, 5, 300),
+            budget_seconds=job_timeout // 2))
 
 
 class DiscoveryWorker:

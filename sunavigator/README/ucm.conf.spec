@@ -73,6 +73,21 @@ search_timeout_seconds = <integer>
 job_timeout_seconds = <integer>
 schedule_interval_hours = <integer>
 * 0 disables scheduled discovery.
+populated_check = <boolean>
+* Check whether installed data models hold events (issue #13). For each selected model
+* discovery runs one `| tstats count from datamodel=<model> where earliest=-24h` with the
+* discovery account's token and stores populated = yes, no or unverified next to the model.
+* Models that catalogue requirements reference (and their mapped local names) are checked
+* first, then the models of Splunk_SA_CIM. The value is informational: it never changes a
+* readiness status, score or state. Default true; false records "unverified" for every
+* model and runs no search.
+populated_max_models = <integer 1-100>
+* Cap on models checked per discovery job; the rest are recorded as unverified
+* (reason model_cap). Default 30.
+populated_timeout_seconds = <integer 5-300>
+* Time limit of each check (sent to splunkd as max_time and as the request timeout). A search
+* that does not finish is recorded as unverified (reason timeout), never as "no". The checks of
+* one job also share a budget of half of job_timeout_seconds. Default 30.
 
 [readiness]
 auto_assess = <boolean>

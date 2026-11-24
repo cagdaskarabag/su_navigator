@@ -95,8 +95,8 @@ preview does not open Splunk's Search view.
    status, drift and history (D-029).
 2. State machine draft → pending_approval → approved → deployed, with
    rejected, failed and retired. Four-eyes approval (configurable).
-3. Saved searches written with the operator's session in this app, owned by
-   the operator (D-028), always disabled on deploy and rollback; read back and
+3. Saved searches written with the handler's system session in this app, owned by
+   the scheduler account since 0.8.x (D-051; at 0.7.0 by the operator, D-028), always disabled on deploy and rollback; read back and
    compared after each write; name conflicts and unmanaged searches refused.
 4. Enable gated on readiness (override reason audited); disable; rollback to
    the previous deployed revision; retire deletes the search.
@@ -105,8 +105,10 @@ preview does not open Splunk's Search view.
 6. UI: Deployment card on the use-case page (draft form, actions allowed for
    the caller, drift, history) and a Deployments view.
 
-Gaps: no alert actions (email, webhook); no bulk deployment; ownership cannot
-be moved to a service account by the app.
+Gaps at 0.7.0: no alert actions (email, webhook); no bulk deployment; ownership
+cannot be moved to a service account by the app. Since 0.8.x deployed searches are
+owned by the scheduler account (D-051). Alert actions, bulk deployment and action
+profiles are still not built (see WP8, deferred).
 
 ## WP6 — Frameworks and dashboards ✅
 1. Framework format `ucm.framework/1`, ATT&CK Enterprise and ICS 20.1 bundled,
@@ -146,6 +148,34 @@ Not validated here, required before 1.0.0: a real search head cluster
 (captain-only jobs, KV replication, generated view replication) and a Splunk
 Cloud stack (vetting submission, egress, `sc_admin`).
 
+## WP8 — Navigation, evidence and ES hand-off (0.8.0 to 0.9.1) ✅ (with the deferrals below)
+
+Done, with the decision record:
+
+| Version | Delivered | Record |
+|---|---|---|
+| 0.8.0 to 0.8.4 | Select-all categories, readiness terms, Home page, use-case summary, interactive "Run this search", multi-value catalogue facets, bookmarks, percentage cards, Recommended next | D-056 to D-060 |
+| 0.8.5 to 0.8.6 | Requirement result counts, selections as shared metadata, handler-only selection writes, nested-SPL guard, interactive-search switch, Cloud wording corrected | D-061, D-062 |
+| 0.8.7 | Scheduler-account index access check and enable gate, `include_internal` semantics, scheduled run proven as `ucm_scheduler`, Settings listing explained | D-063 (issues #7, #9) |
+| 0.8.8 | Control-test precision (`content_error`, window from sample, manifest checks), 94-fixture campaign | D-064 (issues #5, #6) |
+| 0.8.9 | Advisory SPL lint, bounded-total warning, documentation pass | D-065 (issues #8, #14 in part) |
+| 0.9.0 | Provider-aware navigation, twin lineage, quality-aware discovery, Plan deployment panel | D-066 |
+| 0.9.1 | Read-only ES and ESCU hand-off, parallel-copy warning, populated check for CIM data models, release documentation pass | D-067 (issues #4 in part, #13 in part) |
+
+Deferred, each with its reason and its tracking:
+
+| Item | Why deferred | Tracking |
+|---|---|---|
+| Search head cluster with a deployer and indexer peers | no such lab | issue #2 |
+| Splunk Cloud validation and vetting submission | no Cloud stack | issue #3 |
+| ES output mode (findings, notable events, risk) | it cannot be built or verified without an ES 8 lab; 0.9.1 only reads and hands off | issue #4, draft N-11 |
+| Alert action profiles (email, webhook) | gated by a product decision on safe defaults and by the approval model; deployed searches have no actions | draft N-12 |
+| Counts beyond the catalogue marked at the 50,000 bound; join scan paged | the corpora fit today | issue #14, draft N-08 |
+| Macro assistance ("Add Macro") | product decision | issue #10 |
+| Field and acceleration checks behind `populated`; scoring decision | needs a decision on what a `no` should do | issue #13 |
+| Background Reindex | not simple with the existing job mechanism | draft N-09 |
+| Browser tests | Node logic tests exist; Splunk Web is checked by hand | issue #15 |
+
 ## Validation status (keep current)
 
 "Live" means Splunk Enterprise 10.2.9, single instance, in the development VM.
@@ -172,3 +202,6 @@ Cloud stack (vetting submission, egress, `sc_admin`).
 | Retention | ✅ audit cutoff, job history per type, queued jobs kept, interval, audit of purges | ✅ 500-day-old audit record purged by the worker after upgrade | ⬜ | ⬜ |
 | RBAC review | ✅ every POST route without capabilities, every GET | ✅ per-feature 403 checks in the live suite | ⬜ | ⬜ |
 | Packaging | n/a | ✅ AppInspect 4.4.0 precert (all checks; `cloud`, `private_victoria`, `private_classic` tags): 0 failures, 0 errors | n/a | ⬜ vetting |
+| ES / ESCU hand-off (0.9.1) | ✅ mocked app lists and stanza states (ES present, ES disabled, 403, unreadable, non-admin, renamed stanza), name mapping, cache, draft record | ✅ ESCU 6.11.1 without ES: version, real stanza state, schedule, actions, not-found, viewer view | ⬜ | ⬜ |
+| ES installed (0.9.1) | ✅ mocked only | ⬜ no ES lab (issue #4) | ⬜ | ⬜ |
+| CIM data model populated check (0.9.1) | ✅ yes, no, timeout, failure, cap, budget, setting off, invalid name | ✅ temporary models: yes, no, not referenced, setting off; the lab has no CIM add-on, so no real CIM model was checked | ⬜ | ⬜ |

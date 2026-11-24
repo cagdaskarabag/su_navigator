@@ -22,6 +22,25 @@ class JsLogicTest(unittest.TestCase):
                 self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
 
 
+class StaticGuardTest(unittest.TestCase):
+    """The UI builds DOM with ucm.el and text nodes only (issue #15)."""
+
+    FORBIDDEN = re.compile(r"\binnerHTML\b|\bouterHTML\b|\binsertAdjacentHTML\b|\bdocument\.write\b|(?<![.\w])eval\s*\(")
+
+    @staticmethod
+    def code_only(text):
+        text = re.sub(r"/\*.*?\*/", "", text, flags=re.DOTALL)
+        return re.sub(r"(?m)^\s*//.*$", "", text)
+
+    def test_no_html_injection_apis_in_any_view_script(self):
+        scripts = sorted(glob.glob(os.path.join(STATIC, "*.js")))
+        self.assertTrue(scripts)
+        for path in scripts:
+            with open(path, encoding="utf-8") as handle:
+                found = self.FORBIDDEN.findall(self.code_only(handle.read()))
+            self.assertEqual(found, [], os.path.basename(path))
+
+
 class HomeViewTest(unittest.TestCase):
     """The Home view is the default landing page and agrees with the Domain dashboard."""
 

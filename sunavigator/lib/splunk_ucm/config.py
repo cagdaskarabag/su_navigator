@@ -27,7 +27,8 @@ DEFAULTS: Dict[str, Dict[str, str]] = {
     "discovery": {
         "earliest": "-7d", "latest": "now", "include_internal": "false",
         "max_pairs": "5000", "search_timeout_seconds": "120", "job_timeout_seconds": "600",
-        "schedule_interval_hours": "0",
+        "schedule_interval_hours": "0", "populated_check": "true", "populated_max_models": "30",
+        "populated_timeout_seconds": "30",
     },
     "readiness": {
         "auto_assess": "true", "stale_hours": "24", "ready_threshold": "90", "partial_threshold": "50",

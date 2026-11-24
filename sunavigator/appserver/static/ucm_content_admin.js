@@ -199,13 +199,28 @@ function ucmViewMain($, ucm) {
             el("div", { "class": "ucm-actions" }, file, btn), importBox);
     }
 
+    function appPhrase(app, name) {
+        if (!app) { return name + " unknown"; }
+        if (app.state === "installed") { return name + " " + (app.version || "(version unknown)"); }
+        if (app.state === "disabled") { return name + " " + (app.version || "") + " (disabled)"; }
+        if (app.state === "not_installed") { return name + ": not installed"; }
+        return name + ": unverified" + (app.reason ? " (" + app.reason + ")" : "");
+    }
+
+    function securityRow(sc) {
+        if (!sc) { return []; }
+        return [[el("dt", { text: "security content apps" }), el("dd", {},
+            appPhrase(sc.es, "Enterprise Security"), "; ", appPhrase(sc.escu, "ESCU"), " ",
+            el("span", { "class": "ucm-sub", text: sc.note || "" }))]];
+    }
+
     function renderPlatform() {
         ucm.get("platform").done(function (p) {
             ucm.clear(platformCard).appendChild(el("div", {}, el("h3", { text: "Platform" }),
                 el("div", { "class": "ucm-sub", text: p.platform + " " + p.version + (p.shc_member ? ", search head cluster member" : "") }),
                 el("dl", { "class": "ucm-kv" }, p.capabilities.map(function (c) {
                     return [el("dt", { text: c.name.replace(/_/g, " ") }), el("dd", {}, statusBadge(c.status), " ", el("span", { "class": "ucm-sub", text: c.evidence }))];
-                }))));
+                }).concat(securityRow(p.security_content)))));
         }).fail(function (err) {
             ucm.clear(platformCard).appendChild(ucm.stateBox("error", "Platform capabilities unavailable.", err.message));
         });
