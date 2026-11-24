@@ -27,6 +27,9 @@ jobs:
         run: |
           python -m compileall -q sunavigator
           ! grep -rnE "subprocess|os\.system|pickle|_create_unverified_context" sunavigator
+      - name: Views use the modal helper, not browser dialogs
+        run: |
+          ! grep -rnE "(^|[^.[:alnum:]_])(window\.)?(alert|confirm|prompt)[[:space:]]*\(" sunavigator/appserver/static --include=*.js
 
   package:
     runs-on: ubuntu-latest

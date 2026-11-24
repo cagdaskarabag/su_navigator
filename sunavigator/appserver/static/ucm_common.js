@@ -182,7 +182,96 @@ define(["jquery", "splunk.util"], function ($, splunkUtil) {
         return badge(l[0], l[1]);
     }
 
+    /*
+     * Modal dialog used instead of the browser's alert, confirm and prompt dialogs, which
+     * browsers may suppress and which cannot validate input. Text is set with textContent only.
+     * opts: title, message, confirmLabel, cancelLabel (null hides Cancel), danger,
+     *       input: {label, value, minLength, maxLength, multiline, required}
+     * onConfirm(value) runs on confirm; value is the trimmed input text or true.
+     */
+    function modal(opts, onConfirm) {
+        opts = opts || {};
+        var previous = document.activeElement;
+        var input = null, error = el("div", { "class": "ucm-modal-error", role: "alert" });
+        var titleId = "ucm-modal-title-" + new Date().getTime();
+        var field = null;
+        if (opts.input) {
+            input = el(opts.input.multiline ? "textarea" : "input", {
+                "class": "ucm-modal-input", type: opts.input.multiline ? null : "text",
+                maxlength: opts.input.maxLength || 1000, "aria-label": opts.input.label || opts.title });
+            input.value = opts.input.value || "";
+            field = el("label", { "class": "ucm-modal-label" },
+                el("span", { text: opts.input.label || "" }), input,
+                opts.input.minLength ? el("span", { "class": "ucm-sub",
+                    text: "At least " + opts.input.minLength + " characters." }) : null);
+        }
+        var ok = el("button", { "class": "btn " + (opts.danger ? "btn-danger" : "btn-primary"), type: "button",
+            text: opts.confirmLabel || "OK" });
+        var cancel = opts.cancelLabel === null ? null
+            : el("button", { "class": "btn", type: "button", text: opts.cancelLabel || "Cancel" });
+        var dialog = el("div", { "class": "ucm-modal", role: "dialog", "aria-modal": "true", "aria-labelledby": titleId },
+            el("h3", { id: titleId, text: opts.title || "" }),
+            opts.message ? el("p", { "class": "ucm-modal-message", text: opts.message }) : null,
+            field, error,
+            el("div", { "class": "ucm-actions" }, ok, cancel));
+        var backdrop = el("div", { "class": "ucm-modal-backdrop" }, dialog);
+
+        function close() {
+            document.removeEventListener("keydown", onKey, true);
+            if (backdrop.parentNode) { backdrop.parentNode.removeChild(backdrop); }
+            if (previous && previous.focus) { previous.focus(); }
+        }
+        function submit() {
+            var value = true;
+            if (input) {
+                value = input.value.replace(/^\s+|\s+$/g, "");
+                var min = opts.input.minLength || (opts.input.required ? 1 : 0);
+                if (value.length < min) {
+                    error.textContent = min > 1 ? "Enter at least " + min + " characters." : "A value is required.";
+                    input.focus();
+                    return;
+                }
+            }
+            close();
+            if (onConfirm) { onConfirm(value); }
+        }
+        function onKey(e) {
+            if (e.key === "Escape" || e.keyCode === 27) {
+                e.preventDefault();
+                close();
+            } else if ((e.key === "Enter" || e.keyCode === 13) && e.target === input && !opts.input.multiline) {
+                e.preventDefault();
+                submit();
+            } else if (e.key === "Tab" || e.keyCode === 9) {
+                var focusable = [input, ok, cancel].filter(function (n) { return n; });
+                var i = focusable.indexOf(document.activeElement);
+                var next = e.shiftKey ? (i <= 0 ? focusable.length - 1 : i - 1) : (i + 1) % focusable.length;
+                e.preventDefault();
+                focusable[next].focus();
+            }
+        }
+        ok.addEventListener("click", submit);
+        if (cancel) { cancel.addEventListener("click", close); }
+        document.addEventListener("keydown", onKey, true);
+        document.body.appendChild(backdrop);
+        (input || ok).focus();
+    }
+
+    function notify(message, title) {
+        modal({ title: title || "Request failed", message: message, cancelLabel: null });
+    }
+
+    function confirmAction(title, message, confirmLabel, onConfirm, danger) {
+        modal({ title: title, message: message, confirmLabel: confirmLabel, danger: danger },
+            function () { onConfirm(); });
+    }
+
+    function askText(title, message, input, confirmLabel, onConfirm) {
+        modal({ title: title, message: message, input: input, confirmLabel: confirmLabel || "OK" }, onConfirm);
+    }
+
     return {
+        modal: modal, notify: notify, confirmAction: confirmAction, askText: askText,
         get: get, post: post, postRaw: postRaw, el: el, clear: clear, badge: badge,
         criticalityBadge: criticalityBadge, chips: chips, stateBox: stateBox, queryParams: queryParams,
         setQueryParams: setQueryParams, pager: pager, debounce: debounce, shortSha: shortSha,

@@ -82,7 +82,7 @@ require([
                     e.preventDefault();
                     ucm.post("selections", { id: item.content_id, intent: "select" }).done(function () {
                         loadSelections().done(load);
-                    }).fail(function (err) { window.alert(err.message); });
+                    }).fail(function (err) { ucm.notify(err.message); });
                 } })));
     }
 

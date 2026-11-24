@@ -77,9 +77,11 @@ require([
                     ucm.post("dashboards/create", { template: d.template, params: d.params || {} }).done(load)
                         .fail(function (err) { notice(status, "error", "Could not regenerate.", err.message); });
                 } }), " ", el("button", { "class": "btn", type: "button", text: "Delete", onclick: function () {
-                    if (!window.confirm("Delete dashboard " + d.name + "?")) { return; }
-                    ucm.post("dashboards/delete", { name: d.name }).done(load)
-                        .fail(function (err) { notice(status, "error", "Could not delete.", err.message); });
+                    ucm.confirmAction("Delete dashboard?", "The generated view " + d.name + " is deleted.", "Delete",
+                        function () {
+                            ucm.post("dashboards/delete", { name: d.name }).done(load)
+                                .fail(function (err) { notice(status, "error", "Could not delete.", err.message); });
+                        }, true);
                 } }))));
         });
         root.appendChild(el("h3", { text: "Existing generated dashboards" }));

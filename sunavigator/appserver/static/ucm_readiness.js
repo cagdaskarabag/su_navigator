@@ -48,7 +48,7 @@ require([
                 el("button", { "class": "btn btn-primary", type: "button", disabled: running || !data.discovery_completed_at ? "disabled" : null,
                     onclick: function () {
                         this.disabled = true;
-                        ucm.post("readiness").done(poll).fail(function (err) { window.alert(err.message); });
+                        ucm.post("readiness").done(poll).fail(function (err) { ucm.notify(err.message); });
                     } }, running ? "Assessment running…" : "Re-assess all"),
                 data.discovery_completed_at ? null : el("span", { "class": "ucm-sub", text: "Run discovery on the Data Inventory page first." })),
             s.discovery_at && data.discovery_completed_at && s.discovery_at !== data.discovery_completed_at

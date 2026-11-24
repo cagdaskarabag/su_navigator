@@ -90,7 +90,7 @@ require([
             onclick: function () {
                 this.disabled = true;
                 ucm.post("readiness/assess", { id: uc.content_id }).done(function () { load(); })
-                    .fail(function (err) { window.alert(err.message); });
+                    .fail(function (err) { ucm.notify(err.message); });
             } });
         if (!rd) {
             return el("div", {}, ucm.stateBox("info", "Readiness: not assessed",
@@ -120,7 +120,7 @@ require([
 
     function setIntent(uc, intent) {
         ucm.post("selections", { id: uc.content_id, intent: intent }).done(load).fail(function (err) {
-            window.alert(err.message);
+            ucm.notify(err.message);
         });
     }
 
@@ -166,13 +166,13 @@ require([
                     onclick: function () {
                         this.disabled = true;
                         ucm.post("validate", { id: uc.content_id, sample: true }).done(load)
-                            .fail(function (err) { window.alert(err.message); });
+                            .fail(function (err) { ucm.notify(err.message); });
                     } }),
                 el("button", { "class": "btn", type: "button", text: "Bounded preview",
                     onclick: function () {
                         this.disabled = true;
                         ucm.post("preview", { id: uc.content_id }).done(load)
-                            .fail(function (err) { window.alert(err.message); });
+                            .fail(function (err) { ucm.notify(err.message); });
                     } })),
             el("div", { "class": "ucm-sub", text: "Preview forces a short time window and a result cap. Searches with delete, outputlookup, collect, script or similar commands are refused, and so are searches with map, savedsearch, rest or commands outside SUN's read-only list. Field sampling uses a constructed fieldsummary, not the imported pipeline." }));
     }
@@ -183,29 +183,43 @@ require([
     function runAction(uc, dep, action) {
         var body = { id: uc.content_id };
         var settings = dep.settings || {};
+        var label = ACTION_LABELS[action] || action;
+        var revs = (dep.deployment && dep.deployment.revisions) || [];
+        var review = (revs[revs.length - 1] || {}).review_commands || [];
+        var needsAck = review.length && (action === "approve" || (action === "submit" && settings.require_approval === false));
+
+        function send() {
+            ucm.post("deployment/" + action, body).done(load).fail(function (err) { ucm.notify(err.message); });
+        }
+        function acknowledgeThenSend() {
+            if (!needsAck) { send(); return; }
+            ucm.confirmAction("Commands need review",
+                "This search runs commands SUN cannot verify as read-only: " + review.join(", ") +
+                ". They can run other searches or reach data the SPL does not show. Confirm you reviewed them. " +
+                "Your acknowledgment is recorded in the audit trail.", "I reviewed them", function () {
+                    body.acknowledge_commands = true;
+                    send();
+                });
+        }
+
         if (action === "enable") {
             var rd = uc.readiness ? uc.readiness.state : "not_assessed";
             if ((settings.block_enable_states || []).indexOf(rd) >= 0) {
-                var reason = window.prompt("Readiness is " + rd + ". Enter an override reason (at least 10 characters). It is audited.");
-                if (!reason) { return; }
-                body.override_reason = reason;
+                ucm.askText("Override the readiness gate", "Readiness is " + rd + ". The override reason is audited.",
+                    { label: "Override reason", minLength: 10, maxLength: 500, multiline: true }, "Enable",
+                    function (reason) { body.override_reason = reason; acknowledgeThenSend(); });
+                return;
             }
         } else if (action === "retire") {
-            if (!window.confirm("Retire this deployment? The saved search is deleted from Splunk.")) { return; }
+            ucm.confirmAction("Retire this deployment?", "The saved search is deleted from Splunk.", "Retire",
+                acknowledgeThenSend, true);
+            return;
         } else if (action === "approve" || action === "reject" || action === "rollback") {
-            var note = window.prompt("Optional note for the audit trail:", "");
-            if (note === null) { return; }
-            body.note = note;
+            ucm.askText(label, "Optional note for the audit trail.", { label: "Note", maxLength: 500, multiline: true },
+                label, function (note) { body.note = note; acknowledgeThenSend(); });
+            return;
         }
-        var revs = (dep.deployment && dep.deployment.revisions) || [];
-        var review = (revs[revs.length - 1] || {}).review_commands || [];
-        if (review.length && (action === "approve" || (action === "submit" && settings.require_approval === false))) {
-            if (!window.confirm("This search runs commands SUN cannot verify as read-only: " + review.join(", ") +
-                    ". They can run other searches or reach data the SPL does not show. Confirm you reviewed them. " +
-                    "Your acknowledgment is recorded in the audit trail.")) { return; }
-            body.acknowledge_commands = true;
-        }
-        ucm.post("deployment/" + action, body).done(load).fail(function (err) { window.alert(err.message); });
+        acknowledgeThenSend();
     }
 
     function draftForm(uc, dep, current) {
@@ -238,7 +252,7 @@ require([
             ucm.post("deployment/draft", { id: uc.content_id, spl_source: source.value, custom_spl: custom.value,
                 cron: cron.value, earliest: earliest.value, latest: latest.value, alert_mode: mode.value,
                 severity: severity.value, threshold: threshold.value, notes: notes.value })
-                .done(load).fail(function (err) { save.disabled = false; window.alert(err.message); });
+                .done(load).fail(function (err) { save.disabled = false; ucm.notify(err.message); });
         } });
         return el("div", { "class": "ucm-form" }, kv([
             ["Search", source], ["Custom SPL", customWrap], ["Schedule (cron)", cron], ["Earliest", earliest],

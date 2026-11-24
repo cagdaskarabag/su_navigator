@@ -78,3 +78,14 @@ textarea.ucm-input { font-family: Menlo, Consolas, monospace; font-size: 12px; }
 .ucm-row-active td { background: #eef4fa; }
 .ucm-chip { display: inline-block; padding: 1px 6px; margin: 0 4px 2px 0; font-size: 11px; border-radius: 10px; background: #eef4fa; }
 .ucm-toolbar label { display: inline-flex; align-items: center; gap: 4px; margin: 0 8px; }
+
+.ucm-modal-backdrop { position: fixed; inset: 0; z-index: 2000; display: flex; align-items: center; justify-content: center; background: rgba(23, 28, 33, .45); }
+.ucm-modal { width: min(520px, calc(100vw - 32px)); max-height: calc(100vh - 64px); overflow: auto; padding: 18px 20px 12px; background: #fff; border-radius: 6px; box-shadow: 0 8px 28px rgba(0, 0, 0, .25); font-size: 13px; line-height: 1.45; color: #2b3033; }
+.ucm-modal h3 { margin: 0 0 8px; font-size: 16px; }
+.ucm-modal-message { margin: 0 0 10px; white-space: pre-wrap; overflow-wrap: anywhere; }
+.ucm-modal-label { display: flex; flex-direction: column; gap: 4px; margin-bottom: 6px; }
+.ucm-modal-input { width: 100%; box-sizing: border-box; padding: 6px 8px; border: 1px solid #c3cbd4; border-radius: 3px; font: inherit; }
+textarea.ucm-modal-input { min-height: 72px; resize: vertical; }
+.ucm-modal-error { min-height: 16px; color: #b3261e; font-size: 12px; }
+.ucm-modal .ucm-actions { justify-content: flex-end; }
+.ucm-modal .btn-danger { background: #b3261e; border-color: #b3261e; color: #fff; }

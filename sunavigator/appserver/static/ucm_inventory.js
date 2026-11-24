@@ -192,7 +192,7 @@ require([
                 poll();
             }).fail(function (err) {
                 btn.disabled = false;
-                window.alert(err.message);
+                ucm.notify(err.message);
             });
         });
     }
@@ -204,7 +204,7 @@ require([
                 value: $("#map-value").val(),
                 canonical_value: $("#map-canon").val() || $("#map-value").val(),
                 notes: $("#map-notes").val()
-            }).done(function () { loadMappings(); }).fail(function (err) { window.alert(err.message); });
+            }).done(function () { loadMappings(); }).fail(function (err) { ucm.notify(err.message); });
         });
     }
 
