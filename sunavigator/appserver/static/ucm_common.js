@@ -650,6 +650,27 @@ define(["jquery", "splunk.util"], function ($, splunkUtil) {
             " Enabling needs an audited override reason.");
     }
 
+    /* Messages of a sync or import job, its own first and then those of its failed categories. */
+    function jobErrors(job) {
+        var out = ((job && job.errors) || []).map(function (e) { return e.message || e.code || "failed"; });
+        ((job && job.results) || []).forEach(function (r) {
+            if (r.status === "failed") {
+                out.push("category " + r.category_id + ": " + (((r.errors || [])[0] || {}).message || "failed"));
+            }
+        });
+        return out;
+    }
+
+    /* A failed latest job is the first thing the administrator needs; the history table carries the rest. */
+    function jobFailureBox(jobs) {
+        var latest = (jobs || [])[0];
+        if (!latest || latest.status !== "failed") { return null; }
+        var first = (latest.errors || [])[0] || {};
+        var detail = jobErrors(latest)[0] || "No error message was recorded for this job.";
+        return stateBox("error", "The latest synchronization failed" + (first.code ? " (" + first.code + ")" : ""),
+            detail + " Requested " + (latest.requested_at || "") + (latest.requested_by ? " by " + latest.requested_by : "") + ".");
+    }
+
     function yesNo(value) { return value === true ? "yes" : (value === false ? "no" : "unknown"); }
 
     /* Overview card for the account that runs deployed searches (D-063). */
@@ -693,7 +714,7 @@ define(["jquery", "splunk.util"], function ($, splunkUtil) {
     }
 
     return {
-        accessBadge: accessBadge, accessBox: accessBox, schedulerCard: schedulerCard,
+        accessBadge: accessBadge, accessBox: accessBox, jobErrors: jobErrors, jobFailureBox: jobFailureBox, schedulerCard: schedulerCard,
         modal: modal, qualityBadges: qualityBadges, QUALITY_FLAGS: QUALITY_FLAGS, notify: notify, confirmAction: confirmAction, askText: askText,
         get: get, post: post, postRaw: postRaw, el: el, clear: clear, badge: badge,
         criticalityBadge: criticalityBadge, chips: chips, stateBox: stateBox, queryParams: queryParams,
