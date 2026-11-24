@@ -247,7 +247,9 @@ Preview forces `earliest_time`/`latest_time`, a row limit (D-037) and a timeout.
 `/servicesNS/nobody/sunavigator/search/jobs`, the namespace deployment parses
 in and the saved search runs in. Before, an app-scoped macro failed to parse
 in validation yet parsed at deploy (verified on 10.2.9). The search still runs
-as the caller.
+as the caller. The Search app's `comment(1)` macro is not exported, and 277
+upstream primary searches use it, so the app ships the same no-op
+`comment(1)` in `default/macros.conf`, not exported.
 Event payloads are not stored; only counts, field names and messages.
 A runtime error (missing lookup) is recorded on the validation document
 (`preview.ok=false`), not raised as a 5xx.
@@ -438,3 +440,38 @@ as drift.
   sample. A truncated or failed sample makes the field `unverified`
   (`sample_truncated`, `sample_failed`). The inventory and coverage views
   show the truncation.
+
+## D-038 SPL execution policy: allowlist, indirect execution, acknowledgment
+*0.7.2. Extends D-026 and D-028. Operator decision D3 (a).*
+* Every command is classified. **Side-effect** (denylist; adds
+  `summaryindex`, `dbxoutput`, `runshellscript`, `deletemodel`, `dump`,
+  `crawl`, `outputtelemetry` and `fit … into`): preview, submit and deploy
+  refuse, as before. **Indirect** (`map`, `savedsearch`, `loadjob`, `rest`,
+  `dbxquery`, `dbxlookup`, `savedsearch:` datasets): runs SPL or reaches data
+  the search text does not show. **Unknown**: not on the built-in read-only
+  allowlist (custom and add-on commands such as MLTK `apply`).
+* Indirect and unknown commands ("review commands") refuse preview. Approval
+  needs `acknowledge_commands=true`. The acknowledged list and approver are
+  stored on the revision and in the audit record. Without approval
+  (`require_approval = false`), the submitter acknowledges at submit. Deploy
+  re-parses and refuses when the search now has review commands nobody
+  acknowledged, for example after a macro changed.
+* Commands are taken from the raw SPL (static analysis sees subsearches) and
+  from the pipeline Splunk's parser returns, which has macros expanded,
+  including macros inside subsearches. Before 0.7.2 only the parser's top-level
+  command names were used, so `outputlookup` in a macro inside a subsearch
+  passed the gate (verified on 10.2.9).
+* Splunk's parser rejects unknown commands, including those in subsearches. So
+  when the whole search parses, an unknown name that only static analysis
+  reported is kept only if a one-command probe (`| makeresults | <name>`) does
+  not say "Unknown search command". This drops tokenisation artefacts such
+  as `$tok|s$` and never drops a command Splunk can run.
+* `[spl] extra_safe_commands` in ucm.conf adds trusted read-only commands to
+  the allowlist; side-effect and indirect names in it are ignored.
+* Readiness: a parsed search with review commands is `partial`
+  (`review_commands`) for the SPL-validity requirement, like side effects.
+* Measured against the upstream catalogue (19,771 searches, static pass): 128
+  flagged. Of those, 42 use `rest`, 12 `map`, 6 `dbxquery` and 14 MLTK `apply`;
+  24 `collect` and 18 `fit … into` are side effects.
+* Scripted and external lookups execute code through `lookup`. They are out
+  of scope here; the lookup definition, not the search, is the control point.
