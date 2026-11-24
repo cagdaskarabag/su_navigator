@@ -17,10 +17,11 @@ from ..discovery.spl import RELATIVE_TIME, validate_index_name
 from ..errors import NotFoundError, UnsupportedOperation, ValidationError
 from ..model.canonical import UseCase
 from ..platform.search import SearchClient
+from ..readiness.principal import scan_spl
 from ..readiness.service import ReadinessService
 from ..spl.analysis import analyze
 from ..spl.parser import high_cost, parse
-from ..spl.policy import classify, command_exists
+from ..spl.policy import classify, command_exists, expanded_pipeline
 from ..storage import collections as C
 from ..storage.collections import DOC_SCHEMA
 from ..storage.kvstore import DocumentStore
@@ -168,7 +169,7 @@ class ValidationService:
             "parse_ok": False, "parse_error": "", "commands": [], "side_effects": [],
             "indirect_commands": [], "unknown_commands": [], "review_commands": [],
             "high_cost": [], "warnings": [], "cim_parse_ok": None, "cim_parse_error": "",
-            "preview": previous.get("preview"), "field_samples": previous.get("field_samples") or [],
+            "access_scan": None, "preview": previous.get("preview"), "field_samples": previous.get("field_samples") or [],
             "sampled_at": previous.get("sampled_at"), "normalized": "",
         }
         if not uc.spl:
@@ -184,6 +185,7 @@ class ValidationService:
             self._apply_policy(doc, uc.spl, None)
             return doc
         doc["commands"] = parsed.commands
+        doc["access_scan"] = scan_spl(uc.spl, expanded_pipeline(parsed) if parsed.ok else "")
         self._apply_policy(doc, uc.spl, parsed)
         doc["high_cost"] = high_cost(parsed.commands)
         if parsed.ok:

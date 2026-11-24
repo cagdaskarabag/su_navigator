@@ -6,8 +6,10 @@ Each use case gets one level, the furthest it has reached:
 
 ``ready`` is readiness state ``ready``; ``deployed`` means a revision is in a
 saved search (disabled); ``enabled`` means the saved search is enabled;
-``operational`` additionally needs a successful scheduled run in the health
-window (only when operational health is requested and available).
+``operational`` additionally needs a scheduled run that finished with status
+``success`` in the health window (only when operational health is requested and
+available). It means "ran without error", not "saw data": a search that returns
+nothing also succeeds (D-063).
 
 ATT&CK ids are resolved against one framework version: revoked ids follow
 their ``revoked-by`` replacement and are listed as remapped; deprecated and
@@ -26,7 +28,7 @@ LEVELS = ("catalogue", "ready", "deployed", "enabled", "operational")
 _RANK = {name: i for i, name in enumerate(LEVELS)}
 PAGE = 5000
 LEVEL_LABELS = {"catalogue": "In catalogue", "ready": "Data ready", "deployed": "Deployed", "enabled": "Enabled",
-                "operational": "Running successfully"}
+                "operational": "Ran without error (not a statement about data)"}
 NAVIGATOR_COLORS = {"catalogue": "#dbe9f6", "ready": "#a8d5a2", "deployed": "#5fb760", "enabled": "#1e7b34",
                     "operational": "#0b4d1f"}
 
@@ -176,7 +178,7 @@ class CoverageService:
                 "color": NAVIGATOR_COLORS[cell["level"]], "enabled": True, "showSubtechniques": False,
                 "comment": "%s: %d use case(s) in catalogue, %d ready, %d deployed, %d enabled" % (
                     LEVEL_LABELS[cell["level"]], c["catalogue"], c["ready"], c["deployed"], c["enabled"])
-                + (", %d running successfully" % c["operational"] if operational else ""),
+                + (", %d ran without error" % c["operational"] if operational else ""),
                 "metadata": [{"name": "level", "value": cell["level"]},
                              {"name": "use_cases", "value": str(c["catalogue"])}],
             })

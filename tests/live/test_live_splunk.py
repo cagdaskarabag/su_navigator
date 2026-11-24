@@ -901,3 +901,302 @@ class LiveMaintenanceTest(unittest.TestCase):
         self.assertEqual(missing, [], state.get("applied"))
         total = kv.count(C.CATALOG)
         self.assertEqual(kv.count(C.CATALOG, {"summary_version": {"$gte": SUMMARY_VERSION}}), total)
+
+
+def oneshot(t, spl, earliest="-15m", latest="now"):
+    status, content = t.request("POST", "/services/search/jobs",
+                                form={"search": spl, "exec_mode": "oneshot", "earliest_time": earliest,
+                                      "latest_time": latest, "output_mode": "json", "count": "50"}, timeout=120)
+    assert status == 200, (status, content[:300])
+    return json.loads(content).get("results", [])
+
+
+def conf_value(t, stanza, key):
+    status, content = t.request("GET", "/servicesNS/nobody/sunavigator/configs/conf-ucm/" + stanza,
+                                {"output_mode": "json"})
+    if status != 200:
+        return ""
+    return json.loads(content)["entry"][0]["content"].get(key, "")
+
+
+def set_conf_value(t, stanza, key, value):
+    status, content = t.request("POST", "/servicesNS/nobody/sunavigator/configs/conf-ucm/" + stanza,
+                                form={key: value})
+    assert status == 200, (status, content[:300])
+
+
+def _internalised(record_id, spl):
+    """A copy of one fixture record whose search reads only _internal (no macros, no datamodel)."""
+    from splunk_ucm.util import git_blob_sha
+    bundle = helpers.fixture_bundle(record_ids=[record_id])
+    entry = bundle["records"][0]
+    record = json.loads(entry["content"])
+    record["spl"] = spl
+    record.pop("cimSpl", None)
+    entry["content"] = json.dumps(record, indent=2) + "\n"
+    entry["blob_sha"] = git_blob_sha(entry["content"].encode("utf-8"))
+    return bundle
+
+
+@unittest.skipUnless(LIVE, "set UCM_LIVE_SPLUNK=1 to run against a real Splunk instance")
+class LiveSchedulerVisibilityTest(unittest.TestCase):
+    """B-03 (D-063): the scheduled owner's index access is read with the handler's system token.
+
+    A throw-away role imports ``user`` (so it holds ``*``, which excludes internal indexes) and a throw-away
+    user holds the role. The test points ``[deployment] scheduled_owner`` at that user, shows ``not_met`` for
+    ``_internal``, grants it and shows ``met``, disallows it again, and restores the configuration.
+    """
+
+    ID = uuid.uuid4().hex[:6]
+    ROLE = "ucm_test_rr_" + ID
+    SCHED = "ucm_test_sch_" + ID
+    OPERATOR = "ucm_test_op_" + ID
+    PW = "T3st!" + uuid.uuid4().hex
+    UC = "fenre:UC-5.2.14"
+    SPL = "index=_internal sourcetype=scheduler | stats count by status"
+    SAVED = "/servicesNS/nobody/sunavigator/saved/searches/"
+
+    @classmethod
+    def setUpClass(cls):
+        cls.admin = transport()
+        cls.kv = KVStore(cls.admin)
+        cls.original_owner = conf_value(cls.admin, "deployment", "scheduled_owner")
+        try:
+            cls._create()
+        except BaseException:
+            cls.tearDownClass()
+            raise
+
+    @classmethod
+    def _create(cls):
+        status, body = cls.admin.request("POST", "/services/authorization/roles",
+                                         form={"name": cls.ROLE, "imported_roles": "user",
+                                               "capabilities": "schedule_search"})
+        assert status in (200, 201), (status, body[:300])
+        for name, roles in ((cls.SCHED, cls.ROLE), (cls.OPERATOR, "ucm_deployment_operator")):
+            status, body = cls.admin.request("POST", "/services/authentication/users",
+                                             form={"name": name, "password": cls.PW, "roles": roles})
+            assert status in (200, 201), (status, body[:300])
+        cls.operator = transport(cls.OPERATOR, cls.PW)
+        set_conf_value(cls.admin, "deployment", "scheduled_owner", cls.SCHED)
+        status, body = api(cls.admin, "POST", "import",
+                           raw=json.dumps(_internalised("5.2.14", cls.SPL)).encode("utf-8"))
+        assert status == 200, body
+        cls.kv.delete(C.DEPLOYMENTS, "dep_fenre_UC-5.2.14")
+
+    @classmethod
+    def tearDownClass(cls):
+        from urllib.parse import quote
+        doc = cls.kv.get(C.DEPLOYMENTS, "dep_fenre_UC-5.2.14")
+        if doc:
+            cls.admin.request("DELETE", cls.SAVED + quote(doc["saved_search"]["name"], safe=""))
+            cls.kv.delete(C.DEPLOYMENTS, "dep_fenre_UC-5.2.14")
+        set_conf_value(cls.admin, "deployment", "scheduled_owner", cls.original_owner)
+        for name in (cls.SCHED, cls.OPERATOR):
+            cls.admin.request("DELETE", "/services/authentication/users/" + name)
+        cls.admin.request("DELETE", "/services/authorization/roles/" + cls.ROLE)
+        api(cls.admin, "POST", "import", raw=json.dumps(helpers.fixture_bundle(record_ids=["5.2.14"])).encode("utf-8"))
+
+    def role(self, **form):
+        status, body = self.admin.request("POST", "/services/authorization/roles/" + self.ROLE, form=form)
+        self.assertEqual(status, 200, body[:300])
+
+    def permission(self):
+        status, doc = api(self.admin, "POST", "readiness/assess", body={"id": self.UC})
+        self.assertEqual(status, 200, doc)
+        rows = [r for r in doc["results"] if r["type"] == "permission"]
+        self.assertEqual(len(rows), 1, doc["results"])
+        return rows[0]
+
+    def act(self, who, action, **body):
+        body["id"] = self.UC
+        return api(who, "POST", "deployment/" + action, body=body)
+
+    def test_restricted_role_then_granted(self):
+        status, summary = api(self.operator, "GET", "readiness/summary")
+        self.assertEqual(status, 200, summary)
+        card = summary["scheduler"]
+        self.assertEqual((card["owner"], card["status"], card["roles"]), (self.SCHED, "ok", [self.ROLE]), card)
+        self.assertFalse(card["internal_access"])
+        self.assertTrue(card["all_indexes_access"])
+        self.assertNotIn("allowed", card)
+        row = self.permission()
+        self.assertEqual((row["status"], row["code"]), ("not_met", "index_not_accessible"), row)
+        self.assertIn(self.SCHED, row["value"])
+        self.assertIn("_internal", row["detail"])
+        self.assertIn("'_*' does", row["detail"])
+
+        status, body = self.act(self.operator, "draft", spl_source="custom", custom_spl=self.SPL,
+                                cron="*/30 * * * *")
+        self.assertEqual(status, 200, body)
+        dep = body["deployment"]
+        self.assertEqual(body["scheduler_access"]["status"], "not_met", body["scheduler_access"])
+        name = dep["saved_search"]["name"]
+        status, body = self.act(self.operator, "submit")
+        self.assertEqual(status, 200, body)
+        self.assertEqual(body["deployment"]["revisions"][-1]["scheduler_access"]["status"], "not_met")
+        self.assertEqual(self.act(self.admin, "approve", note="live test")[0], 200)
+        status, body = self.act(self.operator, "deploy")
+        self.assertEqual(status, 200, body)
+        self.assertEqual(body["deployment"]["live"]["drift"], [])
+
+        status, body = self.act(self.operator, "enable")
+        self.assertEqual(status, 409, body)
+        self.assertIn("cannot search _internal", json.dumps(body))
+        self.assertIn("override", json.dumps(body))
+        status, body = self.act(self.operator, "enable", override_reason="live test: accept blind run")
+        self.assertEqual(status, 200, body)
+        self.assertEqual(body["deployment"]["live"]["status"], "enabled")
+        self.assertEqual(self.act(self.operator, "disable")[0], 200)
+        _, audit = api(self.admin, "GET", "audit", {"prefix": "deployment.enable", "limit": "20"})
+        mine = [e for e in audit["events"] if e["object_id"] == self.UC]
+        self.assertTrue(mine, audit)
+        self.assertEqual(mine[0]["details"]["scheduler_access"], "not_met", mine[0])
+        self.assertEqual(mine[0]["details"]["override_reason"], "live test: accept blind run")
+
+        self.role(srchIndexesAllowed="_internal")
+        status, summary = api(self.operator, "GET", "readiness/summary")
+        self.assertTrue(summary["scheduler"]["internal_access"], summary["scheduler"])
+        row = self.permission()
+        self.assertEqual((row["status"], row["code"]), ("met", "index_accessible"), row)
+        status, view = api(self.operator, "GET", "deployment", {"id": self.UC})
+        self.assertEqual(view["scheduler_access"]["status"], "met", view["scheduler_access"])
+        status, body = self.act(self.operator, "enable", override_reason="")
+        if status == 409:
+            self.assertNotEqual(body.get("code"), "scheduler_access_gate", body)
+        else:
+            self.assertEqual(status, 200, body)
+            self.assertEqual(self.act(self.operator, "disable")[0], 200)
+
+        self.role(srchIndexesDisallowed="_internal")
+        row = self.permission()
+        self.assertEqual(row["status"], "not_met", row)
+        self.assertIn("disallowed", row["detail"])
+        # splunkd drops an index from srchIndexesAllowed when it is added to srchIndexesDisallowed
+        self.role(srchIndexesDisallowed="", srchIndexesAllowed="_internal")
+        row = self.permission()
+        self.assertEqual(row["status"], "met", row)
+
+        self.assertEqual(self.act(self.operator, "retire")[0], 200)
+        status, _ = self.admin.request("GET", self.SAVED + name.replace(" ", "%20"), {"output_mode": "json"})
+        self.assertEqual(status, 404)
+
+    def test_unknown_owner_is_unverified_and_never_blocks(self):
+        set_conf_value(self.admin, "deployment", "scheduled_owner", "ucm_test_nobody_" + self.ID)
+        try:
+            status, summary = api(self.operator, "GET", "readiness/summary")
+            self.assertEqual(summary["scheduler"]["status"], "user_not_found", summary["scheduler"])
+            row = self.permission()
+            self.assertEqual((row["status"], row["code"]), ("unverified", "owner_not_found"), row)
+        finally:
+            set_conf_value(self.admin, "deployment", "scheduled_owner", self.SCHED)
+
+
+@unittest.skipUnless(LIVE, "set UCM_LIVE_SPLUNK=1 to run against a real Splunk instance")
+class LiveScheduledRunTest(unittest.TestCase):
+    """B-04 / issue #7 (D-063): a deployed search really runs on the scheduler as the scheduled owner.
+
+    Two temporary users (four-eyes), a one-minute schedule, one real scheduled run. The test reads
+    ``scheduler.log`` for the run's user and status and checks that the saved search's owner is unchanged.
+    """
+
+    ID = uuid.uuid4().hex[:6]
+    SUBMITTER = "ucm_test_sub_" + ID
+    APPROVER = "ucm_test_apr_" + ID
+    PW = "T3st!" + uuid.uuid4().hex
+    UC = "fenre:UC-18.2.1"
+    DEP_KEY = "dep_fenre_UC-18.2.1"
+    SPL = '| makeresults count=1 | eval sun_probe="scheduled-run"'
+    SAVED = "/servicesNS/nobody/sunavigator/saved/searches/"
+
+    @classmethod
+    def setUpClass(cls):
+        cls.admin = transport()
+        cls.kv = KVStore(cls.admin)
+        if conf_value(cls.admin, "deployment", "scheduled_owner") != SCHEDULED_OWNER:
+            raise unittest.SkipTest("[deployment] scheduled_owner is not %s on this instance" % SCHEDULED_OWNER)
+        try:
+            cls._create()
+        except BaseException:
+            cls.tearDownClass()
+            raise
+
+    @classmethod
+    def _create(cls):
+        for name in (cls.SUBMITTER, cls.APPROVER):
+            status, body = cls.admin.request("POST", "/services/authentication/users",
+                                             form={"name": name, "password": cls.PW,
+                                                   "roles": "ucm_deployment_operator"})
+            assert status in (200, 201), (status, body[:300])
+        cls.submitter = transport(cls.SUBMITTER, cls.PW)
+        cls.approver = transport(cls.APPROVER, cls.PW)
+        status, body = api(cls.admin, "POST", "import",
+                           raw=json.dumps(helpers.fixture_bundle(record_ids=["18.2.1"])).encode("utf-8"))
+        assert status == 200, body
+        cls.kv.delete(C.DEPLOYMENTS, cls.DEP_KEY)
+
+    @classmethod
+    def tearDownClass(cls):
+        from urllib.parse import quote
+        doc = cls.kv.get(C.DEPLOYMENTS, cls.DEP_KEY)
+        if doc:
+            cls.admin.request("DELETE", cls.SAVED + quote(doc["saved_search"]["name"], safe=""))
+            cls.kv.delete(C.DEPLOYMENTS, cls.DEP_KEY)
+        for name in (cls.SUBMITTER, cls.APPROVER):
+            cls.admin.request("DELETE", "/services/authentication/users/" + name)
+
+    def act(self, who, action, **body):
+        body["id"] = self.UC
+        return api(who, "POST", "deployment/" + action, body=body)
+
+    def saved(self, name):
+        from urllib.parse import quote
+        status, content = self.admin.request("GET", self.SAVED + quote(name, safe=""), {"output_mode": "json"})
+        if status == 404:
+            return None
+        entry = json.loads(content)["entry"][0]
+        return dict(entry["content"], owner=entry["acl"]["owner"], sharing=entry["acl"]["sharing"])
+
+    def test_scheduled_run_executes_as_scheduler_account(self):
+        status, body = self.act(self.submitter, "draft", spl_source="custom", custom_spl=self.SPL, cron="* * * * *",
+                                earliest="-5m@m", latest="@m")
+        self.assertEqual(status, 200, body)
+        self.assertTrue(body["deployment"]["revisions"][0]["parse_ok"], body)
+        name = body["deployment"]["saved_search"]["name"]
+        self.assertEqual(self.act(self.submitter, "submit")[0], 200)
+        self.assertEqual(self.act(self.submitter, "approve")[0], 403)
+        self.assertEqual(self.act(self.approver, "approve", note="live test: scheduled run")[0], 200)
+        status, body = self.act(self.approver, "deploy")
+        self.assertEqual(status, 200, body)
+        before = self.saved(name)
+        self.assertTrue(before["disabled"])
+        self.assertEqual((before["owner"], before["sharing"]), (SCHEDULED_OWNER, "app"))
+        self.assertEqual(before["cron_schedule"], "* * * * *")
+        status, body = self.act(self.approver, "enable", override_reason="live test: scheduled run evidence")
+        self.assertEqual(status, 200, body)
+        enabled_at = time.time()
+        try:
+            rows = []
+            deadline = enabled_at + 240
+            spl = ('search index=_internal sourcetype=scheduler savedsearch_name="%s" | '
+                   'table _time user app status result_count savedsearch_name' % name)
+            while time.time() < deadline and not rows:
+                time.sleep(15)
+                rows = oneshot(self.admin, spl, earliest="-10m")
+            self.assertTrue(rows, "no scheduler.log entry for %s within 4 minutes" % name)
+            first = rows[-1]
+            if os.environ.get("UCM_LIVE_VERBOSE") == "1":
+                print("\nscheduler.log:", json.dumps(first, sort_keys=True))
+            self.assertEqual(first["user"], SCHEDULED_OWNER, first)
+            self.assertNotIn(first["user"], (self.SUBMITTER, self.APPROVER))
+            self.assertEqual(first["status"], "success", first)
+            self.assertEqual(first["app"], "sunavigator", first)
+            self.assertEqual(first["result_count"], "1", first)
+            after = self.saved(name)
+            self.assertEqual((after["owner"], after["sharing"]), (SCHEDULED_OWNER, "app"))
+            self.assertFalse(after["disabled"])
+        finally:
+            self.act(self.approver, "disable")
+        status, body = self.act(self.approver, "retire")
+        self.assertEqual((status, body["deployment"]["state"]), (200, "retired"))
+        self.assertIsNone(self.saved(name))

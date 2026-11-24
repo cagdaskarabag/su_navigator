@@ -40,6 +40,7 @@ from ..frameworks.evidence import EvidenceService
 from ..frameworks.operations import OperationsService
 from ..frameworks.registry import FrameworkRegistry
 from ..platform.search import SearchClient
+from ..readiness.principal import SchedulerAccess, read_principal
 from ..readiness.query import ReadinessFilter, ReadinessQueryService
 from ..readiness.recommend import MAX_ITEMS as MAX_RECOMMENDATIONS, RecommendationService
 from ..readiness.service import ReadinessService, new_job as new_readiness_job
@@ -160,7 +161,8 @@ class Context:
             SearchClient(self.user_transport), settings_from_config(self.config))
 
     def readiness_service(self) -> ReadinessService:
-        return ReadinessService(self.records(), self.audit, readiness_settings(self.config))
+        return ReadinessService(self.records(), self.audit, readiness_settings(self.config),
+                                principal_reader=lambda owner: read_principal(self.system_transport, owner))
 
     def mapping_service(self) -> MappingService:
         return MappingService(self.records())
@@ -198,7 +200,8 @@ class Context:
         runner = splunk_runner(writer, SearchClient(self.user_transport), APP_NAME, test_index)
         return DeploymentService(self.records(), self.audit, SearchClient(self.user_transport),
                                  SavedSearchClient(writer, owner=owner), deployment_settings(self.config),
-                                 control_runner=runner)
+                                 control_runner=runner,
+                                 access=SchedulerAccess(self.records(), self.system_transport, owner))
 
     def dashboard_service(self) -> DashboardService:
         views = ViewClient(self.system_transport) if self.system_transport else self.view_client
@@ -450,8 +453,14 @@ def get_readiness_summary(ctx: Context, req: Request) -> Response:
     out = ReadinessQueryService(ctx.store).summary()
     out["state"] = svc.state()
     out["jobs"] = svc.jobs(limit=10)
-    out["discovery_completed_at"] = ctx.discovery_service().state.state().get("last_completed_at")
+    discovery = ctx.discovery_service().state.state()
+    out["discovery_completed_at"] = discovery.get("last_completed_at")
     out["settings"] = dataclasses.asdict(svc.settings)
+    owner = ctx.config.get("deployment", "scheduled_owner", "").strip()
+    scheduler = read_principal(ctx.system_transport, owner).summary()
+    scheduler["discovery_include_internal"] = bool(discovery.get("include_internal")) \
+        if discovery.get("last_completed_at") else None
+    out["scheduler"] = scheduler
     return Response(200, out)
 
 
@@ -541,6 +550,7 @@ def _require_any(ctx: Context, *caps: str) -> None:
 
 def _deployment_view(ctx: Context, svc: DeploymentService, doc: Optional[Dict[str, Any]]) -> Dict[str, Any]:
     return {"deployment": doc, "allowed_actions": svc.allowed_actions(doc, ctx.user, ctx.capabilities()),
+            "scheduler_access": svc.scheduler_access_for(doc),
             "settings": {"require_approval": svc.settings.require_approval,
                          "allow_self_approval": svc.settings.allow_self_approval,
                          "block_enable_states": list(svc.settings.block_enable_states),

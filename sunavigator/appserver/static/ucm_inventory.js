@@ -51,7 +51,10 @@ function ucmViewMain($, ucm) {
             el("div", { "class": "ucm-actions" },
                 el("label", {}, el("input", { type: "checkbox", id: "ucm-inc-int" }), " Include internal indexes"),
                 el("button", { "class": "btn btn-primary", type: "button", id: "ucm-run-disc", text: "Run discovery" })),
-            el("div", { "class": "ucm-sub", text: "Discovery runs a constructed tstats over indexes listed by the management API. Imported SPL is never searched." }));
+            el("div", { "class": "ucm-sub", text: "Discovery runs a constructed tstats over indexes listed by the management API. Imported SPL is never searched." }),
+            el("div", { "class": "ucm-sub", text: "Internal indexes (_internal, _audit, _introspection, ...) are scanned only when Include internal indexes is ticked " +
+                "(default [discovery] include_internal = false). Without it they are listed with no counts, and readiness shows a requirement on an internal index " +
+                "as not verified, never as present or missing. Tick it if you deploy use cases that search internal indexes." }));
         if ((s.totals || {}).truncated) {
             box.appendChild(ucm.stateBox("warn", "The last discovery hit its result limit.",
                 "Some index/sourcetype pairs may be missing from the inventory, and none were marked missing in that run. Raise max_pairs in [discovery] or narrow the indexes searched."));

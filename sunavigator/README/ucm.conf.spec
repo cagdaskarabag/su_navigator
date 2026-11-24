@@ -58,6 +58,10 @@ latest = <relative-time>
 * Relative latest bound. Default now.
 include_internal = <boolean>
 * Include Splunk internal indexes (_internal, _audit, ...). Default false.
+* When false, internal indexes are not scanned: a requirement on one is reported as
+* not verified (never present or missing). Scanning them also does not give the
+* scheduler account access to them; that is a role setting (see [deployment]
+* scheduled_owner and docs/OPERATOR_GUIDE.md).
 max_pairs = <integer>
 * Maximum index/sourcetype pairs stored per job.
 search_timeout_seconds = <integer>

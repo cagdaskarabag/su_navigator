@@ -17,6 +17,7 @@ import re
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from ..discovery.apps import app_candidates
+from .principal import check_access, known_index_docs
 from .snapshot import EnvironmentSnapshot
 
 MET, PARTIAL, NOT_MET, UNKNOWN, UNVERIFIED, NOT_APPLICABLE = (
@@ -97,7 +98,17 @@ def eval_sourcetype(req, snap: EnvironmentSnapshot, settings: EvaluationSettings
                       "Seen in an earlier discovery run but not in the latest window.",
                       [_pair_row(d) for d in missing])
     window = "%s to %s" % (snap.discovery.get("earliest", "?"), snap.discovery.get("latest", "?"))
-    return result(NOT_MET, "not_found", "No events for this sourcetype in the discovery window (%s)." % window)
+    note = "" if snap.include_internal else (
+        " Internal indexes were not scanned ([discovery] include_internal = false), so a sourcetype that "
+        "lives only in _internal or _audit is not seen.")
+    return result(NOT_MET, "not_found", "No events for this sourcetype in the discovery window (%s).%s" % (window, note))
+
+
+def _internal_not_scanned(name: str) -> Dict[str, Any]:
+    return result(UNVERIFIED, "internal_not_scanned",
+                  "%s is an internal index and the last discovery ran without internal indexes ([discovery] "
+                  "include_internal = false), so it was not checked. Run discovery with Include internal indexes "
+                  "to verify it." % name)
 
 
 def eval_index(req, snap: EnvironmentSnapshot, settings: EvaluationSettings):
@@ -107,6 +118,8 @@ def eval_index(req, snap: EnvironmentSnapshot, settings: EvaluationSettings):
         doc = snap.indexes.get(name.lower())
         if not doc:
             continue
+        if (doc.get("is_internal") or name.startswith("_")) and not snap.include_internal:
+            return _internal_not_scanned(doc.get("name") or name)
         row = {"name": doc.get("name"), "status": doc.get("status"), "window_count": doc.get("window_count"),
                "age_seconds": doc.get("age_seconds"), "disabled": doc.get("disabled")}
         if doc.get("status") != "active" or doc.get("disabled"):
@@ -114,6 +127,8 @@ def eval_index(req, snap: EnvironmentSnapshot, settings: EvaluationSettings):
         if not doc.get("window_count"):
             return result(PARTIAL, "index_empty", "Index exists but had no events in the discovery window.", [row])
         return result(MET, "present", "Index has events in the discovery window.", [row])
+    if value.startswith("_") and not snap.include_internal:
+        return _internal_not_scanned(value)
     return result(NOT_MET, "not_found", "Index is not defined on this deployment.")
 
 
@@ -296,6 +311,14 @@ def eval_field(req, snap: EnvironmentSnapshot, settings: EvaluationSettings,
                   "Field was not present in the bounded sample of matching sourcetypes.", [row])
 
 
+def eval_permission(req, snap: EnvironmentSnapshot, settings: EvaluationSettings):
+    attrs = req.get("attributes") or {}
+    evidence: Dict[str, List[str]] = {}
+    for st in attrs.get("scan", {}).get("sourcetypes") or []:
+        evidence[st] = sorted({d.get("index") for d in snap.pairs_active.get(st.lower(), []) if d.get("index")})
+    return check_access(snap.principal, attrs.get("scan"), known_index_docs(snap.indexes), evidence)
+
+
 def eval_other(req, snap: EnvironmentSnapshot, settings: EvaluationSettings):
     value = req.get("value") or ""
     if value.startswith("eventtype="):
@@ -324,7 +347,7 @@ EVALUATORS: Dict[str, Callable[..., Dict[str, Any]]] = {
     "field": eval_field,
     "event_condition": _unverified("requires_data_sampling", "Event conditions need a bounded data sample (WP4)."),
     "freshness": _unverified("not_evaluable", "No freshness target is defined for this requirement."),
-    "permission": _unverified("not_evaluable", "Permissions are checked at deployment time (WP5)."),
+    "permission": eval_permission,
     "data_source": _unverified("not_evaluable", "Free-text data source; map it to a sourcetype to evaluate."),
 }
 

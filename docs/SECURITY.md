@@ -198,6 +198,41 @@ every app role except the two administrative ones, while the app's own API keeps
 working for viewers and analysts. A site that overrides this ACL in `local.meta`
 keeps its override.
 
+## The system token reads the scheduler account's roles (D-063)
+
+Since 0.8.7 the REST handler's system token (`passSystemAuth = true`) and the
+background worker's session key make two read-only requests, and only for the
+account named in `[deployment] scheduled_owner`:
+
+- `GET authentication/users/<scheduled_owner>`: the user's role names;
+- `GET authorization/roles/<role>` for each of those roles: `srchIndexesAllowed`,
+  `srchIndexesDisallowed`, `srchIndexesDefault`, `srchFilter` and their `imported_*`
+  counterparts.
+
+Why the system token: a user without `admin_all_objects` can read only their own
+user and roles (a `ucm_viewer`-class user got `403` for `ucm_scheduler`, measured on
+10.2.9), so the caller's token cannot answer the question. The calls are read-only,
+add no capability and no route, and are not made for any other user. A failure
+(permission, network, Cloud restrictions) gives `unverified` and never blocks anything.
+
+What is exposed to app users:
+
+- `GET readiness/summary` (any app role) returns the scheduler card: the owner's name,
+  the role names, whether the account can search `_internal`, whether it holds `*`,
+  whether a search filter or a disallowed list exists, and how many default indexes
+  it has. It never returns index lists, patterns or the filter text.
+- The `permission` requirement row in `uc_readiness` (shared metadata, same as the rest
+  of the readiness evidence) names the indexes a use case reads that the account cannot
+  search; these are index names already visible in the inventory.
+- The deployment view and the revision's `scheduler_access` record carry the status, the
+  code and a sentence naming the owner, the indexes and the roles.
+- Role patterns and filters are not stored anywhere by the app; they are read per
+  request.
+
+The enable gate for a search the scheduler cannot read uses the existing audited
+override reason (at least 10 characters) and the existing `ucm_deploy` capability. It
+adds a refusal; it removes none.
+
 ## Control tests write to Splunk (D-054)
 
 A control test sends fixture events to the test index in `[controltest] index`

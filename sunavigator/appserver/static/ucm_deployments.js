@@ -24,6 +24,9 @@ function ucmViewMain($, ucm) {
     var STATE_KIND = { draft: "neutral", pending_approval: "warn", approved: "info", rejected: "high",
         deployed: "ok", failed: "error", retired: "neutral" };
     var HEALTH_KIND = { operational: "ok", no_runs: "warn", unhealthy: "error", disabled: "info", unknown: "neutral" };
+    var HEALTH_LABEL = { operational: "ran without error" };
+    var HEALTH_HELP = { operational: "The last scheduled run finished with status success. This is not a statement about data: " +
+        "a search that sees no events also reports success." };
 
     function card(label, value, active, onclick) {
         return el("div", { "class": "ucm-card ucm-card-link" + (active ? " ucm-card-active" : ""), onclick: onclick },
@@ -123,7 +126,11 @@ function ucmViewMain($, ucm) {
                 var cell = ucm.clear(healthCells[id]);
                 var i = byId[id];
                 if (!ops.available) { cell.textContent = byId[id] ? "unavailable" : ""; return; }
-                if (i) { cell.appendChild(ucm.badge(i.health.replace("_", " ") + (i.runs ? " (" + i.runs + ")" : ""), HEALTH_KIND[i.health] || "neutral")); }
+                if (i) {
+                    var b = ucm.badge((HEALTH_LABEL[i.health] || i.health.replace("_", " ")) + (i.runs ? " (" + i.runs + ")" : ""), HEALTH_KIND[i.health] || "neutral");
+                    if (HEALTH_HELP[i.health]) { b.setAttribute("title", HEALTH_HELP[i.health]); }
+                    cell.appendChild(b);
+                }
             });
         }).fail(function () {
             Object.keys(healthCells).forEach(function (id) { ucm.clear(healthCells[id]); });

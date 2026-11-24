@@ -770,7 +770,8 @@ as drift.
   Techniques are listed without a tactic, so a technique in several tactics
   is coloured in each.
 * "Running successfully" is a level (and legend entry) only when run status
-  is requested and available.
+  is requested and available. *Relabelled "Ran without error (not a statement
+  about data)" by D-063; the level and its meaning are unchanged.*
 * Verified: the lab layer (41 techniques) loads in the public ATT&CK
   Navigator with no console errors and the expected colours.
 
@@ -1272,3 +1273,116 @@ as drift.
   stack is not validated (issue #3).
 * Not done: reading the scheduler account's index access (next sprint), a
   server-side audit of interactive searches, treating `rest` as hidden.
+
+## D-063 Scheduler-principal visibility, scheduled-run proof and the Settings listing
+
+*0.8.7 (assessment of 24 Nov 2026, B-03, B-04, issues #7 and #9).*
+
+* Context: a deployed search runs with the rights of `[deployment] scheduled_owner`
+  (D-051). If that account cannot search an index the SPL names, Splunk returns no
+  events and no error: the run is logged as `success` with `result_count=0`, so the
+  Operations page showed `operational` for a search that never saw data. The readiness
+  engine had a `permission` requirement type that always answered `unverified`
+  (`not_evaluable`), and an index that discovery had not scanned (internal indexes
+  with `[discovery] include_internal = false`) was reported as "index not defined".
+* Spike (lab, Splunk 10.2.9, 24 Nov 2026), before any code:
+  * With an `admin` session, `GET authentication/users/<owner>` and
+    `GET authorization/roles/<role>` return `roles`, `srchIndexesAllowed`,
+    `imported_srchIndexesAllowed`, `srchIndexesDisallowed`,
+    `imported_srchIndexesDisallowed`, `srchIndexesDefault`, `imported_srchIndexesDefault`,
+    `srchFilter` and `imported_srchFilter`. The `imported_*` values are already resolved
+    through nested imports, so no recursion is needed.
+  * The REST handler's own system token (`passSystemAuth = true`) reads the same data:
+    after installing 0.8.7, `GET /services/ucm/readiness/summary` returns the scheduler
+    card with `status = ok` for `ucm_scheduler`. The modular input's session key reads
+    it too (the readiness worker job stores the principal summary).
+  * A user without `admin_all_objects` reads only their own user and roles. A
+    `ucm_viewer`-class user got `200` for itself and `403` for `ucm_scheduler`, for
+    `authorization/roles/ucm_scheduler` and for `authorization/roles/admin`. The
+    scheduler account therefore cannot be read with the caller's token, and the
+    handler's system token is required.
+  * Measured with throw-away roles and users (all deleted): `*` matches only
+    non-internal indexes; `_*` or `_internal` is needed for internal indexes; a pattern
+    that starts with `*` (for example `*audit`) never matches an internal index;
+    `srchIndexesDisallowed` wins and applies across all of a user's roles; a role that
+    imports `user` holds `*` and default `main`; a role with an empty
+    `srchIndexesDefault` searching without `index=` sees nothing (no error); setting an
+    index in `srchIndexesDisallowed` through REST removes it from the same role's
+    `srchIndexesAllowed`; `srchFilter` hides events silently.
+* Decision, resolver (`readiness/principal.py`): `read_principal(transport, owner)`
+  reads the user and each of the user's roles and merges own and imported allowed,
+  disallowed and default patterns and the filters. It never raises. A missing
+  owner, an unknown user, a failed read or one unreadable role gives a principal with
+  status `no_owner`, `user_not_found` or `unreadable`. `covers(index)` applies the
+  rules above (disallowed first, internal indexes need an `_` pattern); wildcard SPL
+  patterns (`index=web*`) are expanded against the indexes known from discovery.
+* Decision, SPL side (`scan_spl`): the indexes come from the static `analyze` of the SPL
+  plus the macro-expanded parse when validation stored one (`access_scan`, bound to the
+  source hash). A search with no `index=` is checked against the default indexes. The
+  result is `unverified`, never `met`, for `tstats ... from datamodel`, `tag=`,
+  `eventtype=`, macros that were not expanded, `index=*`, and `map`, `savedsearch` or
+  `loadjob`. A non-empty `srchFilter` adds a warning to the explanation. Only a literal,
+  checkable shortfall gives `not_met`; a certain `not_met` is not weakened by a doubt
+  about another part of the same search.
+* Decision, requirement: every use case with SPL gets a derived requirement
+  `permission:scheduler_index_access`, "runs as <owner>: index access", level
+  `required` (a gap, not a blocker: the readiness state and the enable gate are separate,
+  and the gate is evaluated live against the deployed SPL). Statuses: `met`, `not_met`
+  (or `partial` when only some indexes are missing), `unverified`, `not_applicable`
+  (no index is read). Each row has a plain explanation and the indexes observed. The
+  engine version moved to `ucm.readiness/4` (D-024), so every stored assessment is
+  re-run by the next worker cycle; run **Assess** to see it at once.
+* Decision, deployment: submit stores `scheduler_access` on the revision and in the audit
+  details and never blocks. Enable is gated when the access is `not_met`: it needs an
+  override reason of at least 10 characters, the same audited `override_reason` path
+  that the readiness gate uses (error code `scheduler_access_gate`, or
+  `readiness_gate` if readiness is also blocked). No new capability, route or bypass.
+  `unverified` (including a role-read failure) never blocks. The access is read live
+  with the handler's system token on each view and each enable; nothing about the roles
+  is stored on the deployment.
+* Decision, UI: the Overview shows a scheduler card (owner, roles found, internal-index
+  access yes or no, default-index count, whether discovery scans internal indexes) from
+  `readiness/summary` with no extra request; the use-case page shows the access badge and
+  an explanation, and the enable dialog asks for the override reason when the access is
+  `not_met`.
+* Decision, `include_internal`: X
+  default is the one in `ucm.conf.spec`), internal indexes are not scanned. An internal
+  index requirement is now `unverified` ("internal indexes are not scanned"), never
+  "present" or "missing" and no longer `partial`; a sourcetype not found says so. The
+  Inventory and the card state this. This lowers the score of use cases that name only
+  an internal index and moves them toward `insufficient_evidence` until discovery scans
+  internal indexes; that is the honest reading.
+* Decision, issue #7 (B-04): `LiveScheduledRunTest` deploys a custom search as
+  `ucm_test_sub_*` (submits) and `ucm_test_apr_*` (approves, four-eyes; the
+  submitter's own approval returns 403), enables it with `cron = * * * * *`, waits
+  for a real scheduler run and reads `index=_internal sourcetype=scheduler`. Result on
+  the lab: `user = ucm_scheduler`, `app = sunavigator`, `status = success`,
+  `result_count = 1`, and the saved search is still owned by `ucm_scheduler` with
+  sharing `app`. The search is then disabled, retired and the users deleted. Scheduled
+  execution as the scheduler account is proven on Splunk Enterprise 10.2.9.
+* Decision, Coverage wording: `operational` is now labelled "Ran without error (not a
+  statement about data)" everywhere (Coverage, Deployments, Navigator layer comment,
+  documentation). The state name in the API stays `operational`. It means the
+  scheduler logged `status=success`; as shown above, that includes runs that returned
+  nothing. The new access check is the way to find the common cause.
+* Finding, issue #9: not a SUN defect. Settings > Searches, reports, and alerts
+  requests `servicesNS/<you>/<app>/saved/searches?search=(eai:acl.owner="<you>") AND
+  (eai:acl.app="<app>")`: its default **Owner** filter is the signed-in user. Deployed
+  searches are owned by `ucm_scheduler`, so they are hidden until the filter is changed
+  (captured from Splunk Web 10.2.9 with a headless browser; app `sunavigator`,
+  sharing `app`, owner `ucm_scheduler`, disabled). Choosing Owner **All**
+  (`servicesNS/-/sunavigator/saved/searches`) or Owner `ucm_scheduler` lists the search.
+  Before D-051 the owner was the approver, so the original lab observation was the same
+  filter with a different owner. Nothing is changed in how searches are created. The
+  use-case page now says to set Owner to All, and the operator guide §9.14 documents it.
+* Accepted risks, documented: the check reads roles as they are at the time; a role change
+  does not by itself mark stored assessments stale (assess again; the enable gate is
+  always live). Macros, data models, tags, event types and `index=*` stay `unverified`.
+  `srchFilter`, search-time-window limits (`srchTimeWin`) and per-role quotas are not
+  evaluated. A Splunk Cloud or search head cluster stack may restrict role reads: that
+  gives `unverified` and does not block (not validated, issues #2 and #3).
+* Consequences: the system token now reads `authentication/users/<owner>` and
+  `authorization/roles/<role>` (read-only, only for the configured owner;
+  `docs/SECURITY.md`). The `readiness/summary` response is visible to every app user and
+  carries the owner name, role names and booleans, never index lists. No schema change,
+  no migration, no new collection, no new capability, no new route, no new setting.

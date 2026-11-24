@@ -17,6 +17,7 @@ from ..storage.repositories import CategoryRepository, ContentRepository
 from ..util import new_id, utc_now_iso
 from . import ENGINE_VERSION
 from .evaluators import EvaluationSettings, evaluate
+from .principal import PRINCIPAL_NO_OWNER, PRINCIPAL_UNREADABLE, PrincipalAccess, scan_spl
 from .scoring import ScoringSettings, score
 from .snapshot import EnvironmentSnapshot
 
@@ -32,6 +33,7 @@ class ReadinessSettings:
     scoring: ScoringSettings = dataclasses.field(default_factory=ScoringSettings)
     batch: int = 200
     job_timeout_seconds: int = 3600
+    scheduled_owner: str = ""
 
 
 def new_job(requested_by: str, source: str = "manual") -> Dict[str, Any]:
@@ -41,18 +43,31 @@ def new_job(requested_by: str, source: str = "manual") -> Dict[str, Any]:
             "requested_at": utc_now_iso(), "errors": [], "totals": {}}
 
 
-def _requirements(uc: UseCase) -> List[Requirement]:
+def _requirements(uc: UseCase, snap: Optional[EnvironmentSnapshot] = None, owner: str = "") -> List[Requirement]:
     reqs = list(uc.requirements)
     if uc.spl and not any(r.type == "spl_validity" for r in reqs):
         reqs.append(Requirement(
             "spl_validity:primary", "spl_validity", "primary", "required", "derived_spl", "medium",
             "primary SPL parsed with Splunk search/parser"))
+    if uc.spl and not any(r.type == "permission" for r in reqs):
+        reqs.append(Requirement(
+            "permission:scheduler_index_access", "permission",
+            "runs as %s: index access" % (owner or "the scheduled owner"), "required", "derived_spl", "high",
+            "indexes the primary SPL reads, against the roles of the account that runs deployed searches",
+            {"scan": _scan(uc, snap)}))
     return reqs
+
+
+def _scan(uc: UseCase, snap: Optional[EnvironmentSnapshot]) -> Dict[str, Any]:
+    stored = snap.validation(uc.content_id, uc.key) if snap is not None else None
+    if stored and stored.get("access_scan") and stored.get("source_hash") == uc.provenance.source_hash:
+        return stored["access_scan"]
+    return scan_spl(uc.spl)
 
 
 def assess_use_case(uc: UseCase, snap: EnvironmentSnapshot, settings: ReadinessSettings) -> Dict[str, Any]:
     results = []
-    for req in _requirements(uc):
+    for req in _requirements(uc, snap, settings.scheduled_owner):
         r = dataclasses.asdict(req)
         ev = evaluate(r, snap, settings.evaluation, uc.content_id, uc.key)
         row = {
@@ -82,7 +97,9 @@ def assess_use_case(uc: UseCase, snap: EnvironmentSnapshot, settings: ReadinessS
 
 class ReadinessService:
     def __init__(self, store: DocumentStore, audit: AuditService, settings: Optional[ReadinessSettings] = None,
-                 clock: Callable[[], str] = utc_now_iso):
+                 clock: Callable[[], str] = utc_now_iso,
+                 principal_reader: Optional[Callable[[str], PrincipalAccess]] = None):
+        self.principal_reader = principal_reader
         self.store = store
         self.audit = audit
         self.settings = settings or ReadinessSettings()
@@ -140,6 +157,7 @@ class ReadinessService:
         snap = EnvironmentSnapshot.load(self.store)
         if not snap.discovered:
             raise ValidationError("run environment discovery before assessing readiness")
+        snap.principal = self._read_principal()
         stored = self.content.get_content(key)
         catalog = self.content.get_catalog(key)
         if not stored or not catalog:
@@ -153,6 +171,18 @@ class ReadinessService:
         self.audit.record(actor, "readiness.assessed", "use_case", uc.content_id,
                           details={"state": doc["state"], "score": doc["score"]})
         return doc
+
+    def _read_principal(self) -> Optional[PrincipalAccess]:
+        owner = (self.settings.scheduled_owner or "").strip()
+        if not owner:
+            return PrincipalAccess("", PRINCIPAL_NO_OWNER, "[deployment] scheduled_owner is not set in ucm.conf")
+        if self.principal_reader is None:
+            return None
+        try:
+            return self.principal_reader(owner)
+        except Exception as exc:
+            log.warning("scheduler principal could not be read", extra={"error": str(exc)[:200]})
+            return PrincipalAccess(owner, PRINCIPAL_UNREADABLE, "reading roles failed")
 
     def run(self, job: Dict[str, Any]) -> Dict[str, Any]:
         job["status"] = JOB_RUNNING
@@ -188,6 +218,10 @@ class ReadinessService:
         snap = EnvironmentSnapshot.load(self.store)
         if not snap.discovered:
             raise ValidationError("run environment discovery before assessing readiness")
+        snap.principal = self._read_principal()
+        if snap.principal is not None:
+            job["principal"] = {k: v for k, v in snap.principal.summary().items()
+                                if k in ("owner", "status", "reason", "roles", "internal_access")}
         active = {r["_key"] for r in self.store.query(C.CATALOG, {"provider_status": STATUS_ACTIVE},
                                                       fields=["_key"])}
         normalizer = StoredNormalizer(self.categories)

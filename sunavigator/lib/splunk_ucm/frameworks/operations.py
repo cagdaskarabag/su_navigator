@@ -37,6 +37,7 @@ def _num(value: Any) -> float:
 
 
 def classify(enabled: bool, row: Dict[str, Any]) -> str:
+    """``operational`` means the last run finished with status success; it says nothing about data."""
     if not enabled:
         return "disabled"
     if not row or not _num(row.get("runs")):

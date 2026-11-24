@@ -31,7 +31,8 @@ function ucmViewMain($, ucm) {
         ucm.clear(root).appendChild(el("div", {},
             ucm.kpiStrip(kpis),
             el("div", { "class": "ucm-sub", text: "These figures come from the stored catalogue, readiness and deployment records. " +
-                "Open Readiness for the per-use-case detail behind them." })));
+                "Open Readiness for the per-use-case detail behind them." }),
+            summary && summary.scheduler ? ucm.schedulerCard(summary.scheduler) : null));
     }
 
     $.when(ucm.get("catalog", { count: 1 }), ucm.get("readiness/summary")).done(function (catalog, summary) {
