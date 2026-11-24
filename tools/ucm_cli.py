@@ -3,6 +3,7 @@
 
   build-bundle  Build an offline content bundle from a local Fenre-layout checkout.
   build-escu-bundle  Build an offline bundle from an ESCU package (directory or .tar.gz).
+  build-control-fixtures  Build the control-test fixture bundle from a Fenre samples/ tree (D-054).
   validate      Validate every record of a local checkout without importing it.
   manifest      Resolve the remote provider manifest (network; no Splunk needed).
 
@@ -21,6 +22,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from splunk_ucm.config import DEFAULTS  # noqa: E402
 from splunk_ucm.content.escu.package import build_bundle as build_escu_bundle  # noqa: E402
+from splunk_ucm.deployment.controltest import build_fixture_bundle  # noqa: E402
 from splunk_ucm.content.registry import bundle_provider, remote_provider  # noqa: E402
 from splunk_ucm.errors import UcmError  # noqa: E402
 from ucm_bundle_builder import build_bundle_from_directory  # noqa: E402
@@ -43,6 +45,15 @@ def cmd_build_bundle(args) -> int:
 
 def cmd_build_escu_bundle(args) -> int:
     bundle, report = build_escu_bundle(args.package)
+    data = json.dumps(bundle, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
+    with open(args.output, "wb") as handle:
+        handle.write(data)
+    print(json.dumps(dict(report, output=args.output, bytes=len(data)), indent=2))
+    return 0
+
+
+def cmd_build_control_fixtures(args) -> int:
+    bundle, report = build_fixture_bundle(args.samples, args.provider)
     data = json.dumps(bundle, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
     with open(args.output, "wb") as handle:
         handle.write(data)
@@ -95,6 +106,11 @@ def main(argv=None) -> int:
     p.add_argument("--package", required=True, help="extracted DA-ESS-ContentUpdate directory or .tar.gz")
     p.add_argument("--output", required=True)
     p.set_defaults(func=cmd_build_escu_bundle)
+    p = sub.add_parser("build-control-fixtures", help="build control-test fixtures from a Fenre samples/ tree")
+    p.add_argument("--samples", required=True, help="path to the samples/ directory")
+    p.add_argument("--provider", default="fenre", help="provider id the fixtures belong to (default fenre)")
+    p.add_argument("--output", required=True)
+    p.set_defaults(func=cmd_build_control_fixtures)
     p = sub.add_parser("validate", help="validate a local checkout")
     p.add_argument("--repo", required=True)
     p.add_argument("--categories")

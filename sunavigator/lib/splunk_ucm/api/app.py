@@ -11,6 +11,7 @@ import dataclasses
 import json
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
+from .. import APP_NAME
 from ..audit import AuditService
 from ..catalog.derived import get_facets
 from ..catalog.detail import UseCaseDetailService
@@ -29,6 +30,7 @@ from ..discovery.service import DiscoveryService, new_job as new_discovery_job
 from ..discovery.worker import settings_from_config
 from ..dashboards.service import DashboardService, ViewClient
 from ..dashboards.templates import DOMAINS as DASHBOARD_DOMAINS
+from ..deployment.controltest import DEFAULT_TEST_INDEX, splunk_runner
 from ..deployment.savedsearch import SavedSearchClient
 from ..deployment.service import DeploymentService
 from ..deployment.worker import settings_from_config as deployment_settings
@@ -189,8 +191,11 @@ class Context:
         # saved searches are written with the caller's session (D-028, D-029).
         owner = self.config.get("deployment", "scheduled_owner", "").strip()
         writer = self.system_transport or self.user_transport
+        test_index = self.config.get("controltest", "index", DEFAULT_TEST_INDEX).strip() or DEFAULT_TEST_INDEX
+        runner = splunk_runner(writer, SearchClient(self.user_transport), APP_NAME, test_index)
         return DeploymentService(self.records(), self.audit, SearchClient(self.user_transport),
-                                 SavedSearchClient(writer, owner=owner), deployment_settings(self.config))
+                                 SavedSearchClient(writer, owner=owner), deployment_settings(self.config),
+                                 control_runner=runner)
 
     def dashboard_service(self) -> DashboardService:
         views = ViewClient(self.system_transport) if self.system_transport else self.view_client
@@ -539,6 +544,14 @@ def get_deployments(ctx: Context, req: Request) -> Response:
     return Response(200, out)
 
 
+def post_controltest_import(ctx: Context, req: Request) -> Response:
+    ctx.require(CAP_MANAGE_CONTENT)
+    max_mb = ctx.config.get_int("import", "max_bundle_mb", 50, 1, 500)
+    if len(req.body or b"") > max_mb * 1024 * 1024:
+        raise ValidationError("fixture bundle is larger than max_bundle_mb")
+    return Response(200, ctx.deployment_service().import_fixtures(ctx.user, req.json()))
+
+
 def get_deployments_export(ctx: Context, req: Request) -> Response:
     return Response(200, ctx.deployment_service().export(ctx.user))
 
@@ -571,6 +584,8 @@ def _deployment_action(action: str) -> Handler:
             doc = svc.enable(ctx.user, use_case_id, str(body.get("override_reason") or ""))
         elif action == "verify":
             doc = svc.verify(ctx.user, use_case_id)
+        elif action == "controltest":
+            doc = svc.control_test(ctx.user, use_case_id)
         elif action in ("submit", "approve"):
             doc = getattr(svc, action)(ctx.user, use_case_id, note,
                                        acknowledge_commands=body.get("acknowledge_commands") is True)
@@ -723,7 +738,7 @@ def post_dashboard_delete(ctx: Context, req: Request) -> Response:
 
 
 DEPLOYMENT_ACTIONS = ("draft", "submit", "approve", "reject", "deploy", "enable", "disable", "rollback",
-                      "retire", "verify")
+                      "retire", "verify", "controltest")
 
 
 def build_router() -> Router:
@@ -759,6 +774,7 @@ def build_router() -> Router:
     router.add("POST", "preview", post_preview)
     router.add("GET", "deployments", get_deployments)
     router.add("GET", "deployments/export", get_deployments_export)
+    router.add("POST", "controltest/import", post_controltest_import)
     router.add("GET", "deployment", get_deployment)
     for action in DEPLOYMENT_ACTIONS:
         router.add("POST", "deployment/" + action, _deployment_action(action))

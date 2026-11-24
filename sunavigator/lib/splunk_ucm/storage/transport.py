@@ -20,6 +20,10 @@ class SplunkdTransport(abc.ABC):
                 form: Optional[Dict[str, Any]] = None, timeout: float = 60.0) -> Tuple[int, bytes]:
         """Perform a request; ``path`` starts with ``/services`` or ``/servicesNS``."""
 
+    def post_raw(self, path: str, query: Query, body: str, timeout: float = 60.0) -> Tuple[int, bytes]:
+        """POST an unencoded body (raw event receivers). Implemented by transports that can send one."""
+        raise NotImplementedError("this transport cannot send a raw body")
+
     def json(self, method: str, path: str, query: Query = None, json_body: Any = None,
              form: Optional[Dict[str, Any]] = None, ok=(200, 201), timeout: float = 60.0) -> Any:
         q = dict(query or {})
@@ -41,6 +45,21 @@ class SimpleRequestTransport(SplunkdTransport):
 
     def __init__(self, session_key: str):
         self.session_key = session_key
+
+    def post_raw(self, path, query, body, timeout=60.0):
+        import splunk.rest  # type: ignore  # provided by Splunk at runtime
+
+        kwargs: Dict[str, Any] = {
+            "sessionKey": self.session_key, "method": "POST", "getargs": query or None,
+            "raiseAllErrors": False, "rawResult": True, "timeout": timeout, "jsonargs": body,
+        }
+        try:
+            response, content = splunk.rest.simpleRequest(path, **kwargs)
+        except Exception as exc:
+            raise StorageError("splunkd connection failed: %s" % exc) from exc
+        if isinstance(content, str):
+            content = content.encode("utf-8")
+        return int(response.status), content or b""
 
     def request(self, method, path, query=None, json_body=None, form=None, timeout=60.0):
         import splunk.rest  # type: ignore  # provided by Splunk at runtime

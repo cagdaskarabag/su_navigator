@@ -3,7 +3,7 @@
 [![Version](https://img.shields.io/badge/version-0.7.3-blue.svg)](docs/OPERATOR_GUIDE.md#0-what-changed-in-073)
 [![Splunk Compatibility](https://img.shields.io/badge/splunk-Enterprise%2010.x%20%7C%20Cloud-orange.svg)](docs/OPERATOR_GUIDE.md#2-requirements)
 [![Python Support](https://img.shields.io/badge/python-3.9%20%7C%203.13-brightgreen.svg)](docs/DECISIONS.md#d-005-stdlib-only-python-compatible-with-39313)
-[![Tests](https://img.shields.io/badge/unit%20tests-202%20passed-success.svg)](tests/)
+[![Tests](https://img.shields.io/badge/unit%20tests-353%20passed-success.svg)](tests/)
 [![AppInspect](https://img.shields.io/badge/Splunk%20AppInspect-Clean-brightgreen.svg)](docs/DECISIONS.md#d-019-packaging-constraints-from-appinspect)
 
 **SUNavigator** is a native Splunk application for Enterprise and Cloud that bridges the gap between external security detection catalogues and live production environments. It empowers SOC and detection engineering teams to **discover**, **assess**, **backlog**, **validate**, and **safely deploy** monitoring use cases with built-in four-eyes governance.
@@ -183,6 +183,8 @@ Splunk ES Content Update detections can be imported the same way as a second pro
 python3 tools/ucm_cli.py build-escu-bundle --package DA-ESS-ContentUpdate-latest.tar.gz --output escu.json
 ```
 
+After a deployment, a control test can replay the Fenre sample events through the deployed search. Build the fixtures with `python3 tools/ucm_cli.py build-control-fixtures --samples <fenre>/samples --output fixtures.json`, import them as a content manager, then use **Run control test** on the deployment (see the operator guide, §6.6a).
+
 ---
 
 ## Deployment Workflow & Governance
@@ -238,7 +240,7 @@ sun_navigator/
 │   └── appserver/static/         # Simple XML JS modules and styles
 ├── tools/                        # Development, packaging, and bundle CLI tools
 ├── tests/                        # Automated test suites
-│   ├── unit/                     # 324 mocked unit tests (runs without Splunk)
+│   ├── unit/                     # 353 mocked unit tests (runs without Splunk)
 │   ├── fixtures/readiness/       # Readiness regression corpus and its baseline
 │   └── live/                     # Integration tests against live Splunk instances
 └── docs/                         # Specifications, ADRs, operator guide, and screenshots

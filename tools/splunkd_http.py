@@ -37,6 +37,20 @@ class HttpTransport(SplunkdTransport):
             # Explicit opt-in for local development against a self-signed splunkd.
             self._ctx = ssl._create_unverified_context()  # nosec
 
+    def post_raw(self, path, query, body, timeout=60.0):
+        url = self.base_url + path
+        if query:
+            url += "?" + urllib.parse.urlencode(query, doseq=True)
+        req = urllib.request.Request(url, data=body.encode("utf-8"), method="POST",
+                                     headers={"Authorization": self._auth, "Content-Type": "text/plain"})
+        try:
+            with urllib.request.urlopen(req, context=self._ctx, timeout=timeout) as resp:  # nosec - fixed base URL
+                return resp.status, resp.read()
+        except urllib.error.HTTPError as exc:
+            return exc.code, exc.read() or b""
+        except (urllib.error.URLError, OSError) as exc:
+            raise StorageError("splunkd connection failed: %s" % exc) from exc
+
     def request(self, method, path, query=None, json_body=None, form=None, timeout=60.0):
         url = self.base_url + path
         if query:

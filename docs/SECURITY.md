@@ -24,7 +24,7 @@ Status: WP5 (catalogue, discovery, readiness, selection, SPL validation, deploym
 | *(none)* | Read catalogue, categories, use-case detail, sync status, platform report, inventory, mappings, discovery status. |
 | `ucm_manage_content` | Remote sync, provider manifest check, offline import, catalogue reindex, audit read, framework import and activation. |
 | `ucm_run_discovery` | Queue discovery jobs; create and delete **local** source mappings; run readiness assessments (full or single). |
-| `ucm_deploy` | Approve, reject, deploy, enable, disable, roll back and retire deployments; create and delete generated dashboards. Drafting and submitting also accept `ucm_run_discovery`. |
+| `ucm_deploy` | Approve, reject, deploy, enable, disable, roll back, retire and control-test deployments; create and delete generated dashboards. Drafting and submitting also accept `ucm_run_discovery`. |
 | `ucm_admin` | Audit read; app administration in later WPs. |
 
 | Role | Imports | Capabilities |
@@ -88,6 +88,16 @@ HTTP 404 from the KV collections, while a `ucm_viewer` still works.
 Redacting names per caller was the alternative (D2 option a), not chosen
 for 0.7.x.
 
+## Control tests write to Splunk (D-054)
+
+A control test sends fixture events to the test index in `[controltest] index`
+through `services/receivers/simple`, with the system token, and runs the deployed
+SPL as the caller, restricted to that index and a per-run `source` marker. The
+receiver call needs the system token because a caller's session cannot write
+events; the caller still needs `ucm_deploy`. The index is the only data the test
+writes; keep it separate from production indexes and set its retention. Searches
+that cannot be restricted to the test index are never run.
+
 ## Storage ACLs (`metadata/default.meta`)
 
 - Provider-owned collections (`uc_catalog`, `uc_content`, `uc_categories`):
@@ -95,7 +105,7 @@ for 0.7.x.
   `ucm_content_manager` and `ucm_admin`. Direct KV writes by viewers are
   rejected by splunkd (verified live).
 - Evidence and job collections (`uc_sync_state`, `uc_environment_sources`,
-  `uc_source_mappings`, `uc_readiness`, `uc_validation`): readable by all app
+  `uc_source_mappings`, `uc_readiness`, `uc_validation`, `uc_control_fixtures`): readable by all app
   users, writable only by `admin` / `sc_admin`. The REST handler writes them
   with the system token after the capability check, and the background worker
   writes discovery and readiness results. Analysts and content managers cannot

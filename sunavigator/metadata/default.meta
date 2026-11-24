@@ -61,3 +61,8 @@ access = read : [ * ], write : [ admin, sc_admin ]
 
 [collections/uc_dashboards]
 access = read : [ * ], write : [ admin, sc_admin ]
+
+# Control-test fixtures (Fenre samples/ events), imported by the REST handler with
+# the system token after its capability check (D-054).
+[collections/uc_control_fixtures]
+access = read : [ * ], write : [ admin, sc_admin ]

@@ -130,6 +130,7 @@ All collections are app-scoped (`nobody` owner) and replicated in SHC.
 | `uc_readiness` | same as `uc_catalog` | shared | readiness worker / REST (system token) | `state`, `score`, `coverage`, `blockers`, `gaps`, `counts`, per-requirement `results[]` (status, code, detail, observed, via_mapping), `engine_version`, `discovery_at`, `source_hash`. ~3 KB. Staleness computed on read. |
 | `uc_selections` | `sel_<user>_<content_id>` | per-user | user | Bookmark / select / defer / reject. Sync never writes this collection. |
 | `uc_validation` | same as `uc_catalog` | shared | REST (system token) | Parser outcome, side-effects, bounded preview metadata (no event payloads), field samples. |
+| `uc_control_fixtures` | `cf_<catalog key>` | shared | REST (system token), import only | Control-test fixture: sourcetype, host, `min_count`, raw positive and negative text, import `batch` (D-054). |
 | `uc_deployments` | `dep_<catalog key>` | shared | REST (system token), worker | Workflow `state`, `revisions[]` (frozen SPL, schedule, parse result, submitter, approver, deploy time), `deployed_revision`, `live` (status, drift, owner, next run), `history[]` (last 100), `version`. |
 | `uc_frameworks` | `fw_<id>_<version>` / `active_<id>` | shared | REST (system token) | Imported framework definitions (`ucm.framework/1`) and the active version per framework. Bundled versions are files, not documents. |
 | `uc_dashboards` | `dash_<view name>` | shared | REST (system token) | Generated view record: template, params, label, XML hash, created/updated by. |
@@ -204,6 +205,8 @@ Downgrades are not supported (D-033).
 | `POST ucm/deployment/submit` | `ucm_run_discovery` or `ucm_deploy` | Submit the draft for approval. |
 | `POST ucm/deployment/{approve,reject,deploy,enable,disable,rollback,retire}` | `ucm_deploy` | Workflow and saved-search actions (`note`; `override_reason` for enable). |
 | `POST ucm/deployment/verify` | `ucm_run_discovery` or `ucm_deploy` | Compare the saved search with its revision. |
+| `POST ucm/deployment/controltest` | `ucm_deploy` | Replay control fixtures against the deployed search in the test index (D-054). |
+| `POST ucm/controltest/import` | `ucm_manage_content` | Import Fenre control-test fixtures (`ucm-control-fixtures/1`) into `uc_control_fixtures` (D-054). |
 | `GET ucm/frameworks` | read | Framework versions (bundled and imported, active flag) and coverage per framework. |
 | `GET ucm/frameworks/matrix` | read | ATT&CK matrix (`framework_id`, `version`, `domain`, `operational=1`, `hours`) with remapped and unresolved ids. |
 | `GET ucm/frameworks/technique` | read | Use cases for one technique (`id`). |

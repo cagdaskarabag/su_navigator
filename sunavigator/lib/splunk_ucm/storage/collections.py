@@ -11,6 +11,7 @@ READINESS = "uc_readiness"
 SELECTIONS = "uc_selections"
 VALIDATION = "uc_validation"
 DEPLOYMENTS = "uc_deployments"
+CONTROL_FIXTURES = "uc_control_fixtures"
 FRAMEWORKS = "uc_frameworks"
 DASHBOARDS = "uc_dashboards"
 

@@ -21,6 +21,7 @@ DEFAULTS: Dict[str, Dict[str, str]] = {
     },
     "sync": {"schedule_interval_hours": "0", "job_timeout_seconds": "3600", "max_invalid_ratio": "0.2"},
     "import": {"max_bundle_mb": "50"},
+    "controltest": {"index": "ucm_controltest"},
     "catalog": {"max_page_size": "100"},
     "discovery": {
         "earliest": "-7d", "latest": "now", "include_internal": "false",

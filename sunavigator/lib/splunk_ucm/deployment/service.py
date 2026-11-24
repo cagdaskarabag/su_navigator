@@ -31,6 +31,7 @@ from ..storage.collections import DOC_SCHEMA
 from ..storage.kvstore import DocumentStore
 from ..storage.repositories import CategoryRepository, ContentRepository
 from ..util import safe_key, utc_now_iso
+from .controltest import ControlTestRunner, bundle_hash, validate_bundle
 from .savedsearch import SavedSearchClient
 from .export import build_bundle
 from .spec import drift, is_managed_by_us, normalize_spec, saved_search_name, settings_for, spl_hash
@@ -76,12 +77,14 @@ def deployment_key(catalog_key: str) -> str:
 
 class DeploymentService:
     def __init__(self, store: DocumentStore, audit: AuditService, search: SearchClient,
-                 saved: SavedSearchClient, settings: Optional[DeploymentSettings] = None):
+                 saved: SavedSearchClient, settings: Optional[DeploymentSettings] = None,
+                 control_runner: Optional[ControlTestRunner] = None):
         self.store = store
         self.audit = audit
         self.search = search
         self.saved = saved
         self.settings = settings or DeploymentSettings()
+        self.control_runner = control_runner
         self.content = ContentRepository(store)
         self.categories = CategoryRepository(store)
 
@@ -159,6 +162,8 @@ class DeploymentService:
                 out.append("retire")
             if doc.get("deployed_revision"):
                 out.append("verify")
+                if self.control_runner is not None:
+                    out.append("controltest")
         elif can_propose and doc.get("deployed_revision"):
             out.append("verify")
         return out
@@ -384,6 +389,50 @@ class DeploymentService:
             if doc["live"]["status"] in (LIVE_MISSING, LIVE_UNMANAGED):
                 totals["missing"] += 1
         return totals
+
+    # -- control tests (D-054) -------------------------------------------------
+
+    def import_fixtures(self, actor: str, bundle: Any) -> Dict[str, Any]:
+        provider, fixtures = validate_bundle(bundle)
+        batch = bundle_hash(bundle)
+        now = utc_now_iso()
+        docs = []
+        for fx in fixtures:
+            content_id = "%s:UC-%s" % (provider, fx["uc_id"])
+            docs.append({"_key": safe_key("cf", key_from_id(content_id)), "content_id": content_id,
+                         "provider": provider, "batch": batch, "sourcetype": fx["sourcetype"],
+                         "host": fx["host"], "min_count": fx["min_count"], "positive": fx["positive"],
+                         "negative": fx.get("negative", ""), "imported_at": now, "imported_by": actor})
+        if docs:
+            self.store.batch_save(C.CONTROL_FIXTURES, docs)
+        self.store.delete_query(C.CONTROL_FIXTURES, {"provider": provider, "batch": {"$ne": batch}})
+        self.audit.record(actor, "controltest.import", "controltest", provider,
+                          details={"count": len(docs), "batch": batch})
+        return {"provider": provider, "count": len(docs), "batch": batch}
+
+    def control_test(self, actor: str, content_id: str) -> Dict[str, Any]:
+        doc = self._require(content_id)
+        rev = self._deployed(doc)
+        if self.control_runner is None:
+            raise UnsupportedOperation("control tests are not configured")
+        if rev.get("side_effects"):
+            result = {"status": "not_runnable",
+                      "reason": "the deployed search has side effects: " + ", ".join(rev["side_effects"])}
+        else:
+            fixture = self.store.get(C.CONTROL_FIXTURES, safe_key("cf", key_from_id(content_id)))
+            if fixture is None:
+                result = {"status": "no_fixture", "reason": "no control fixture is imported for this use case",
+                          "test_index": self.control_runner.test_index}
+            else:
+                result = self.control_runner.run(rev.get("spl") or "", fixture)
+        result = dict(result, revision=rev["rev"], ran_at=utc_now_iso(), ran_by=actor)
+        doc["control_test"] = result
+        self._save(doc, actor)
+        self.audit.record(actor, "deployment.controltest", "deployment", doc["content_id"],
+                          outcome="success" if result["status"] == "passed" else "failure",
+                          details={"status": result["status"], "revision": rev["rev"],
+                                   "reason": result.get("reason", "")[:500]})
+        return self._decorate(doc)
 
     # -- internals -----------------------------------------------------------
 

@@ -684,6 +684,35 @@ Limits to know before you rely on the file:
   are removed in the file (`whitespace_normalized` in the manifest says which
   entries changed); the SHA-256 in the manifest is of the exact stored SPL.
 
+### 6.6a Control tests on deployed searches (D-054)
+
+Control tests replay Fenre sample events through the search that is deployed, to
+confirm that the search still fires on the event it is meant to catch. Use them
+after a deploy or a content change; they do not change the deployment state.
+
+1. Create the test index once on the Splunk instance (the app does not create
+   indexes): `ucm_controltest` or the name in `[controltest] index`.
+2. Build the fixtures from a checkout of the Fenre content:
+   `python3 tools/ucm_cli.py build-control-fixtures --samples <fenre>/samples --output fixtures.json`.
+3. Upload them as a content manager: `POST ucm/controltest/import` with the JSON
+   file as body. The response gives the count and the batch hash. Importing
+   again replaces the fixtures of that provider.
+4. On a deployed use case, use **Run control test**. The card shows `passed`,
+   `failed`, `inconclusive`, `not_runnable` or `no_fixture`, with the row counts
+   and the revision that was run.
+
+What the test does: sends the sample events to the test index with a per-run
+marker, runs the deployed SPL with its index filter pointed at that marker, and
+compares the rows to `expected.min_count` (positive) and zero (negative). A
+search whose index filter cannot be rewritten is not run. Search `earliest` and
+`latest` terms are removed from the test copy because the sample timestamps are
+fixed.
+
+What it does not prove: alerting, suppression, the schedule, or that the sample
+is realistic. A `failed` result means the search and the sample disagree; check
+which one is wrong before changing either. Events stay in the test index; set its
+retention in Splunk.
+
 ### 6.7 Coverage
 
 View `ucm_coverage`. Bundled frameworks: MITRE ATT&CK **Enterprise 20.1**
@@ -797,6 +826,7 @@ Common stanzas:
 | `[deployment] default_earliest` / `default_latest` | `-20m@m` / `-5m@m` | Time range proposed for new drafts. |
 | `[deployment] default_schedule_window` | `auto` | Schedule window proposed for new drafts (`auto` or 0–1440 minutes). |
 | `[retention] audit_days` | `365` | `0` keeps audit forever. Also indexed in `_internal` via the app log. |
+| `[controltest] index` | `ucm_controltest` | Test index for control tests (§6.6a). Must exist. |
 
 The worker interval is 60 seconds (`default/inputs.conf`). Do not disable
 `ucm_sync_worker://default` unless you intend to stop all background jobs
@@ -1206,6 +1236,8 @@ Full table: [ARCHITECTURE.md §6](ARCHITECTURE.md).
 - The Settings → Searches listing did not show `SUN - …` searches in the lab
   (§9.14). Use the REST search in §6.6.
 - Default four-eyes blocks a single `admin` from approving their own draft.
+- Control tests (§6.6a) run on the lab with 2 deployed use cases. Other use
+  cases with fixtures are unverified until deployed and run.
 
 ---
 

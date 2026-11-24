@@ -824,6 +824,49 @@ as drift.
 * Web exposure: `default/web.conf` exposes `ucm/deployments/export` explicitly
   (the `ucm/deployment/*` pattern does not cover it).
 
+## D-054 Control tests replay Fenre fixtures against the deployed search
+*0.7.3+ (T-23).*
+* Input: `samples/UC-<id>/positive.log` and `negative.log`, built with
+  `tools/ucm_cli.py build-control-fixtures --samples <dir>` (94 use cases in the
+  Fenre tree on 2026-11). The bundle (`ucm-control-fixtures/1`) is uploaded with
+  `POST ucm/controltest/import` (content-manager capability). It is stored in
+  `uc_control_fixtures` (admin write). A re-import replaces the fixtures of that
+  provider; the `batch` hash decides what is stale.
+* Action: `deployment/controltest` (deploy capability) runs on the **deployed**
+  revision, not on the draft. The result is stored on the deployment as
+  `control_test` and audited as `deployment.controltest`. It does not change
+  workflow state or the saved search.
+* Run: each fixture event is sent to `services/receivers/simple` in
+  `[controltest] index` (default `ucm_controltest`) with the manifest sourcetype,
+  host and a per-run `source` marker. The SPL's index filter is rewritten to
+  `index=<test> source="<marker>"`. The positive run needs `expected.min_count`
+  rows, the negative run needs none. Events that are not all searchable in time
+  make the result inconclusive, not failed.
+* Event boundaries: blank-line blocks when the file uses them, otherwise one
+  line per event. All 94 samples meet their `min_count` under this rule.
+* Time: the sample timestamps are fixed (April 2026). The search's own
+  `earliest=`/`latest=` terms are removed from the test copy and the test window
+  (`-10y` to `+1d`) is used. The logic is tested, not the production window.
+* Refused without a run: searches that cannot be scoped to the test index
+  (`tstats`, `datamodel`, `from`, `rest`, `mstats`, `map`, `savedsearch`,
+  negated or list index filters, a `source=` filter, no index) and deployed
+  searches with side effects. These report `not_runnable`. A search that errors
+  on the test index is `inconclusive`.
+* Why not HEC or a time-bounded search: the HEC token and port were not usable
+  on the lab (HEC on 8088 unreachable; the token was rejected on 8089). The raw
+  receiver cannot set event time, so each run is isolated by its marker, not by a
+  time window. Events accumulate in the test index; retention is an operator
+  setting.
+* Lab result (Splunk 10.2.9, 2026-11-24): `fenre:UC-9.1.2` passed (2 rows for
+  the positive fixture, the negative fixture is absent). `fenre:UC-1.1.1` failed:
+  0 rows for 3 `cpu` events. The SPL filters `cpu=all` and computes
+  `cpu_load_percent`, which the sample lines do not contain. The verdict is
+  correct for the content as written; the sample and the SPL disagree on the
+  data shape.
+* Not covered: the verdict does not prove alerting, suppression, or the
+  schedule. Only the 2 deployed use cases above were run on the lab; the
+  remaining 92 fixtures were imported and not deployed.
+
 ## D-053 ESCU as an offline-bundle provider
 *0.7.3+ (T-22).*
 * Source: the Splunk ES Content Update package (`DA-ESS-ContentUpdate`, 6.11.1

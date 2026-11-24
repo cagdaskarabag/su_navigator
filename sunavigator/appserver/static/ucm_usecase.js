@@ -178,7 +178,8 @@ require([
     }
 
     var ACTION_LABELS = { submit: "Submit for approval", approve: "Approve", reject: "Reject", deploy: "Deploy (disabled)",
-        enable: "Enable", disable: "Disable", rollback: "Roll back", retire: "Retire", verify: "Verify now" };
+        enable: "Enable", disable: "Disable", rollback: "Roll back", retire: "Retire", verify: "Verify now",
+        controltest: "Run control test" };
 
     function runAction(uc, dep, action) {
         var body = { id: uc.content_id };
@@ -220,6 +221,23 @@ require([
             return;
         }
         acknowledgeThenSend();
+    }
+
+    var CONTROL_TEST_TEXT = {
+        passed: "The deployed search returned rows for the fixture's positive events and none for its negative events.",
+        failed: "The deployed search did not behave as the fixture expects.",
+        inconclusive: "The test could not finish, so the search is neither confirmed nor refuted.",
+        not_runnable: "The search cannot be scoped to the test index, so it was not run against any index.",
+        no_fixture: "No control fixture is imported for this use case."
+    };
+
+    function controlTestBox(ct) {
+        var kind = ct.status === "passed" ? "info" : (ct.status === "failed" ? "error" : "warn");
+        var parts = [CONTROL_TEST_TEXT[ct.status] || ct.status];
+        if (ct.reason) { parts.push(ct.reason + "."); }
+        if (ct.test_index) { parts.push("Test index " + ct.test_index + "."); }
+        parts.push("Revision " + ct.revision + ", run " + (ct.ran_at || "") + " UTC by " + (ct.ran_by || "") + ".");
+        return ucm.stateBox(kind, "Control test: " + ct.status, parts.join(" "));
     }
 
     function draftForm(uc, dep, current) {
@@ -313,6 +331,7 @@ require([
                 latest.latest + " range. Remove it from the SPL unless the override is intended."));
         }
         if (dep.last_error) { card.appendChild(ucm.stateBox("error", "Last error", dep.last_error)); }
+        if (dep.control_test) { card.appendChild(controlTestBox(dep.control_test)); }
         var drift = (dep.live && dep.live.drift) || [];
         if (drift.length) {
             card.appendChild(ucm.stateBox("warn", "Drift detected (" + (dep.live.verified_at || "") + " UTC)",

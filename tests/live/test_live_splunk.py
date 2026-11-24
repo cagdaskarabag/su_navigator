@@ -668,6 +668,105 @@ class LiveDeploymentTest(unittest.TestCase):
 
 
 @unittest.skipUnless(LIVE, "set UCM_LIVE_SPLUNK=1 to run against a real Splunk instance")
+class LiveControlTestTest(unittest.TestCase):
+    """T-23 (D-054): fixture events go to the test index and the deployed SPL runs against them.
+
+    Uses fenre:UC-9.1.2 (index=wineventlog, EventCode=4740). The test replaces every
+    fenre control fixture on the instance with its own bundle, which is lab-only.
+    """
+
+    OPERATOR = "ucm_ct_operator_" + uuid.uuid4().hex[:6]
+    OPERATOR_PW = "T3st!" + uuid.uuid4().hex
+    UC = "fenre:UC-9.1.2"
+    KEY = "cf_fenre_UC-9.1.2"
+    DEP_KEY = "dep_fenre_UC-9.1.2"
+    INDEX = "ucm_controltest"
+    SAVED = "/servicesNS/nobody/sunavigator/saved/searches/"
+    POSITIVE = "".join("EventCode=4740 Account_Name=alice CallerComputerName=dc-lab-1\n" for _ in range(3))
+    NEGATIVE = "EventCode=4624 Account_Name=bob CallerComputerName=ws-lab-1\n"
+
+    @staticmethod
+    def bundle(positive=None, negative=None, min_count=2):
+        return {"format": "ucm-control-fixtures", "format_version": 1, "provider": "fenre",
+                "fixtures": [{"uc_id": "9.1.2", "sourcetype": "WinEventLog:Security", "host": "dc-lab-1",
+                              "min_count": min_count,
+                              "positive": LiveControlTestTest.POSITIVE if positive is None else positive,
+                              "negative": LiveControlTestTest.NEGATIVE if negative is None else negative}]}
+
+    @classmethod
+    def setUpClass(cls):
+        cls.admin = transport()
+        cls.admin.request("POST", "/services/data/indexes", form={"name": cls.INDEX})
+        status, _ = cls.admin.request("POST", "/services/authentication/users",
+                                      form={"name": cls.OPERATOR, "password": cls.OPERATOR_PW,
+                                            "roles": "ucm_deployment_operator"})
+        assert status in (200, 201), status
+        cls.operator = transport(cls.OPERATOR, cls.OPERATOR_PW)
+        status, body = api(cls.admin, "POST", "import", raw=json.dumps(helpers.fixture_bundle(record_ids=["9.1.2"])).encode("utf-8"))
+        assert status == 200, body
+        cls.kv = KVStore(cls.admin)
+        cls.kv.delete(C.DEPLOYMENTS, cls.DEP_KEY)
+        assert api(cls.operator, "POST", "deployment/draft", body={"id": cls.UC})[0] == 200
+        assert api(cls.operator, "POST", "deployment/submit", body={"id": cls.UC})[0] == 200
+        assert api(cls.admin, "POST", "deployment/approve", body={"id": cls.UC, "note": "live control test"})[0] == 200
+        status, body = api(cls.operator, "POST", "deployment/deploy", body={"id": cls.UC})
+        assert status == 200, body
+
+    @classmethod
+    def tearDownClass(cls):
+        from urllib.parse import quote
+        doc = cls.kv.get(C.DEPLOYMENTS, cls.DEP_KEY)
+        if doc:
+            cls.admin.request("DELETE", cls.SAVED + quote(doc["saved_search"]["name"], safe=""))
+            cls.kv.delete(C.DEPLOYMENTS, cls.DEP_KEY)
+        cls.kv.delete(C.CONTROL_FIXTURES, cls.KEY)
+        cls.admin.request("DELETE", "/services/authentication/users/" + cls.OPERATOR)
+
+    def load(self, bundle=None):
+        status, body = api(self.admin, "POST", "controltest/import", body=bundle or self.bundle())
+        self.assertEqual(status, 200, body)
+        return body
+
+    def run_control_test(self, who=None):
+        return api(who or self.admin, "POST", "deployment/controltest", body={"id": self.UC})
+
+    def test_import_is_restricted_to_content_managers(self):
+        status, body = api(self.operator, "POST", "controltest/import", body=self.bundle())
+        self.assertEqual(status, 403, body)
+        self.assertEqual(self.load()["count"], 1)
+        stored = self.kv.get(C.CONTROL_FIXTURES, self.KEY)
+        self.assertEqual((stored["sourcetype"], stored["min_count"]), ("WinEventLog:Security", 2))
+
+    def test_negative_matches_fail_the_control_test(self):
+        self.load(self.bundle(negative="EventCode=4740 Account_Name=eve CallerComputerName=dc-lab-1\n"))
+        status, body = self.run_control_test(self.operator)
+        self.assertEqual(status, 200, body)
+        ct = body["deployment"]["control_test"]
+        self.assertEqual(ct["status"], "failed", ct)
+        self.assertGreaterEqual(ct["negative"]["rows"], 1)
+        self.assertIn("negative run", ct["reason"])
+
+    def test_positive_and_negative_runs_pass_on_the_deployed_search(self):
+        self.load()
+        status, body = self.run_control_test()
+        self.assertEqual(status, 200, body)
+        ct = body["deployment"]["control_test"]
+        self.assertEqual(ct["status"], "passed", ct)
+        self.assertEqual(ct["test_index"], self.INDEX)
+        self.assertGreaterEqual(ct["positive"]["rows"], 2)
+        self.assertEqual(ct["negative"]["rows"], 0)
+        self.assertEqual(body["deployment"]["control_test"]["revision"], body["deployment"]["deployed_revision"])
+        _, audit = api(self.admin, "GET", "audit", {"prefix": "deployment.controltest", "limit": "20"})
+        self.assertIn(self.UC, [e["object_id"] for e in audit["events"]])
+
+    def test_missing_fixture_is_reported_without_running(self):
+        self.kv.delete(C.CONTROL_FIXTURES, self.KEY)
+        status, body = self.run_control_test()
+        self.assertEqual(status, 200, body)
+        self.assertEqual(body["deployment"]["control_test"]["status"], "no_fixture")
+
+
+@unittest.skipUnless(LIVE, "set UCM_LIVE_SPLUNK=1 to run against a real Splunk instance")
 class LiveFrameworksDashboardsTest(unittest.TestCase):
     """WP6: bundled ATT&CK coverage, scheduler run status, generated dashboards and their RBAC."""
 

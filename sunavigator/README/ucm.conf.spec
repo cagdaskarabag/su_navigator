@@ -39,6 +39,11 @@ max_invalid_ratio = <float 0-1>
 [import]
 max_bundle_mb = <integer>
 
+[controltest]
+index = <string>
+* Dedicated test index for post-deploy control tests (D-054). Create it on the
+  Splunk instance first; the app never creates indexes. Default ucm_controltest.
+
 [catalog]
 max_page_size = <integer>
 
