@@ -17,6 +17,10 @@ from ..storage.transport import SplunkdTransport
 ONESHOT_ROW_CEILING = 50000
 
 
+class SearchFailed(UnsupportedOperation):
+    """splunkd ran the search and reported an error message for it."""
+
+
 class SearchResult:
     def __init__(self, rows: List[Dict[str, Any]], messages: List[Dict[str, str]], truncated: bool):
         self.rows = rows
@@ -48,7 +52,8 @@ class SearchClient:
         return self._oneshot(search, timeout, max_count, earliest, latest)
 
     def preview(self, search: str, timeout: float = 30.0, max_count: int = 100,
-                earliest: str = "-15m", latest: str = "now", app: str = "") -> SearchResult:
+                earliest: str = "-15m", latest: str = "now", app: str = "",
+                level: str = "fast") -> SearchResult:
         """Dispatch a *user-approved* bounded search. Caller must have gated side effects.
 
         With ``app`` the search runs in that app's namespace (macros, lookups,
@@ -58,7 +63,7 @@ class SearchClient:
         if not text:
             raise ValidationError("empty search")
         path = "/servicesNS/nobody/%s/search/jobs" % quote(app, safe="") if app else "/services/search/jobs"
-        return self._oneshot(text, timeout, max_count, earliest, latest, path)
+        return self._oneshot(text, timeout, max_count, earliest, latest, path, level)
 
     def parse(self, q: str, app: str = "") -> ParseResult:
         """POST search/parser with parse_only. 400 is a parse failure, not a transport error.
@@ -92,7 +97,8 @@ class SearchClient:
         return parsed
 
     def _oneshot(self, search: str, timeout: float, max_count: int,
-                 earliest: str, latest: str, path: str = "/services/search/jobs") -> SearchResult:
+                 earliest: str, latest: str, path: str = "/services/search/jobs",
+                 level: str = "fast") -> SearchResult:
         """Return at most ``max_count`` rows; ``truncated`` is True only if more existed.
 
         A oneshot returns ``count`` rows (splunkd default 100) whatever ``max_count``
@@ -106,7 +112,7 @@ class SearchClient:
             "count": str(limit + 1),
             "max_count": str(limit + 1),
             "timeout": str(max(1, int(timeout))),
-            "adhoc_search_level": "fast",
+            "adhoc_search_level": level,
         }
         if earliest:
             form["earliest_time"] = earliest
@@ -126,6 +132,5 @@ class SearchClient:
         truncated = len(rows) > limit
         result = SearchResult(rows[:limit], messages, truncated)
         if result.errors:
-            raise UnsupportedOperation("search failed: %s" % result.errors[0][:300],
-                                       {"messages": result.errors[:5]})
+            raise SearchFailed("search failed: %s" % result.errors[0][:300], {"messages": result.errors[:5]})
         return result
