@@ -631,3 +631,24 @@ as drift.
 * Not chosen: option (a), redacting names for viewers. It would need
   per-caller filtering in inventory, readiness, validation and detail
   responses and tighter collection ACLs.
+
+## D-045 Compliance substance and imported fields on the use-case page
+*0.7.3+ (T-14, findings F-22 to F-24). Normalizer `fenre-1.3.0`.*
+* Regulation mappings keep, per clause: `control_objective`,
+  `evidence_artifact`, `assurance_rationale`, `sme_caveat` (each capped at
+  4,000 characters), `requires_sme_review` (booleans only) and `clause_url`
+  (absolute http/https only; anything else is dropped).
+* New canonical fields: `wave` (`crawl`, `walk`, `run`; other values dropped),
+  `control_test` (the five schema keys, strings only), `exclusions`,
+  `equipment` (also still in `tags`) and `hardware` (free text, not a tag,
+  because upstream writes sentences there).
+* Every remaining provider field (for example `evidence`,
+  `grandmaExplanation`, `owner`, `cost`) is listed verbatim under
+  "Other provider fields", rendered as text only.
+* The detail view normalizes from the stored raw record on read, so the new
+  fields appear without re-downloading. The normalizer bump runs the existing
+  reindex migration for catalogue summaries once (verified on the lab: 122
+  summaries moved to `fenre-1.3.0`).
+* Upstream measurement (16,726 records): every compliance entry has the
+  objective, evidence and rationale; 679 of 3,870 have a `clauseUrl`; 3,256
+  carry `requires_sme_review`.

@@ -117,6 +117,8 @@ class UseCase:
     category_name: str = ""
     subcategory: str = ""
     tags: List[str] = dataclasses.field(default_factory=list)
+    equipment: List[str] = dataclasses.field(default_factory=list)
+    hardware: str = ""
     criticality: str = "unknown"
     difficulty: str = "unknown"
     business_value: str = ""
@@ -145,6 +147,9 @@ class UseCase:
     visualization: str = ""
     script_example: str = ""
     schedule: Optional[Dict[str, Any]] = None
+    wave: str = ""  # crawl | walk | run
+    control_test: Dict[str, str] = dataclasses.field(default_factory=dict)
+    exclusions: str = ""
     # frameworks
     framework_mappings: List[FrameworkMapping] = dataclasses.field(default_factory=list)
     framework_na_reasons: List[str] = dataclasses.field(default_factory=list)

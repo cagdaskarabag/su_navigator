@@ -620,6 +620,7 @@ class LiveMaintenanceTest(unittest.TestCase):
                 break
             time.sleep(10)
         self.assertEqual(state.get("app_version"), __version__, "worker did not record the version in time")
-        self.assertEqual(state.get("applied"), [m[0] for m in MIGRATIONS])
+        missing = [m[0] for m in MIGRATIONS if m[0] not in (state.get("applied") or [])]
+        self.assertEqual(missing, [], state.get("applied"))
         total = kv.count(C.CATALOG)
         self.assertEqual(kv.count(C.CATALOG, {"summary_version": {"$gte": SUMMARY_VERSION}}), total)

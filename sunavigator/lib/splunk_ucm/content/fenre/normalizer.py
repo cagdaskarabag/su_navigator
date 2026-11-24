@@ -19,7 +19,7 @@ from ...util import dedupe, safe_key, sha256_json
 from ..provider import Normalizer, ProviderCategory, ProviderManifest, ProviderRecord
 from ..validation import FieldContract, ValidationPolicy, is_safe_url
 
-NORMALIZER_VERSION = "fenre-1.2.0"
+NORMALIZER_VERSION = "fenre-1.3.0"
 PROVIDER = "fenre"
 
 _DOMAIN_MAP_PATH = os.path.join(os.path.dirname(__file__), "domain_map.json")
@@ -41,7 +41,11 @@ _MAPPED = {
     "dataModelAcceleration", "spl", "cimSpl", "splVariants", "implementation",
     "detailedImplementation", "visualization", "scriptExample", "mitreAttack", "compliance",
     "status", "splStatus", "lastReviewed", "reviewer", "references", "knownFalsePositives",
+    "hardware", "wave", "controlTest", "exclusions",
 }
+_WAVES = ("crawl", "walk", "run")
+_CONTROL_TEST_KEYS = ("positiveScenario", "negativeScenario", "fixtureRef", "attackTechnique", "fixtureStatus")
+_TEXT_CAP = 4000
 
 CONSUMED_FIELDS = (
     FieldContract("description", "string"), FieldContract("value", "string"),
@@ -62,6 +66,8 @@ CONSUMED_FIELDS = (
     FieldContract("status", "string"), FieldContract("splStatus", "string"),
     FieldContract("lastReviewed", "string"), FieldContract("reviewer", "string"),
     FieldContract("references", "array", "object"), FieldContract("knownFalsePositives", "string"),
+    FieldContract("hardware", "string"), FieldContract("wave", "string"),
+    FieldContract("controlTest", "object"), FieldContract("exclusions", "string"),
 )
 
 
@@ -76,6 +82,10 @@ def load_domain_map(path: str = _DOMAIN_MAP_PATH) -> Dict[str, Any]:
 
 def _s(value: Any) -> str:
     return value.strip() if isinstance(value, str) else ""
+
+
+def _text(value: Any) -> str:
+    return _s(value)[:_TEXT_CAP]
 
 
 def _strs(value: Any) -> List[str]:
@@ -171,6 +181,7 @@ class FenreNormalizer(Normalizer):
             domains=self._domains(raw, category),
             category_key=category.key, category_name=category.name,
             subcategory=self._subcategory(raw, rid, category),
+            equipment=_strs(raw.get("equipment")), hardware=_text(raw.get("hardware")),
             tags=dedupe(_strs(raw.get("equipment")) + ([_s(raw["industry"])] if _s(raw.get("industry")) else [])
                         + ([_s(raw["detectionType"])] if _s(raw.get("detectionType")) else [])),
             criticality=criticality if criticality in CRITICALITY_RANK else "unknown",
@@ -190,6 +201,8 @@ class FenreNormalizer(Normalizer):
             instructions=_s(raw.get("implementation")),
             detailed_instructions=_s(raw.get("detailedImplementation")),
             visualization=_s(raw.get("visualization")), script_example=_s(raw.get("scriptExample")),
+            wave=_s(raw.get("wave")).lower() if _s(raw.get("wave")).lower() in _WAVES else "",
+            control_test=self._control_test(raw), exclusions=_text(raw.get("exclusions")),
             framework_mappings=mappings, framework_na_reasons=na_reasons,
             review_status=_s(raw.get("status")) or "unknown", spl_status=_s(raw.get("splStatus")),
             last_reviewed=_s(raw.get("lastReviewed")), reviewer=_s(raw.get("reviewer")),
@@ -259,6 +272,13 @@ class FenreNormalizer(Normalizer):
         return out
 
     @staticmethod
+    def _control_test(raw: Dict[str, Any]) -> Dict[str, str]:
+        test = raw.get("controlTest")
+        if not isinstance(test, dict):
+            return {}
+        return {k: _text(test[k]) for k in _CONTROL_TEST_KEYS if _text(test.get(k))}
+
+    @staticmethod
     def _references(raw: Dict[str, Any], record_path: str) -> List[Reference]:
         out = []
         for ref in raw.get("references") or []:
@@ -302,9 +322,20 @@ class FenreNormalizer(Normalizer):
             if ident in seen:
                 continue
             seen.add(ident)
-            attributes = {k: item[k] for k in ("mode", "assurance", "obligationRef")
-                          if isinstance(item.get(k), (str, bool))}
+            attributes: Dict[str, Any] = {k: item[k] for k in ("mode", "assurance", "obligationRef")
+                                          if isinstance(item.get(k), (str, bool))}
             attributes["regulation_label"] = _s(item["regulation"])
+            for source, target in (("controlObjective", "control_objective"),
+                                   ("evidenceArtifact", "evidence_artifact"),
+                                   ("assurance_rationale", "assurance_rationale"),
+                                   ("smeCaveat", "sme_caveat")):
+                if _text(item.get(source)):
+                    attributes[target] = _text(item[source])
+            clause_url = _s(item.get("clauseUrl"))
+            if clause_url and is_safe_url(clause_url):
+                attributes["clause_url"] = clause_url
+            if isinstance(item.get("requires_sme_review"), bool):
+                attributes["requires_sme_review"] = item["requires_sme_review"]
             mappings.append(FrameworkMapping(
                 framework="regulation:" + reg_id, object_id=_s(item["clause"]),
                 object_type="control", framework_version=version, attributes=attributes))

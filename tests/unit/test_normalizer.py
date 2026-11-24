@@ -141,6 +141,39 @@ class FenreNormalizerTest(unittest.TestCase):
                 self.assertTrue(uc.title)
                 self.assertTrue(uc.domains, listing.record_id)
 
+    def test_compliance_substance_is_kept(self):
+        def mutate(raw):
+            raw["compliance"] = [
+                dict(raw["compliance"][0], clauseUrl="https://gdpr-info.eu/art-7-gdpr/", requires_sme_review=True,
+                     smeCaveat="Confirm the regulator expectation before uplifting assurance."),
+                dict(raw["compliance"][0], clause="Art.32", clauseUrl="javascript:alert(1)",
+                     requires_sme_review="yes")]
+        uc = self.normalize("10.4.24", mutate)
+        regs = [m for m in uc.framework_mappings if m.framework.startswith("regulation:")]
+        first, second = regs[0].attributes, regs[1].attributes
+        self.assertTrue(first["control_objective"].startswith("Evidence that GDPR"))
+        self.assertIn("Saved search 'UC-10.4.24'", first["evidence_artifact"])
+        self.assertTrue(first["assurance_rationale"].startswith("Auto-generated"))
+        self.assertEqual((first["clause_url"], first["requires_sme_review"]), ("https://gdpr-info.eu/art-7-gdpr/", True))
+        self.assertTrue(first["sme_caveat"].startswith("Confirm"))
+        self.assertNotIn("clause_url", second)
+        self.assertNotIn("requires_sme_review", second)
+
+    def test_scope_testing_and_hardware_are_mapped(self):
+        uc = self.normalize("10.4.24", lambda raw: raw.update(
+            hardware="Edge sensors with BMC access", equipment=["azure", "splunk-es"], exclusions="x" * 5000))
+        self.assertEqual(uc.wave, "crawl")
+        self.assertTrue(uc.control_test["positiveScenario"].startswith("UC-10.4.24 positive"))
+        self.assertIn("negativeScenario", uc.control_test)
+        self.assertEqual(len(uc.exclusions), 4000)
+        self.assertEqual((uc.hardware, uc.equipment), ("Edge sensors with BMC access", ["azure", "splunk-es"]))
+        self.assertIn("azure", uc.tags)
+        for key in ("wave", "controlTest", "exclusions", "hardware"):
+            self.assertNotIn(key, uc.provider_extras)
+        self.assertIn("grandmaExplanation", uc.provider_extras)
+        odd = self.normalize("10.4.24", lambda raw: raw.update(wave="sprint", controlTest="text"))
+        self.assertEqual((odd.wave, odd.control_test), ("", {}))
+
 
 if __name__ == "__main__":
     unittest.main()

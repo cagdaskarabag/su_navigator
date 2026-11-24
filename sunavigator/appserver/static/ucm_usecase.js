@@ -365,10 +365,19 @@ require([
         if (other.length) {
             var body = el("tbody", {});
             other.forEach(function (m) {
-                body.appendChild(el("tr", {}, el("td", { text: m.framework.replace("regulation:", "") }),
-                    el("td", { text: m.framework_version || "unversioned" }), el("td", { text: m.object_id }),
-                    el("td", { text: (m.attributes && m.attributes.mode) || "" }),
-                    el("td", { text: (m.attributes && m.attributes.assurance) || "" })));
+                var a = m.attributes || {};
+                body.appendChild(el("tr", {}, el("td", { text: a.regulation_label || m.framework.replace("regulation:", "") }),
+                    el("td", { text: m.framework_version || "unversioned" }),
+                    el("td", {}, a.clause_url ? el("a", { href: a.clause_url, target: "_blank", rel: "noopener noreferrer", text: m.object_id }) : m.object_id),
+                    el("td", { text: a.mode || "" }),
+                    el("td", {}, a.assurance || "", a.requires_sme_review ? " " : null,
+                        a.requires_sme_review ? ucm.badge("SME review required", "warn") : null)));
+                var notes = [["Control objective", a.control_objective], ["Evidence artifact", a.evidence_artifact],
+                    ["Assurance rationale", a.assurance_rationale], ["SME caveat", a.sme_caveat]].filter(function (n) { return n[1]; });
+                if (notes.length) {
+                    body.appendChild(el("tr", { "class": "ucm-subrow" }, el("td", { colspan: "5" },
+                        el("details", { "class": "ucm-details" }, el("summary", { text: "Objective, evidence and rationale" }), kv(notes)))));
+                }
             });
             parts.push(el("table", { "class": "ucm-table" }, el("thead", {}, el("tr", {},
                 el("th", { text: "Framework" }), el("th", { text: "Version" }), el("th", { text: "Control" }),
@@ -388,10 +397,42 @@ require([
         uc.lookups.forEach(function (l) { rows.push(["Lookup (from SPL)", el("span", { "class": "ucm-mono", text: l })]); });
         uc.cim_models.forEach(function (c) { rows.push(["CIM model", c]); });
         if (uc.splunk_versions.length) { rows.push(["Splunk versions", uc.splunk_versions.join(", ")]); }
+        if (uc.equipment.length) { rows.push(["Equipment", ucm.chips(uc.equipment)]); }
+        if (uc.hardware) { rows.push(["Hardware / platform", uc.hardware]); }
         uc.prerequisite_use_cases.forEach(function (p) { rows.push(["Prerequisite use case", p]); });
         var parts = [rows.length ? kv(rows) : text("", "No structured dependencies supplied.")];
         if (uc.addons_text) { parts.push(el("details", { "class": "ucm-details" }, el("summary", { text: "Provider add-on notes" }), text(uc.addons_text))); }
         return parts;
+    }
+
+    var WAVE_TEXT = { crawl: "crawl — ship first", walk: "walk — builds on crawl use cases", run: "run — advanced, builds on walk" };
+
+    function scopeAndTesting(uc) {
+        var rows = [];
+        if (uc.wave) { rows.push(["Maturity wave", WAVE_TEXT[uc.wave] || uc.wave]); }
+        if (uc.exclusions) { rows.push(["Out of scope", uc.exclusions]); }
+        var t = uc.control_test || {};
+        [["positiveScenario", "Control test: should fire"], ["negativeScenario", "Control test: should stay quiet"],
+            ["attackTechnique", "Test technique"], ["fixtureRef", "Test fixture"], ["fixtureStatus", "Fixture status"]].forEach(function (k) {
+            if (t[k[0]]) { rows.push([k[1], t[k[0]]]); }
+        });
+        return rows.length ? kv(rows) : text("", "No scope or control-test information supplied.");
+    }
+
+    function extraValue(v) {
+        if (typeof v === "string") { return v.length > 4000 ? v.slice(0, 4000) + "…" : v; }
+        if (typeof v === "number" || typeof v === "boolean") { return String(v); }
+        if (Array.isArray(v) && v.every(function (x) { return typeof x === "string"; })) { return v.join(", "); }
+        var json = JSON.stringify(v, null, 2) || "";
+        return el("pre", { "class": "ucm-pre ucm-mono", text: json.length > 4000 ? json.slice(0, 4000) + "…" : json });
+    }
+
+    function providerExtras(uc) {
+        var keys = Object.keys(uc.provider_extras || {}).filter(function (k) { return k.charAt(0) !== "$"; }).sort();
+        if (!keys.length) { return null; }
+        return el("details", { "class": "ucm-details" }, el("summary", { text: "Other provider fields (" + keys.length + ")" }),
+            el("div", { "class": "ucm-sub", text: "Shown as supplied by the provider; not interpreted by the app." }),
+            kv(keys.map(function (k) { return [k, extraValue(uc.provider_extras[k])]; })));
     }
 
     function references(uc) {
@@ -436,6 +477,7 @@ require([
         root.appendChild(section("Implementation", text(uc.instructions),
             uc.detailed_instructions ? el("details", { "class": "ucm-details" }, el("summary", { text: "Detailed implementation guide" }), text(uc.detailed_instructions)) : null,
             uc.visualization ? el("details", { "class": "ucm-details" }, el("summary", { text: "Suggested visualization" }), text(uc.visualization)) : null));
+        root.appendChild(section("Scope and testing", scopeAndTesting(uc)));
         root.appendChild(section("Framework mappings", frameworks(uc)));
         root.appendChild(section("Known false positives", text(uc.known_false_positives)));
         root.appendChild(section("References", references(uc)));
@@ -450,7 +492,7 @@ require([
             ["Schema", p.source_schema], ["Imported (UTC)", p.imported_at],
             ["Normalizer", p.normalizer_version + (uc.normalized_with !== p.normalizer_version ? " (displayed with " + uc.normalized_with + ")" : "")],
             ["Last reviewed", uc.last_reviewed], ["Reviewer", uc.reviewer],
-            ["Validation warnings", String(uc.validation_warning_count || 0)]])));
+            ["Validation warnings", String(uc.validation_warning_count || 0)]]), providerExtras(uc)));
     }
 
     if (!id) {

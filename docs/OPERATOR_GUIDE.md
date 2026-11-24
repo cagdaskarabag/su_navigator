@@ -408,7 +408,13 @@ default max 100 rows).
 Click a title (or open `/app/sunavigator/ucm_usecase?id=fenre:UC-9.1.1`)
 for the use-case page: requirements, SPL (labelled untrusted, not run),
 MITRE and regulation mappings, add-ons, references, readiness, validation
-and the **Deployment** card.
+and the **Deployment** card. Regulation rows link the clause (http/https
+links only), flag "SME review required", and expand to the control
+objective, evidence artifact and assurance rationale. **Scope and testing**
+shows the crawl / walk / run wave, what is out of scope and the control
+test (what should fire, what should stay quiet). **Dependencies** lists
+equipment tags and the hardware note. Any other provider field is listed
+verbatim under **Provenance → Other provider fields**.
 
 **Select** on a row writes a per-user backlog intent. Sync never overwrites
 another user's selections.
