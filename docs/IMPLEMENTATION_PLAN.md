@@ -168,12 +168,12 @@ Deferred, each with its reason and its tracking:
 |---|---|---|
 | Search head cluster with a deployer and indexer peers | no such lab | issue #2 |
 | Splunk Cloud validation and vetting submission | no Cloud stack | issue #3 |
-| ES output mode (findings, notable events, risk) | it cannot be built or verified without an ES 8 lab; 0.9.1 only reads and hands off | issue #4, draft N-11 |
-| Alert action profiles (email, webhook) | gated by a product decision on safe defaults and by the approval model; deployed searches have no actions | draft N-12 |
-| Counts beyond the catalogue marked at the 50,000 bound; join scan paged | the corpora fit today | issue #14, draft N-08 |
+| ES output mode (findings, notable events, risk) | it cannot be built or verified without an ES 8 lab; 0.9.1 only reads and hands off | issue #4, #27 |
+| Alert action profiles (email, webhook) | gated by a product decision on safe defaults and by the approval model; deployed searches have no actions | #28 |
+| Counts beyond the catalogue marked at the 50,000 bound; join scan paged | the corpora fit today | issue #14, #24 |
 | Macro assistance ("Add Macro") | product decision | issue #10 |
 | Field and acceleration checks behind `populated`; scoring decision | needs a decision on what a `no` should do | issue #13 |
-| Background Reindex | not simple with the existing job mechanism | draft N-09 |
+| Background Reindex | not simple with the existing job mechanism | #25 |
 | Browser tests | Node logic tests exist; Splunk Web is checked by hand | issue #15 |
 
 ## Validation status (keep current)

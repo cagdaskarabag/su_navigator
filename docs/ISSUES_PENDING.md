@@ -279,7 +279,26 @@ Comment to post on **#13** (status):
 
 ---
 
-## 3. New issue drafts
+## 3. New issue drafts (filed)
+
+All thirteen drafts below were filed on 2026-11-24 (the bodies are the text of the issues):
+
+| Draft | Issue |
+|---|---|
+| N-01 | [#17](https://github.com/cagdaskarabag/su_navigator/issues/17) |
+| N-02 | [#18](https://github.com/cagdaskarabag/su_navigator/issues/18) |
+| N-03 | [#19](https://github.com/cagdaskarabag/su_navigator/issues/19) |
+| N-04 | [#20](https://github.com/cagdaskarabag/su_navigator/issues/20) |
+| N-05 | [#21](https://github.com/cagdaskarabag/su_navigator/issues/21) |
+| N-06 | [#22](https://github.com/cagdaskarabag/su_navigator/issues/22) |
+| N-07 | [#23](https://github.com/cagdaskarabag/su_navigator/issues/23) |
+| N-08 | [#24](https://github.com/cagdaskarabag/su_navigator/issues/24) |
+| N-09 | [#25](https://github.com/cagdaskarabag/su_navigator/issues/25) |
+| N-10 | [#26](https://github.com/cagdaskarabag/su_navigator/issues/26) |
+| N-11 | [#27](https://github.com/cagdaskarabag/su_navigator/issues/27) |
+| N-12 | [#28](https://github.com/cagdaskarabag/su_navigator/issues/28) |
+| N-13 | [#29](https://github.com/cagdaskarabag/su_navigator/issues/29) |
+
 
 Suggested labels use the repository's existing issue style (type and area in the table of each body). The
 repository has no labels today; the "Labels" line is a suggestion.

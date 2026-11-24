@@ -1949,7 +1949,7 @@ by design.
   installed is unvalidated**: it was tested with mocked responses only. SUN deploys ESCU
   detections as plain scheduled searches, never as ES correlation searches, and a SUN copy
   can run next to an enabled ESCU or ES copy (the Deployment panel warns). Validating the
-  ES-present behaviour is draft N-11.
+  ES-present behaviour is #27.
 
 **Counts and bounds**
 
@@ -1958,16 +1958,16 @@ by design.
   at 90 percent; filters that join readiness or bookmarks refuse above it. Raising it
   means changing `limits.conf` and `[catalog] kv_row_limit` together. Readiness,
   inventory and coverage counts are not yet marked when they reach the bound; the
-  catalogue is the only place that is, and the join scan is not paged (issue #14, draft N-08, §6.2).
+  catalogue is the only place that is, and the join scan is not paged (issue #14, #24, §6.2).
 - Catalogue facet counts are global, not recalculated for the other active filters
   (D-059). The bookmark, availability and regulation filters join by `_key` up to
   `[catalog] max_join_keys` (2000) and otherwise scan up to 49,999 rows. No issue: by design.
-  Facet values are capped (top 600 stored) and a facet name with a comma loses it (draft N-10).
+  Facet values are capped (top 600 stored) and a facet name with a comma loses it (#26).
 - Twin links compare the primary SPL after whitespace is normalised, so a search rewritten
   with the same meaning is not linked, and a link does not prove the records are otherwise
   equal (D-066). Wave, analytic-story and data-source filters need Reindex after an upgrade
   from 0.8.x; Reindex is synchronous (about 5 ms per use case) and blocks one REST call
-  (draft N-09). Twin comparison is by design (no issue).
+  (#25). Twin comparison is by design (no issue).
 - Free-text search is a substring match over a precomputed field (no ranking, only
   the first 1,500 characters of the description). Coverage is computed on read (about
   0.5 s at 20,000 use cases). No issue: by design.
@@ -1988,9 +1988,9 @@ by design.
   cannot see inside macros, data models, tags, event types, `index=*`, `map`,
   `savedsearch` or `loadjob`; those are reported as not verified, never as met. A role
   change does not mark stored assessments stale: press **Assess**. Reading roles on an
-  SHC or on Splunk Cloud has not been validated (drafts N-01 and N-02).
+  SHC or on Splunk Cloud has not been validated (#17 and #18).
 - Discovery scans internal indexes only with `[discovery] include_internal = true`
-  (§6.4); until then requirements on internal indexes stay `unverified` (draft N-03).
+  (§6.4); until then requirements on internal indexes stay `unverified` (#19).
 - Recommended next (D-060) is an ordering heuristic with starting weights that are
   not calibrated. MITRE gain compares technique ids exactly (a sub-technique does not
   credit its parent). It claims no data or CIM population. No issue: by design.
@@ -1999,7 +1999,7 @@ by design.
 
 - The SPL lint (§6.2b) is advice and covers five rules shown wrong on 10.2.9. It does
   not expand macros. A clean result is not proof of correct SPL. More rules only with evidence from the lab
-  (draft N-13).
+  (#29).
 - The use-case page "Run search" runs in your browser with your own permissions and
   outside the server-side guard rails and audit (issue #11). It refuses SPL it cannot
   show (§6.2a); `[interactive_search] enabled = false` removes it. A user without the
@@ -2032,8 +2032,8 @@ by design.
   whatever the data (a Fenre content defect, F-03 in `docs/upstream/FENRE_FINDINGS.md`;
   the SPL lint now flags it). A pass on a `timechart` or on `coalesce` defaults is weak.
   Test-index events are not removed by the app. Tracking: issues #5 and #6 are resolved by
-  the 0.8.8 campaign; what is left is drafts N-04 (upstream report), N-05 (`source=` searches), N-06 (weak passes) and N-07 (re-run
-  with add-ons). Action profiles (email, webhook) are not built: draft N-12.
+  the 0.8.8 campaign; what is left is #20 (upstream report), #21 (`source=` searches), #22 (weak passes) and #23 (re-run
+  with add-ons). Action profiles (email, webhook) are not built: #28.
 
 **Access control**
 

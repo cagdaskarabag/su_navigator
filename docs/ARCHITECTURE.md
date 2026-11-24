@@ -307,7 +307,7 @@ Full model: `docs/SECURITY.md`.
 * ES and ESCU state (0.9.1) is read, never written. Everything that needs ES installed is mocked in
   tests and unvalidated (no ES lab, issue #4); SUN deploys plain scheduled searches, not ES
   correlation searches.
-* Reindex runs inside one REST call (about 5 ms per use case); there is no background job (draft N-09).
+* Reindex runs inside one REST call (about 5 ms per use case); there is no background job (#25).
 * Coverage is computed on read over the whole active catalogue (no cache):
   about 0.5 s per request at 20,000 use cases on a single instance.
 * Catalogue facet counts are global; bookmark / availability / regulation filters
