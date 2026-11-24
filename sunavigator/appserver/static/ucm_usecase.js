@@ -198,9 +198,8 @@ function ucmViewMain($, ucm) {
                 el("span", { "class": "ucm-sub", text: "coverage " + Math.round((rd.coverage || 0) * 100) + "%" }),
                 rd.stale ? ucm.badge("stale: " + rd.stale_reasons.join(", "), "warn") : null,
                 assessBtn),
-            el("div", { "class": "ucm-sub", text: (counts.met || 0) + " met, " + (counts.partial || 0) + " partial, " +
-                (counts.not_met || 0) + " not met, " + (counts.unknown || 0) + " unknown, " + (rd.unverified || 0) +
-                " not verified. Evaluated " + rd.evaluated_at + " UTC against discovery " +
+            el("div", { "class": "ucm-sub", text: ucm.resultSummary(counts, rd.unverified) +
+                ". Evaluated " + rd.evaluated_at + " UTC against discovery " +
                 (rd.discovery_at || "–") + "." }),
             rd.blockers && rd.blockers.length ? el("div", {}, el("strong", { text: "Blocked by critical requirement: " }),
                 rd.blockers.map(function (b) { return ucm.badge(b.type + ": " + b.value, "critical"); })) : null,
@@ -540,8 +539,7 @@ function ucmViewMain($, ucm) {
             el("div", { "class": "ucm-big", text: String(reqs.length) }),
             el("div", { "class": "ucm-sub", text: levels || "none derived" }),
             requirementRows(reqs, rd).extra ? el("div", { "class": "ucm-sub", text: "plus " + requirementRows(reqs, rd).extra + " additional check" + (requirementRows(reqs, rd).extra > 1 ? "s" : "") }) : null,
-            rd ? el("div", { "class": "ucm-sub", text: "results: " + (counts.met || 0) + " met, " + (counts.partial || 0) + " partial, " +
-                (counts.not_met || 0) + " not met, " + (counts.unknown || 0) + " unknown, " + (rd.unverified || 0) + " not verified" })
+            rd ? el("div", { "class": "ucm-sub", text: "results: " + ucm.resultSummary(counts, rd.unverified) })
                 : el("div", { "class": "ucm-sub", text: "not checked yet" })]);
         var rdTile = tile("Readiness", "ucm-sec-requirements", [
             el("div", {}, rd ? ucm.readinessBadge(rd.state) : ucm.badge("not assessed", "neutral"), rd && rd.stale ? ucm.badge("stale", "warn") : null),

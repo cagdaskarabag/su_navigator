@@ -263,6 +263,37 @@ define(["jquery", "splunk.util"], function ($, splunkUtil) {
         return b;
     }
 
+    var RESULT_ORDER = ["met", "partial", "not_met", "unknown", "unverified", "not_applicable"];
+
+    function resultCount(counts, status, unverified) {
+        var n = counts && counts[status];
+        if (status === "unverified" && (n === undefined || n === null)) { n = unverified; }
+        return n || 0;
+    }
+
+    /* One sentence with the stored per-status counts, in the same words as the status badges. */
+    function resultSummary(counts, unverified) {
+        var parts = ["met", "partial", "not_met", "unknown", "unverified"].map(function (st) {
+            return resultCount(counts, st, unverified) + " " + STATUS_LABELS[st][0];
+        });
+        var na = resultCount(counts, "not_applicable", unverified);
+        return parts.join(", ") + (na ? ", " + na + " " + STATUS_LABELS.not_applicable[0] : "");
+    }
+
+    /* The non-zero stored counts as status badges, each explained on hover. */
+    function resultBadges(counts, unverified) {
+        var box = el("span", { "class": "ucm-results-badges" });
+        RESULT_ORDER.forEach(function (st) {
+            var n = resultCount(counts, st, unverified);
+            if (!n) { return; }
+            var b = badge(n + " " + STATUS_LABELS[st][0], STATUS_LABELS[st][1]);
+            b.setAttribute("title", STATUS_HELP[st]);
+            box.appendChild(b);
+        });
+        if (!box.firstChild) { box.appendChild(el("span", { "class": "ucm-sub", text: "–" })); }
+        return box;
+    }
+
     /* Table header with an explanation shown on hover and focus. */
     function helpHeader(label, help) {
         return el("th", { "class": "ucm-help", title: help, tabindex: "0" }, label);
@@ -540,7 +571,7 @@ define(["jquery", "splunk.util"], function ($, splunkUtil) {
         get: get, post: post, postRaw: postRaw, el: el, clear: clear, badge: badge,
         criticalityBadge: criticalityBadge, chips: chips, stateBox: stateBox, queryParams: queryParams,
         setQueryParams: setQueryParams, pager: pager, debounce: debounce, shortSha: shortSha,
-        readinessBadge: readinessBadge, statusBadge: statusBadge, helpHeader: helpHeader, legend: legend,
+        readinessBadge: readinessBadge, statusBadge: statusBadge, resultSummary: resultSummary, resultBadges: resultBadges, helpHeader: helpHeader, legend: legend,
         selectAll: selectAll, percent: percent, readinessKpis: readinessKpis, kpiCard: kpiCard, kpiStrip: kpiStrip, rawGet: rawGet, splCommands: splCommands, splPolicy: splPolicy,
         searchableSpl: searchableSpl, searchGuard: searchGuard, SIDE_EFFECT_COMMANDS: SIDE_EFFECT_COMMANDS,
         INDIRECT_COMMANDS: INDIRECT_COMMANDS, READINESS_HELP: READINESS_HELP, STATUS_HELP: STATUS_HELP,

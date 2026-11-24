@@ -1163,3 +1163,36 @@ as drift.
   users (for example "popular with your colleagues"), automatic selection, and
   filtering by the user's role or domain interest.
 
+## D-061 Requirement result counts, wording, and selections as shared metadata
+
+*0.8.5 (OD-8).*
+
+* Context: the Readiness table showed one "Not verified" number although the
+  assessment stores the count of every status, and some pages described the same
+  state in different words. `uc_selections` had never been described as shared
+  metadata.
+* Decision, display: the Readiness table column "Not verified" became
+  "Requirement results" (`ucm.resultBadges`): non-zero stored `counts` as status
+  badges with the same labels and hover text as the requirement table. The
+  use-case page uses `ucm.resultSummary` for the same sentence in both places it
+  printed counts. Rows stored before `counts` existed fall back to `unverified`.
+  Nothing is recomputed in the browser.
+* Decision, wording: "not assessed" = no stored readiness result for the use case;
+  "not verified" = a requirement the inventory cannot check yet, left out of score
+  and coverage, never "missing". The out-of-date Overview notice (field and SPL
+  checks "in a later release") and the Readiness page description were rewritten
+  to say this.
+* Decision, OD-8: `uc_selections` is documented as **app-shared metadata**,
+  consistent with D2 (D-044). Checked on the lab: a user holding only
+  `ucm_viewer` can list every user's rows and create a row for another user
+  through `/servicesNS/nobody/sunavigator/storage/collections/data/uc_selections`
+  (the test row was deleted). `metadata/default.meta` grants read to all roles and
+  write to admin, sc_admin, ucm_admin, ucm_analyst and ucm_viewer. The ACLs were
+  **not** changed. The app API only reads and writes the caller's rows, and
+  recommendations and bookmark filters use only the caller's rows, so the
+  isolation is application-level, not storage-level. A per-user storage boundary
+  would need the REST handler to be the only writer, which is a larger change and
+  is not made here.
+* Consequences: operators are told not to put sensitive text in selection notes.
+  No schema change, no new collection, no new route.
+

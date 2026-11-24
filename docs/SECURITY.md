@@ -12,7 +12,7 @@ Status: WP5 (catalogue, discovery, readiness, selection, SPL validation, deploym
 | Interactive search (browser) | Started only by a click on **Run search** on the use-case page. The browser dispatches the SPL through Splunk's search API (`splunkjs/mvc/searchmanager`) with the user's own session: their role, capabilities, index access and search quotas apply, and the app is not involved. This is deliberately outside the preview guard rails (D-058, below). |
 | Imported SPL preview | Dispatched only after an explicit user action, a successful parse in the app namespace, a side-effect command gate, and a refusal of indirect-execution (`map`, `savedsearch`, `rest`, ...) and unknown commands (D-038). Time window and `max_count` are forced. Event payloads are not stored. |
 | Field sampling | Constructed `| search index=… sourcetype=… \| head N \| eval … \| fields <validated names> \| fieldsummary` over discovered pairs, in a window ending at the pair's newest event. Imported pipelines are not used. Only presence, counts and the index / sourcetype where a field was seen are kept; event values are not stored (D-044). |
-| Selections | Per-user KV rows; the handler only reads and writes the caller's `user` field. |
+| Selections | Per-user KV rows; the app API only reads and writes the caller's `user` field. This is application-level isolation only: the collection is app-shared metadata at KV level (D-061, below). |
 | Deployment | Saved searches are written with the system token after the capability check and owned by `[deployment] scheduled_owner`, a dedicated `ucm_scheduler` account (D-051). Operators cannot edit or delete them in Splunk (verified on the lab). Disabled first, read back and compared, owner included. Only searches carrying the app's marker are modified. No alert actions. Workflow records are written with the system token after the capability check (D-029). |
 | Reference links | Rendered as links only when absolute `http(s)`; other values are dropped or shown as plain repository paths. |
 | Browser → app API | Splunk Web proxy (`/splunkd/__raw/services/ucm/*`), Splunk session + CSRF form key. All inputs are validated against allowlists; KV queries are built from structured filters, free text is regex-escaped. |
@@ -164,6 +164,21 @@ request parameter, returns no selection data of other users, and writes nothing.
 A unit test checks that another user's name never appears in a response and that
 their rejects have no effect. Readiness, deployments and the catalogue are
 app-shared metadata (D-044) already readable by every app user.
+
+## Selections are app-shared metadata at KV level (D-061)
+
+`uc_selections` holds each user's bookmark, select, defer and reject intents,
+priority and notes. Its ACL (`metadata/default.meta`) gives read to every role and
+write to `admin`, `sc_admin`, `ucm_admin`, `ucm_analyst` and `ucm_viewer`. Treat it
+like the shared inventory in D-044 (decision D2): any user who can reach the app's
+KV Store REST endpoints can read every user's rows, and those with write access can
+change them. Verified on the lab with a user holding only `ucm_viewer`: listing all
+rows and creating a row for another user both succeeded (test row removed).
+
+What the app does: its REST handler takes the user only from the session
+(`ctx.user`), never from a parameter, and reads or writes that user's rows only.
+Bookmarks, recommendations and the backlog all depend on that. The ACLs were not
+changed in 0.8.5. Do not store sensitive information in selection notes.
 
 ## Control tests write to Splunk (D-054)
 

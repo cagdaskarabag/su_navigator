@@ -118,14 +118,17 @@ function runView(file, rootId, routes, opts) {
     ucm.rawGet = function (p, params) { calls.push({ method: "RAW", path: p, params: params || {} }); return routes["RAW " + p] !== undefined ? resolved(routes["RAW " + p]) : rejected({ status: 404, message: "no raw route" }); };
     ucm.post = api("POST");
     var root = new FakeElement("div");
-    global.document.getElementById = function (id) { return id === rootId ? root : null; };
+    global.document.getElementById = function (id) {
+        if (id === rootId) { return root; }
+        return root.find(function (n) { return n.getAttribute("id") === id; })[0] || null;
+    };
     global.document.querySelectorAll = function () { return []; };
     var windowListeners = {};
     var urls = [];
     global.window = { location: { search: opts.search || "", pathname: "/view" },
         history: { replaceState: function (a, b, url) { urls.push(url); } }, scrollTo: function () {},
         addEventListener: function (t, f) { (windowListeners[t] = windowListeners[t] || []).push(f); } };
-    var $ = Object.assign(function () { throw new Error("jQuery call not stubbed"); }, jq, {
+    var $ = Object.assign(opts.jquery || function () { throw new Error("jQuery call not stubbed"); }, jq, {
         when: function () {
             var args = Array.prototype.slice.call(arguments);
             var ok = true, err = null, vals = [];

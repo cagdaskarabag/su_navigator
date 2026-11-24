@@ -129,9 +129,10 @@
       <title>Validation and deployment</title>
       <html>
         <div class="ucm-notice">
-          <strong>Not assessed.</strong> Readiness above is inventory evidence (data, add-ons, data models,
-          knowledge objects). Field presence and SPL validity are verified in a later release, and no use case is
-          reported as validated or enabled until there is evidence for it.
+          <strong>Not verified is not the same as missing.</strong> Readiness above is inventory evidence (data,
+          add-ons, data models, knowledge objects). Requirements the inventory cannot check yet, such as fields,
+          event conditions and permissions, are counted as not verified and are left out of score and coverage.
+          A use case is shown as validated, deployed or enabled only when there is stored evidence for it.
         </div>
       </html>
     </panel>

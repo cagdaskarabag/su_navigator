@@ -1,6 +1,6 @@
 <dashboard version="1.1" theme="light" script="ucm_readiness.js" stylesheet="ucm.css" hideEdit="true">
   <label>Readiness</label>
-  <description>Readiness of imported use cases against the discovered environment. Scores weight each requirement by level and confidence; any unmet critical requirement blocks the use case. Field and SPL checks are not verified yet.</description>
+  <description>Readiness of imported use cases against the discovered environment. Scores weight each requirement by level and confidence; any unmet critical requirement blocks the use case. Requirements that cannot be checked yet are shown as not verified and are left out of the score.</description>
   <row>
     <panel>
       <html>

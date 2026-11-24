@@ -1,10 +1,10 @@
-# SUNavigator 0.8.4 — operator guide
+# SUNavigator 0.8.5 — operator guide
 
 **SUNavigator** (short for **Splunk use case navigator**) discovers, assesses,
 selects, validates and deploys monitoring use cases in Splunk.
 
 This is the install, usage and troubleshooting guide for **SUNavigator
-0.8.4**. It is written for a single Splunk Enterprise instance
+0.8.5**. It is written for a single Splunk Enterprise instance
 (search head + indexer on one host), including a local macOS install. Search
 head clusters and Splunk Cloud are **not** validated in this version.
 
@@ -24,6 +24,21 @@ Related documents (design, not how-to):
 
 The 0.8 line is a usability release. It adds no schema change and no new
 collections. An upgrade from 0.7.3 keeps your data.
+
+### 0.8.5
+
+- **Requirement results on Readiness.** Each row of the Readiness table shows
+  the stored counts per requirement status (met, partial, not met, unknown, not
+  verified, n/a) instead of the single "Not verified" number. They are the
+  counts stored by the last assessment; nothing is recomputed. The use-case page
+  prints the same counts in the same words (D-061).
+- **Consistent wording.** "Not assessed" means no stored readiness result for a
+  use case. "Not verified" means one requirement could not be checked yet; it is
+  not the same as missing data. The Overview notice that said field and SPL checks
+  arrive "in a later release" was out of date and has been replaced.
+- **Documented, not changed.** `uc_selections` is app-shared metadata at KV level
+  (OD-8, `docs/SECURITY.md`). No ACL changed.
+- No schema change.
 
 ### 0.8.4
 
@@ -202,7 +217,7 @@ commands (`delete`, `outputlookup`, `collect`, script, and similar). Deployed
 searches have **no email, webhook or script alert actions**; the default
 alert mode only writes to Splunk's Triggered Alerts.
 
-**Not in 0.8.4:** PDF export of coverage, a bundled regulation-control
+**Not in 0.8.5:** PDF export of coverage, a bundled regulation-control
 catalogue, validated SHC behaviour, Splunk Cloud vetting submission.
 
 ---
@@ -214,7 +229,7 @@ catalogue, validated SHC behaviour, Splunk Cloud vetting submission.
 | Splunk | Enterprise 10.x (validated on 10.2.9 in development; tested by operators on 10.4.3 Darwin arm64). Python 3.9 or 3.13 in Splunk. |
 | KV Store | Must reach `status: ready`. The app stores catalogue, inventory, readiness, selections, deployments and audit in KV collections. |
 | Role | First-time setup needs `admin` (or `sc_admin` on Cloud). |
-| Disk | The 0.8.4 package is a few megabytes. Category 9 of Fenre is about 120 records; the full Fenre corpus is tens of thousands of records. |
+| Disk | The 0.8.5 package is a few megabytes. Category 9 of Fenre is about 120 records; the full Fenre corpus is tens of thousands of records. |
 | Network | Optional. Remote sync needs HTTPS to `api.github.com` and `raw.githubusercontent.com`. Offline import needs none. |
 | Browser | Splunk Web. The app is a set of Simple XML views plus JavaScript under `/en-US/app/sunavigator/`. |
 
@@ -231,7 +246,7 @@ Placeholders used below:
 
 ```bash
 ./tools/package.sh
-# writes dist/sunavigator-0.8.4.tar.gz
+# writes dist/sunavigator-0.8.5.tar.gz
 ```
 
 The tarball has a single top-level folder `sunavigator/`
@@ -249,11 +264,11 @@ then fails in the UI with `500 Internal Server Error` even though splunkd is
 still unpacking. Use the CLI:
 
 ```bash
-$SPLUNK_HOME/bin/splunk install app /path/to/sunavigator-0.8.4.tar.gz \
+$SPLUNK_HOME/bin/splunk install app /path/to/sunavigator-0.8.5.tar.gz \
   -auth "$SPLUNK_USER:$SPLUNK_PASSWORD"
 # first install: omit -update
 # upgrade of an existing copy:
-$SPLUNK_HOME/bin/splunk install app /path/to/sunavigator-0.8.4.tar.gz \
+$SPLUNK_HOME/bin/splunk install app /path/to/sunavigator-0.8.5.tar.gz \
   -update 1 -auth "$SPLUNK_USER:$SPLUNK_PASSWORD"
 
 $SPLUNK_HOME/bin/splunk restart
@@ -939,7 +954,7 @@ Most non-admin roles cannot. The UI then reports run status **not
 available**, not “no runs”. Tick **Include run status** only if your role
 can search `_internal`.
 
-Regulation controls have no bundled catalogue in 0.8.4; only controls that
+Regulation controls have no bundled catalogue in 0.8.5; only controls that
 appear on imported use cases are listed.
 
 **Export ATT&CK Navigator layer** (next to the legend) downloads the matrix
@@ -1064,7 +1079,7 @@ app. Do the steps in this order:
    $SPLUNK_HOME/bin/splunk restart
    ```
 
-4. **Install SUNavigator 0.8.4** as in §3.2. The first install omits
+4. **Install SUNavigator 0.8.5** as in §3.2. The first install omits
    `-update`, because `sunavigator` is a new app ID.
 5. **Re-create the GitHub token** if you use one (§3.6). It must be stored in
    realm `sunavigator`. The 0.7.0 token in realm `splunk_use_case_manager` is
@@ -1217,7 +1232,7 @@ tail -50 "$SPLUNK_HOME/var/log/splunk/sunavigator.log"
 ```
 
 On a search head cluster only the captain runs jobs (not validated in
-0.8.4). On a single instance `standalone = 1` is expected.
+0.8.5). On a single instance `standalone = 1` is expected.
 
 ### 9.4 Provider could not be reached
 
@@ -1424,7 +1439,7 @@ Full table: [ARCHITECTURE.md §6](ARCHITECTURE.md).
 
 ---
 
-## 12. Known limitations (0.8.4)
+## 12. Known limitations (0.8.5)
 
 - Catalogue total counts are bounded by KV `max_rows_per_query` (50,000).
 - Catalogue search does not rank and does not search descriptions.
@@ -1442,12 +1457,31 @@ Full table: [ARCHITECTURE.md §6](ARCHITECTURE.md).
   deployer and without indexer peers (D-055). Splunk Cloud is unvalidated.
 - On Splunk 10.2.9 earlier builds of this app ran captain-only jobs on every
   member (fixed, D-055). Upgrade if you run an SHC.
+- **Selections are readable and writable at KV level by app users (D-061).**
+  Every role that can use the app can read all users' `uc_selections` rows
+  through the KV Store REST API, and the analyst and viewer roles can also write
+  them. The app's own API only reads and writes the caller's rows. Do not put
+  anything sensitive in selection notes.
+- Catalogue facet counts are global, not recalculated for the other active
+  filters (D-059). The bookmark, availability and regulation filters join by
+  `_key` up to `[catalog] max_join_keys` (2000) and otherwise scan up to 49,999
+  rows; beyond that the catalogue asks you to narrow the other filters.
+- Recommended next (D-060) is an ordering heuristic with starting weights that are
+  not calibrated against outcomes. MITRE gain compares technique ids exactly: a
+  sub-technique is not credited to its parent, and the reverse. It claims no data
+  or CIM population beyond "data model definition installed".
+- A retired deployment can keep a stale `live_status` of `disabled`. Coverage and
+  recommendations use `deployed_revision`, not that field.
+- The use-case page "Run search" runs in your browser with your own permissions;
+  a user without the `search` capability sees the button disabled with a reason.
+  That case is covered by unit tests, not by a lab check.
+- No "Add Macro" action exists (OD-4 is undecided). Macros are listed by name.
 
 ---
 
 ## 13. Quick start checklist
 
-1. `splunk install app sunavigator-0.8.4.tar.gz` then `splunk restart`.
+1. `splunk install app sunavigator-0.8.5.tar.gz` then `splunk restart`.
 2. `splunk show kvstore-status` → `ready` (macOS: §9.2 if stuck on `starting`).
 3. Open **SUNavigator → Administration**; all platform pills green.
 4. **Check provider for categories** → tick **9** → **Synchronize**, **or**

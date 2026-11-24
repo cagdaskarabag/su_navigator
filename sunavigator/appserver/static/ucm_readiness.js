@@ -31,8 +31,9 @@ function ucmViewMain($, ucm) {
             "not verified and n/a requirements are left out."],
         ["Unmet (critical/required)", "Critical and required requirements that were checked and are not met. The first 3 are " +
             "listed; up to 20 unmet required requirements are kept. Unmet recommended requirements are only on the use case page."],
-        ["Not verified", "Requirements the inventory cannot check yet, such as unsampled fields, event conditions, permissions " +
-            "or unparsed SPL. They are left out of score and coverage, and do not mean the data is absent."]
+        ["Requirement results", "How many requirements ended in each status, as stored by the last assessment. " +
+            "Partial counts half and unknown counts 0 in the score. Not verified requirements are left out of score and " +
+            "coverage: they could not be checked yet, which does not mean the data is absent."]
     ];
 
     function howToRead() {
@@ -122,7 +123,7 @@ function ucmViewMain($, ucm) {
                 el("td", { "class": "ucm-sub" }, unmet.slice(0, 3).map(function (u) {
                     return el("div", { "class": "ucm-mono", text: u.type + ": " + u.value });
                 }), unmet.length > 3 ? el("span", { "class": "ucm-more", text: "+" + (unmet.length - 3) }) : null),
-                el("td", { text: it.unverified || 0 })));
+                el("td", {}, ucm.resultBadges(it.counts, it.unverified))));
         });
         return el("div", {},
             el("div", { "class": "ucm-summary-line", text: data.total + " use cases" }),

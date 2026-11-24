@@ -154,7 +154,7 @@ All collections are app-scoped (`nobody` owner) and replicated in SHC.
 | `uc_environment_sources` | `src_<kind>_<hash>` | shared | discovery worker | Index, index/sourcetype pair, app (name, label, version, `package_id`) and data-model rows with window counts and data age. Missing sources are marked, never deleted. |
 | `uc_source_mappings` | `map_<kind>_<hash>` | shared | discovery worker / REST (system token) | Local and auto mappings. Local rows are never overwritten by discovery. |
 | `uc_readiness` | same as `uc_catalog` | shared | readiness worker / REST (system token) | `state`, `score`, `coverage`, `blockers`, `gaps`, `counts`, per-requirement `results[]` (status, code, detail, observed, via_mapping), `engine_version`, `discovery_at`, `source_hash`. ~3 KB. Staleness computed on read. |
-| `uc_selections` | `sel_<user>_<content_id>` | per-user | user | Bookmark / select / defer / reject. Sync never writes this collection. |
+| `uc_selections` | `sel_<user>_<content_id>` | per-user rows, app-shared at KV level (D-061) | user | Bookmark / select / defer / reject. Sync never writes this collection. The API isolates users; the ACL does not. |
 | `uc_validation` | same as `uc_catalog` | shared | REST (system token) | Parser outcome, side-effects, bounded preview metadata (no event payloads), field samples. |
 | `uc_control_fixtures` | `cf_<catalog key>` | shared | REST (system token), import only | Control-test fixture: sourcetype, host, `min_count`, raw positive and negative text, import `batch` (D-054). |
 | `uc_deployments` | `dep_<catalog key>` | shared | REST (system token), worker | Workflow `state`, `revisions[]` (frozen SPL, schedule, parse result, submitter, approver, deploy time), `deployed_revision`, `live` (status, drift, owner, next run), `history[]` (last 100), `version`. |
@@ -215,7 +215,7 @@ Downgrades are not supported (D-033).
 | `GET ucm/mappings` | read | Source mappings. |
 | `POST ucm/mappings` | `ucm_run_discovery` | Create or update a **local** mapping. |
 | `POST ucm/mappings/delete` | `ucm_run_discovery` | Delete a local mapping (auto mappings cannot be deleted). |
-| `GET ucm/readiness` | read | Filtered, paged readiness (`state, domain, criticality, category, q, sort, offset, count`). |
+| `GET ucm/readiness` | read | Filtered, paged readiness (`state, domain, criticality, category, q, sort, offset, count`). Each item carries the stored per-status `counts` and `unverified` (shown as requirement results, D-061). |
 | `GET ucm/readiness/summary` | read | Counts by state, most common unmet requirements, jobs, settings. |
 | `GET ucm/readiness/usecase?id=` | read | Full readiness document with staleness. Also embedded in `GET ucm/usecase` as `readiness`. |
 | `POST ucm/readiness` | `ucm_run_discovery` | Queue a full re-assessment. |
@@ -291,6 +291,9 @@ Full model: `docs/SECURITY.md`.
 * Derived requirements are lexical hypotheses (D-013), not evidence.
 * Coverage is computed on read over the whole active catalogue (no cache):
   about 0.5 s per request at 20,000 use cases on a single instance.
+* Catalogue facet counts are global; bookmark / availability / regulation filters
+  join by `_key` within `[catalog] max_join_keys` and scan up to 49,999 rows
+  otherwise (D-059). Recommendations are an uncalibrated ordering (D-060).
 * Run status relies on the scheduler log in `_internal`, which most
   non-admin roles cannot search (D-031).
 
