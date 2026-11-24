@@ -1,10 +1,10 @@
-# SUNavigator 0.7.1 — operator guide
+# SUNavigator 0.7.2 — operator guide
 
 **SUNavigator** (short for **Splunk use case navigator**) discovers, assesses,
 selects, validates and deploys monitoring use cases in Splunk.
 
 This is the install, usage and troubleshooting guide for **SUNavigator
-0.7.1**. It is written for a single Splunk Enterprise instance
+0.7.2**. It is written for a single Splunk Enterprise instance
 (search head + indexer on one host), including a local macOS install. Search
 head clusters and Splunk Cloud are **not** validated in this version.
 
@@ -20,7 +20,34 @@ Related documents (design, not how-to):
 
 ---
 
-## 0. What changed in 0.7.1
+## 0. What changed in 0.7.2
+
+0.7.2 fixes evidence integrity and trust boundaries (no new features). A clean
+install is recommended; an upgrade within `sunavigator` keeps your data.
+
+- **Search results are no longer cut at 100 rows.** Discovery, run status and
+  field sampling used to stop at 100 rows and report the result as complete,
+  so large environments showed sources as missing. Truncation is now explicit
+  and shown in the inventory and coverage views (D-037). Re-run discovery
+  after upgrading.
+- **Validation and preview run in the `sunavigator` namespace**, like the
+  deployed search. App-scoped macros resolve the same way in preview and in
+  deployment. The app ships the Search app's no-op `comment(1)` macro, which
+  many catalogue searches use (D-026).
+- **SPL execution policy.** Preview also refuses commands that run other
+  searches or reach outside the search (`map`, `savedsearch`, `loadjob`,
+  `rest`, `dbxquery`) and commands outside SUN's read-only list. Approving such
+  a deployment needs an explicit, audited acknowledgment. Side effects hidden
+  in macros inside subsearches are now caught. Trusted read-only custom
+  commands can be listed in `[spl] extra_safe_commands` (D-038).
+- **Analysts can no longer write evidence directly.** `uc_readiness`,
+  `uc_validation`, `uc_environment_sources`, `uc_source_mappings` and
+  `uc_sync_state` are admin-write only; the REST API writes them after its
+  capability check, and the worker rejects malformed jobs (D-039). Custom
+  scripts that wrote these collections with a non-admin account must use
+  the REST API instead.
+
+## 0.1 What changed in 0.7.1
 
 0.7.1 renames the application from **Splunk Use Case Manager** (0.7.0 and
 earlier) to **SUNavigator**. The feature set is unchanged.
@@ -73,7 +100,7 @@ commands (`delete`, `outputlookup`, `collect`, script, and similar). Deployed
 searches have **no email, webhook or script alert actions**; the default
 alert mode only writes to Splunk's Triggered Alerts.
 
-**Not in 0.7.1:** PDF export of coverage, a bundled regulation-control
+**Not in 0.7.2:** PDF export of coverage, a bundled regulation-control
 catalogue, validated SHC behaviour, Splunk Cloud vetting submission.
 
 ---
@@ -85,7 +112,7 @@ catalogue, validated SHC behaviour, Splunk Cloud vetting submission.
 | Splunk | Enterprise 10.x (validated on 10.2.9 in development; tested by operators on 10.4.3 Darwin arm64). Python 3.9 or 3.13 in Splunk. |
 | KV Store | Must reach `status: ready`. The app stores catalogue, inventory, readiness, selections, deployments and audit in KV collections. |
 | Role | First-time setup needs `admin` (or `sc_admin` on Cloud). |
-| Disk | The 0.7.1 package is a few megabytes. Category 9 of Fenre is about 120 records; the full Fenre corpus is tens of thousands of records. |
+| Disk | The 0.7.2 package is a few megabytes. Category 9 of Fenre is about 120 records; the full Fenre corpus is tens of thousands of records. |
 | Network | Optional. Remote sync needs HTTPS to `api.github.com` and `raw.githubusercontent.com`. Offline import needs none. |
 | Browser | Splunk Web. The app is a set of Simple XML views plus JavaScript under `/en-US/app/sunavigator/`. |
 
@@ -102,7 +129,7 @@ Placeholders used below:
 
 ```bash
 ./tools/package.sh
-# writes dist/sunavigator-0.7.1.tar.gz
+# writes dist/sunavigator-0.7.2.tar.gz
 ```
 
 The tarball has a single top-level folder `sunavigator/`
@@ -120,11 +147,11 @@ then fails in the UI with `500 Internal Server Error` even though splunkd is
 still unpacking. Use the CLI:
 
 ```bash
-$SPLUNK_HOME/bin/splunk install app /path/to/sunavigator-0.7.1.tar.gz \
+$SPLUNK_HOME/bin/splunk install app /path/to/sunavigator-0.7.2.tar.gz \
   -auth "$SPLUNK_USER:$SPLUNK_PASSWORD"
 # first install: omit -update
 # upgrade of an existing copy:
-$SPLUNK_HOME/bin/splunk install app /path/to/sunavigator-0.7.1.tar.gz \
+$SPLUNK_HOME/bin/splunk install app /path/to/sunavigator-0.7.2.tar.gz \
   -update 1 -auth "$SPLUNK_USER:$SPLUNK_PASSWORD"
 
 $SPLUNK_HOME/bin/splunk restart
@@ -532,7 +559,7 @@ Most non-admin roles cannot. The UI then reports run status **not
 available**, not “no runs”. Tick **Include run status** only if your role
 can search `_internal`.
 
-Regulation controls have no bundled catalogue in 0.7.1; only controls that
+Regulation controls have no bundled catalogue in 0.7.2; only controls that
 appear on imported use cases are listed.
 
 ### 6.8 Dashboards
@@ -626,7 +653,7 @@ app. Do the steps in this order:
    $SPLUNK_HOME/bin/splunk restart
    ```
 
-4. **Install SUNavigator 0.7.1** as in §3.2. The first install omits
+4. **Install SUNavigator 0.7.2** as in §3.2. The first install omits
    `-update`, because `sunavigator` is a new app ID.
 5. **Re-create the GitHub token** if you use one (§3.6). It must be stored in
    realm `sunavigator`. The 0.7.0 token in realm `splunk_use_case_manager` is
@@ -779,7 +806,7 @@ tail -50 "$SPLUNK_HOME/var/log/splunk/sunavigator.log"
 ```
 
 On a search head cluster only the captain runs jobs (not validated in
-0.7.1). On a single instance `standalone = 1` is expected.
+0.7.2). On a single instance `standalone = 1` is expected.
 
 ### 9.4 Provider could not be reached
 
@@ -984,7 +1011,7 @@ Full table: [ARCHITECTURE.md §6](ARCHITECTURE.md).
 
 ---
 
-## 12. Known limitations (0.7.1)
+## 12. Known limitations (0.7.2)
 
 - Catalogue total counts are bounded by KV `max_rows_per_query` (50,000).
 - Catalogue search does not rank and does not search descriptions.
@@ -1001,7 +1028,7 @@ Full table: [ARCHITECTURE.md §6](ARCHITECTURE.md).
 
 ## 13. Quick start checklist
 
-1. `splunk install app sunavigator-0.7.1.tar.gz` then `splunk restart`.
+1. `splunk install app sunavigator-0.7.2.tar.gz` then `splunk restart`.
 2. `splunk show kvstore-status` → `ready` (macOS: §9.2 if stuck on `starting`).
 3. Open **SUNavigator → Administration**; all platform pills green.
 4. **Check provider for categories** → tick **9** → **Synchronize**, **or**
