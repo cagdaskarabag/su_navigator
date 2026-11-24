@@ -10,6 +10,7 @@ Tests write only test-prefixed documents, a partial fixture bundle (records
 from tests/fixtures) and a temporary viewer user; they clean up after themselves.
 """
 
+import hashlib
 import json
 import os
 import time
@@ -342,6 +343,27 @@ class LiveApiTest(unittest.TestCase):
             for facet in facets[key][:3]:
                 status, body = api(self.viewer, "GET", "catalog", {param: facet["id"], "count": "1"})
                 self.assertEqual((status, body["total"]), (200, facet["count"]), (key, facet))
+
+    def test_evidence_pack_is_deterministic_and_matches_clause_gaps(self):
+        status, fw = api(self.viewer, "GET", "frameworks")
+        regs = [c["framework"] for c in fw["coverage"] if c["kind"] == "regulation"]
+        if not regs:
+            self.skipTest("no regulation mappings imported")
+        framework = regs[0]
+        status, first = api(self.viewer, "GET", "frameworks/evidence", {"framework": framework, "format": "csv"})
+        self.assertEqual(status, 200, first)
+        _, again = api(self.viewer, "GET", "frameworks/evidence", {"framework": framework, "format": "csv"})
+        self.assertEqual(first["sha256"], again["sha256"])
+        self.assertEqual(first["sha256"], hashlib.sha256(first["content"].encode("utf-8")).hexdigest())
+        _, pack = api(self.viewer, "GET", "frameworks/evidence", {"framework": framework})
+        gaps = {c["clause"] for c in json.loads(pack["content"])["clauses"] if c["gap"]}
+        _, controls = api(self.viewer, "GET", "frameworks/controls", {"framework": framework})
+        self.assertEqual(gaps, {c["control"] for c in controls["controls"] if c["gap"]})
+        clause = controls["controls"][0]["control"]
+        status, body = api(self.viewer, "GET", "frameworks/clause", {"framework": framework, "clause": clause})
+        self.assertEqual(status, 200, body)
+        self.assertEqual(len({u["content_id"] for u in body["use_cases"]}),
+                         controls["controls"][0]["counts"]["catalogue"])
 
     def test_platform_report(self):
         status, body = api(self.admin, "GET", "platform")

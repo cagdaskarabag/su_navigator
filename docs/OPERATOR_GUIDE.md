@@ -638,6 +638,25 @@ can search `_internal`.
 Regulation controls have no bundled catalogue in 0.7.3; only controls that
 appear on imported use cases are listed.
 
+**Clauses and evidence (D-049).** Click a regulation under "Other frameworks
+and regulations" to list its clauses in natural order (`A.5.9` before
+`A.5.10`). A clause is marked **gap** when no mapped use case is data ready,
+deployed or enabled; tick **Gaps only** to hide the rest. Click a clause for
+its use cases with level, readiness (and whether it is stale), deployment
+state and saved search, the mapping mode and assurance, "SME review
+required", and the control objective, evidence artifact and rationale.
+
+**Export evidence (CSV)** and **(JSON)** download one row per clause and use
+case with those fields plus provenance (provider record, source ref, blob
+SHA, normalizer version, import time). The pack is built only from KV state
+and sorted, so the same catalogue, readiness and deployment state produces
+the same file; the page shows its SHA-256. It has no generation time: the
+`as_of` fields (JSON) are the latest discovery, readiness and import times
+it contains. CSV cells starting with `=`, `+`, `-`, `@`, tab or carriage
+return are prefixed with `'` so spreadsheets do not run them as formulas.
+At most 5,000 use cases per regulation; narrow larger exports with
+`clause=` on `GET /services/ucm/frameworks/evidence`.
+
 ### 6.8 Dashboards
 
 **Dashboards → Domain** (`ucm_domain`) is a fixed Simple XML dashboard over

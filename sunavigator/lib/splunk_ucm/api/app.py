@@ -34,6 +34,7 @@ from ..deployment.service import DeploymentService
 from ..deployment.worker import settings_from_config as deployment_settings
 from ..errors import PermissionDenied, UcmError, UnsupportedOperation, ValidationError
 from ..frameworks.coverage import CoverageService
+from ..frameworks.evidence import EvidenceService
 from ..frameworks.operations import OperationsService
 from ..frameworks.registry import FrameworkRegistry
 from ..platform.search import SearchClient
@@ -631,6 +632,30 @@ def get_framework_controls(ctx: Context, req: Request) -> Response:
                           "controls": CoverageService(ctx.store).framework_controls(framework, levels)})
 
 
+def _regulation(req: Request) -> str:
+    framework = req.arg("framework")
+    if not framework.startswith("regulation:") or len(framework) > 200:
+        raise ValidationError("framework must be a regulation:<id> framework")
+    return framework
+
+
+def get_framework_clause(ctx: Context, req: Request) -> Response:
+    framework, clause = _regulation(req), req.arg("clause")
+    if not clause or len(clause) > 200:
+        raise ValidationError("clause is required")
+    levels, _ = _levels(ctx, req)
+    rows = EvidenceService(ctx.store).rows(framework, levels, clause)
+    return Response(200, {"framework": framework, "clause": clause, "use_cases": rows})
+
+
+def get_framework_evidence(ctx: Context, req: Request) -> Response:
+    framework, clause = _regulation(req), req.arg("clause")
+    if len(clause) > 200:
+        raise ValidationError("clause is too long")
+    levels, _ = _levels(ctx, req)
+    return Response(200, EvidenceService(ctx.store).pack(framework, levels, req.arg("format", "json"), clause))
+
+
 def post_framework_import(ctx: Context, req: Request) -> Response:
     ctx.require(CAP_MANAGE_CONTENT)
     summary = FrameworkRegistry(ctx.records()).import_definition(req.body, ctx.user)
@@ -724,6 +749,8 @@ def build_router() -> Router:
     router.add("GET", "frameworks/matrix", get_framework_matrix)
     router.add("GET", "frameworks/technique", get_framework_technique)
     router.add("GET", "frameworks/controls", get_framework_controls)
+    router.add("GET", "frameworks/clause", get_framework_clause)
+    router.add("GET", "frameworks/evidence", get_framework_evidence)
     router.add("POST", "frameworks/import", post_framework_import)
     router.add("POST", "frameworks/activate", post_framework_activate)
     router.add("GET", "operations", get_operations)

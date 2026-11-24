@@ -724,3 +724,33 @@ as drift.
   apps (29 of the 65 ids) and lists the ES installer rather than
   `SplunkEnterpriseSecuritySuite`.
 * No network access at runtime; the list changes only with an app release.
+
+## D-049 Clause-level compliance view and evidence pack
+*0.7.3+ (T-18).*
+* Chain: regulation → clause → use case → readiness → deployment. Rows join
+  the catalogue (active use cases), the mapping substance normalized from
+  the stored raw record (mode, assurance, objective, evidence artifact,
+  rationale, clause link, SME flag), `uc_readiness` (state, score, evaluated
+  time, staleness by the same rules as the readiness API) and
+  `uc_deployments` (state, live status, saved search, deployed revision,
+  drift). Provenance comes from the stored record.
+* A clause is a gap when its best use-case level is below "data ready".
+  The clause list (`frameworks/controls`) and the pack compute gaps from the
+  same KV documents; a unit test recomputes them from raw collection queries.
+* Determinism: rows are sorted by natural clause order, framework version
+  and use-case id; JSON uses sorted keys and fixed separators; CSV uses a
+  fixed column list and CRLF line ends. No wall-clock time is included, so
+  the same state yields the same bytes and SHA-256 (verified on the lab:
+  the downloaded file hashes to the value the page reports).
+* Long text is capped at 4,000 characters per cell, the normalizer's own
+  cap. CSV cells that a spreadsheet would treat as a formula get a leading
+  apostrophe.
+* Readable by every app user (D-044): the pack contains catalogue,
+  readiness and deployment state that the views already show. It is a read,
+  so it is not audited.
+* Cost: about 0.45 s in memory for NIST 800-53 upstream (1,194 use cases,
+  1,214 rows, 116 clauses, 0.9 MB CSV). Content is read in batches of 200;
+  a regulation with more than 5,000 use cases is refused with a hint to
+  export per clause.
+* Not covered: clauses that no imported use case maps to (no bundled clause
+  catalogue), and attestation or sign-off workflow.

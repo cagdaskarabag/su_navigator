@@ -207,7 +207,9 @@ Downgrades are not supported (D-033).
 | `GET ucm/frameworks` | read | Framework versions (bundled and imported, active flag) and coverage per framework. |
 | `GET ucm/frameworks/matrix` | read | ATT&CK matrix (`framework_id`, `version`, `domain`, `operational=1`, `hours`) with remapped and unresolved ids. |
 | `GET ucm/frameworks/technique` | read | Use cases for one technique (`id`). |
-| `GET ucm/frameworks/controls` | read | Controls of one regulation (`framework`) with best level and use cases. |
+| `GET ucm/frameworks/controls` | read | Controls of one regulation (`framework`) with best level, `gap` and use cases. |
+| `GET ucm/frameworks/clause` | read | Use cases of one clause (`framework`, `clause`) with readiness, deployment and mapping substance. |
+| `GET ucm/frameworks/evidence` | read | Deterministic evidence pack (`framework`, optional `clause`, `format=json\|csv`): `content`, `sha256`, `filename`, `meta`. |
 | `POST ucm/frameworks/import` | `ucm_manage_content` | Import a `ucm.framework/1` definition (JSON body). |
 | `POST ucm/frameworks/activate` | `ucm_manage_content` | Choose the active version (`framework_id`, `version`). |
 | `GET ucm/operations` | read (scheduler logs need `_internal`) | Run status of deployed searches (`hours` = 1, 4, 24, 72 or 168). |

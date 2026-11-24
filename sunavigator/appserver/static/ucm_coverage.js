@@ -10,7 +10,8 @@ require([
     var state = {
         framework_id: params.framework_id || "mitre_attack_enterprise", version: params.version || "",
         domain: params.domain || "", operational: params.operational || "", hours: params.hours || "24",
-        technique: params.technique || "", framework: params.framework || ""
+        technique: params.technique || "", framework: params.framework || "",
+        clause: params.clause || "", gaps: params.gaps || ""
     };
     var LEVEL_LABEL = { catalogue: "In catalogue", ready: "Data ready", deployed: "Deployed", enabled: "Enabled",
         operational: "Running successfully" };
@@ -27,7 +28,7 @@ require([
     function persist() {
         ucm.setQueryParams({ framework_id: state.framework_id, version: state.version, domain: state.domain,
             operational: state.operational, hours: state.operational ? state.hours : "",
-            technique: state.technique, framework: state.framework });
+            technique: state.technique, framework: state.framework, clause: state.clause, gaps: state.gaps });
     }
 
     function query(extra) {
@@ -155,7 +156,7 @@ require([
             var c = f.counts;
             body.appendChild(el("tr", { "class": state.framework === f.framework ? "ucm-row-active" : "" },
                 el("td", { "class": "ucm-title" }, el("a", { href: "#", text: f.framework.replace(/^regulation:/, ""), onclick: function (e) {
-                    e.preventDefault(); state.framework = f.framework; persist(); renderControls(controlsBox);
+                    e.preventDefault(); state.framework = f.framework; state.clause = ""; persist(); renderControls(controlsBox);
                 } })),
                 el("td", { text: String(f.controls) }),
                 ["catalogue", "ready", "deployed", "enabled"].map(function (l) { return el("td", { text: String(c[l] || 0) }); })));
@@ -167,23 +168,100 @@ require([
         renderControls(controlsBox);
     }
 
+    function download(filename, text, mime) {
+        var url = URL.createObjectURL(new Blob([text], { type: mime }));
+        var a = el("a", { href: "#", text: filename });
+        a.setAttribute("href", url);
+        a.setAttribute("download", filename);
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
+    }
+
+    function exportEvidence(target, format) {
+        var note = el("div", { "class": "ucm-loading", text: "Building evidence pack…" });
+        ucm.clear(target).appendChild(note);
+        ucm.get("frameworks/evidence", query({ framework: state.framework, format: format })).done(function (pack) {
+            download(pack.filename, pack.content, format === "csv" ? "text/csv" : "application/json");
+            ucm.clear(target).appendChild(ucm.stateBox("info", "Downloaded " + pack.filename,
+                pack.meta.rows + " rows, " + pack.meta.clauses + " clauses, " + pack.meta.gaps + " without a ready use case. SHA-256 " +
+                pack.sha256 + ". The same catalogue, readiness and deployment state always produces the same file."));
+        }).fail(failBox(target, "Could not build the evidence pack."));
+    }
+
+    function levelCell(level) {
+        return level ? el("span", { "class": "ucm-matrix-cell lvl-" + level, text: LEVEL_LABEL[level] || level }) : null;
+    }
+
+    function renderClause(target) {
+        ucm.clear(target);
+        if (!state.framework || !state.clause) { return; }
+        target.appendChild(el("div", { "class": "ucm-loading", text: "Loading clause " + state.clause + "…" }));
+        ucm.get("frameworks/clause", query({ framework: state.framework, clause: state.clause })).done(function (data) {
+            ucm.clear(target);
+            target.appendChild(el("h4", {}, "Use cases for clause ", el("span", { "class": "ucm-mono", text: data.clause }),
+                el("a", { href: "#", "class": "ucm-sub", text: "  close", onclick: function (e) {
+                    e.preventDefault(); state.clause = ""; persist(); ucm.clear(target);
+                } })));
+            var body = el("tbody", {});
+            data.use_cases.forEach(function (u) {
+                var dep = u.deployment_state ? u.deployment_state + (u.live_status ? " / " + u.live_status : "") : "not deployed";
+                body.appendChild(el("tr", {},
+                    el("td", { "class": "ucm-title" }, el("a", { href: "ucm_usecase?id=" + encodeURIComponent(u.content_id), text: u.title || u.content_id }),
+                        el("div", { "class": "ucm-sub ucm-mono", text: u.content_id + (u.framework_version ? " · " + u.framework_version : "") })),
+                    el("td", {}, levelCell(u.level)),
+                    el("td", {}, ucm.readinessBadge(u.readiness_state), u.readiness_stale ? ucm.badge("stale", "warn") : null),
+                    el("td", {}, el("div", { text: dep }), u.saved_search ? el("div", { "class": "ucm-sub ucm-mono", text: u.saved_search }) : null,
+                        u.live_drift ? ucm.badge("drift", "warn") : null),
+                    el("td", {}, el("div", { text: [u.mode, u.assurance].filter(Boolean).join(", ") }),
+                        u.requires_sme_review ? ucm.badge("SME review required", "warn") : null),
+                    el("td", { "class": "ucm-sub" }, el("details", { "class": "ucm-details" },
+                        el("summary", { text: "Objective and evidence" }),
+                        el("div", {}, el("strong", { text: "Control objective: " }), u.control_objective || "—"),
+                        el("div", {}, el("strong", { text: "Evidence artifact: " }), u.evidence_artifact || "—"),
+                        el("div", {}, el("strong", { text: "Assurance rationale: " }), u.assurance_rationale || "—"),
+                        u.clause_url ? el("a", { href: u.clause_url, target: "_blank", rel: "noopener noreferrer", text: "Clause text" }) : null))));
+            });
+            target.appendChild(el("table", { "class": "ucm-table" }, el("thead", {}, el("tr", {},
+                ["Use case", "Level", "Readiness", "Deployment", "Mapping", "Evidence"].map(function (h) { return el("th", { text: h }); }))), body));
+        }).fail(failBox(target, "Could not load the clause."));
+    }
+
     function renderControls(target) {
         ucm.clear(target);
         if (!state.framework) { return; }
         ucm.get("frameworks/controls", query({ framework: state.framework })).done(function (data) {
             ucm.clear(target);
-            target.appendChild(el("h4", { text: "Controls in " + data.framework.replace(/^regulation:/, "") }));
+            var gaps = data.controls.filter(function (c) { return c.gap; }).length;
+            var exportBox = el("div", {});
+            var clauseBox = el("div", {});
+            target.appendChild(el("h4", { text: "Clauses in " + data.framework.replace(/^regulation:/, "") }));
+            target.appendChild(el("div", { "class": "ucm-toolbar" },
+                el("span", { "class": "ucm-sub", text: data.controls.length + " clauses mapped, " + gaps + " without a ready, deployed or enabled use case" }),
+                el("label", { "class": "ucm-sub" }, el("input", {
+                    type: "checkbox", checked: state.gaps ? "checked" : null,
+                    onchange: function (e) { state.gaps = e.target.checked ? "1" : ""; persist(); renderControls(target); }
+                }), " Gaps only"),
+                el("button", { "class": "btn", text: "Export evidence (CSV)", onclick: function () { exportEvidence(exportBox, "csv"); } }),
+                el("button", { "class": "btn", text: "Export evidence (JSON)", onclick: function () { exportEvidence(exportBox, "json"); } })));
+            target.appendChild(exportBox);
             var body = el("tbody", {});
-            data.controls.forEach(function (c) {
-                body.appendChild(el("tr", {}, el("td", { "class": "ucm-mono", text: c.control }),
-                    el("td", {}, c.level ? el("span", { "class": "ucm-matrix-cell lvl-" + c.level, text: LEVEL_LABEL[c.level] }) : null),
+            data.controls.filter(function (c) { return !state.gaps || c.gap; }).forEach(function (c) {
+                body.appendChild(el("tr", { "class": state.clause === c.control ? "ucm-row-active" : "" },
+                    el("td", { "class": "ucm-mono" }, el("a", { href: "#", text: c.control, onclick: function (e) {
+                        e.preventDefault(); state.clause = c.control; persist(); renderClause(clauseBox);
+                    } })),
+                    el("td", {}, levelCell(c.level), c.gap ? ucm.badge("gap", "warn") : null),
                     el("td", { text: String(c.counts.catalogue) }),
                     el("td", {}, c.use_cases.slice(0, 10).map(function (id) {
                         return el("a", { "class": "ucm-chip", href: "ucm_usecase?id=" + encodeURIComponent(id), text: id });
                     }))));
             });
             target.appendChild(el("table", { "class": "ucm-table" }, el("thead", {}, el("tr", {},
-                ["Control", "Best level", "Use cases", "Examples"].map(function (h) { return el("th", { text: h }); }))), body));
+                ["Clause", "Best level", "Use cases", "Examples"].map(function (h) { return el("th", { text: h }); }))), body));
+            target.appendChild(clauseBox);
+            renderClause(clauseBox);
         }).fail(failBox(target, "Could not load controls."));
     }
 

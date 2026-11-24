@@ -15,6 +15,7 @@ unknown ids are listed as unresolved, never dropped silently. A sub-technique
 also counts towards its parent.
 """
 
+import re
 from typing import Any, Dict, Iterable, List, Optional, Tuple
 
 from ..storage import collections as C
@@ -36,6 +37,12 @@ def _iter(store: DocumentStore, collection: str, query: Optional[Dict[str, Any]]
         if len(rows) < PAGE:
             return
         skip += PAGE
+
+
+def clause_sort_key(clause: str) -> Tuple:
+    """Natural order: ``A.5.10`` after ``A.5.9``."""
+    parts = re.split(r"(\d+)", clause.lower())
+    return tuple((0, int(p), "") if p.isdigit() else (1, 0, p) for p in parts if p != "")
 
 
 def _empty_counts() -> Dict[str, int]:
@@ -201,5 +208,6 @@ class CoverageService:
                 self._bump(entry, uc["level"], key)
                 if len(entry["use_cases"]) < 20:
                     entry["use_cases"].append(uc["content_id"])
-        return [{"control": e["control"], "counts": e["counts"], "level": e["level"], "use_cases": e["use_cases"]}
-                for _, e in sorted(table.items())]
+        return [{"control": e["control"], "counts": e["counts"], "level": e["level"], "use_cases": e["use_cases"],
+                 "gap": _RANK[e["level"]] < _RANK["ready"]}
+                for _, e in sorted(table.items(), key=lambda kv: clause_sort_key(kv[0]))]
