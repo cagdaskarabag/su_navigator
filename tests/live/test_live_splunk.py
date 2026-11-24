@@ -327,6 +327,11 @@ class LiveApiTest(unittest.TestCase):
         self.assertEqual((status, body["error"]["code"]), (400, "validation_error"))
         status, body = api(self.admin, "GET", "usecase", {"id": "fenre:UC-99.99.99"})
         self.assertEqual(status, 404)
+        status, body = api(self.admin, "GET", "catalog", {"quality": "bogus"})
+        self.assertEqual((status, body["error"]["message"]), (400, "invalid quality flag"))
+        status, body = api(self.admin, "GET", "catalog", {"quality": "unreviewed", "count": "5"})
+        self.assertEqual(status, 200, body)
+        self.assertTrue(all("unreviewed" in i["quality_flags"] for i in body["items"]), body)
 
     def test_platform_report(self):
         status, body = api(self.admin, "GET", "platform")

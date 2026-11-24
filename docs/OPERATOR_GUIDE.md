@@ -404,6 +404,20 @@ default max 100 rows).
 | Domain, category, criticality, difficulty | Exact facets from the canonical model. |
 | Sourcetype (exact) | Exact sourcetype string. |
 | MITRE ATT&CK ID | Technique id such as `T1110`. |
+| Quality flag | Use cases carrying one quality flag (below). |
+
+Quality flags appear as amber badges next to the review status, in the
+catalogue and on the use-case page (D-046):
+
+| Badge | Meaning |
+| --- | --- |
+| unreviewed | No review status, or `draft`. |
+| reviewer N/A | The provider recorded the reviewer as "N/A". |
+| AI reviewer | The reviewer names an AI or automated agent (for example "agent-handcraft-…", "Cursor AI …", "AI-assisted review"). |
+| SME review pending | At least one regulation mapping has `requires_sme_review`. |
+| index=* | The primary SPL searches `index=*` or has no index constraint. |
+| needs ES | Splunk Enterprise Security is listed as a premium app and not marked optional. |
+| duplicate SPL | Another active use case has the same primary SPL (whitespace ignored). The use-case page lists them. |
 
 Click a title (or open `/app/sunavigator/ucm_usecase?id=fenre:UC-9.1.1`)
 for the use-case page: requirements, SPL (labelled untrusted, not run),

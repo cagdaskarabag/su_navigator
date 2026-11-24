@@ -12,7 +12,9 @@ from ..content.provider import ProviderManifest, ProviderRecord
 from ..content.registry import normalizer_for
 from ..errors import NotFoundError, ValidationError
 from ..model.canonical import Category
+from ..storage import collections as C
 from ..storage.repositories import CategoryRepository, ContentRepository, decode_raw
+from .quality import ordered
 
 _KEY_RE = re.compile(r"^[A-Za-z0-9._-]{1,120}$")
 _CONTENT_ID_RE = re.compile(r"^([a-z][a-z0-9_]{1,31}):(UC-[0-9.]{1,40})$")
@@ -72,6 +74,13 @@ class UseCaseDetailService:
         out["validation_warnings"] = stored.get("validation_warnings") or []
         out["validation_warning_count"] = stored.get("validation_warning_count", 0)
         out["requirement_summary"] = self._requirement_summary(out["requirements"])
+        out["spl_duplicates"] = []
+        if "duplicate_spl" in (catalog.get("quality_flags") or []) and catalog.get("spl_hash"):
+            out["quality_flags"] = ordered(list(out["quality_flags"]) + ["duplicate_spl"])
+            rows = self.content.store.query(C.CATALOG, {"$and": [{"spl_hash": catalog["spl_hash"]},
+                                                                 {"provider_status": "active"}]},
+                                            sort=[("sort_key", 1)], limit=21, fields=["content_id"])
+            out["spl_duplicates"] = [r["content_id"] for r in rows if r.get("content_id") != out["content_id"]][:20]
         return out
 
     @staticmethod

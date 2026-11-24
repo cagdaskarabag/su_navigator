@@ -454,6 +454,7 @@ require([
             el("h2", { text: uc.title }),
             el("div", {}, el("span", { "class": "ucm-mono", text: uc.content_id + "  " }), ucm.criticalityBadge(uc.criticality),
                 ucm.badge(uc.difficulty, "neutral"), ucm.chips(uc.domains), ucm.badge("review: " + uc.review_status, "info"),
+                ucm.qualityBadges(uc.quality_flags),
                 uc.provider_status === "withdrawn" ? ucm.badge("withdrawn upstream", "warn") : null),
             el("div", { "class": "ucm-sub", text: [uc.category_name, uc.subcategory].filter(Boolean).join(" › ") })));
 
@@ -469,6 +470,10 @@ require([
             el("details", { "class": "ucm-details" }, el("summary", { text: "Provider data-source description" }), text(uc.data_sources_text)),
             uc.required_fields.length ? el("div", {}, el("strong", { text: "Required fields: " }), ucm.chips(uc.required_fields)) : null,
             uc.datamodel_acceleration_text ? el("details", { "class": "ucm-details" }, el("summary", { text: "Data model acceleration notes" }), text(uc.datamodel_acceleration_text)) : null));
+        if ((uc.spl_duplicates || []).length) {
+            root.appendChild(ucm.stateBox("warn", "The primary SPL is identical in other use cases",
+                "Deploying more than one of them runs the same search twice: " + uc.spl_duplicates.join(", ") + "."));
+        }
         root.appendChild(section("SPL",
             ucm.stateBox("info", "Imported SPL is untrusted content.", "It is shown for review only and is never executed by the catalogue."),
             spl("Primary search", uc.spl) || text("", "No primary SPL supplied."), spl("CIM search", uc.cim_spl),

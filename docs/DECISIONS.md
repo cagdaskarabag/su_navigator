@@ -652,3 +652,27 @@ as drift.
 * Upstream measurement (16,726 records): every compliance entry has the
   objective, evidence and rationale; 679 of 3,870 have a `clauseUrl`; 3,256
   carry `requires_sme_review`.
+
+## D-046 Content quality flags
+*0.7.3+ (T-15, finding F-25). Normalizer `fenre-1.4.0`, catalogue summary v3.*
+* Flags are deterministic and derived from the provider record only:
+  `unreviewed` (status missing or `draft`), `reviewer_na` (reviewer "N/A"),
+  `ai_reviewed` (reviewer names an AI or agent: ai, llm, gpt, copilot, cursor,
+  claude, anthropic, openai, gemini, agent-…, auto-generated/drafted, bot),
+  `sme_review_pending` (a regulation mapping with `requires_sme_review`),
+  `unbounded_index` (the analyser's existing `index=*` / no-index result),
+  `es_required` (Enterprise Security in `premiumApps`, unless its note starts
+  with "optional"). They are stored in `uc_catalog.quality_flags`, shown as
+  badges and filterable (`GET catalog?quality=<flag>`).
+* `duplicate_spl` needs the whole catalogue: summaries store a SHA-256 of the
+  whitespace-normalized primary SPL (`spl_hash`), and a post-pass after every
+  sync, offline import and reindex flags active records sharing a hash.
+  Withdrawn records neither count nor keep the flag.
+* Upstream measurement (16,726 records): reviewer N/A 161, AI reviewer 304
+  (134 distinct strings; reviewer strings without an AI marker such as
+  "documentation-only editorial review …" are not flagged), `index=*` 17,
+  Enterprise Security listed 3,085, 756 records in 103 duplicate-SPL groups.
+* Verified on the lab with 16 category 22 records imported from a bundle: each
+  flag filter returned exactly the expected records.
+* Not covered: ES dependencies only visible in SPL (notable or risk indexes)
+  and near-duplicate SPL.

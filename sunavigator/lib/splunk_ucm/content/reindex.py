@@ -6,6 +6,7 @@ Used after an app upgrade ships a newer normalizer on stacks without egress.
 from typing import Any, Dict, Optional
 
 from ..catalog.detail import _category_from_doc
+from ..catalog.quality import refresh_duplicate_flags
 from ..catalog.summary import catalog_summary
 from ..model.canonical import UseCase
 from ..storage import collections as C
@@ -72,4 +73,5 @@ class ReindexService:
         if pending:
             self.store.batch_save(C.CATALOG, pending)
             counts["reindexed"] += len(pending)
+        counts.update(refresh_duplicate_flags(self.store))
         return counts

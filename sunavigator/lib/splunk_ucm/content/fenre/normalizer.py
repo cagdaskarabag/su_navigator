@@ -11,6 +11,7 @@ import posixpath
 import re
 from typing import Any, Dict, List, Optional, Set
 
+from ...catalog.quality import ordered as ordered_flags
 from ...model.canonical import (CRITICALITY_RANK, DIFFICULTIES, DOMAINS, AddonRef, Category,
                                 FrameworkMapping, Provenance, Reference, Requirement, SplVariant,
                                 UseCase)
@@ -19,7 +20,7 @@ from ...util import dedupe, safe_key, sha256_json
 from ..provider import Normalizer, ProviderCategory, ProviderManifest, ProviderRecord
 from ..validation import FieldContract, ValidationPolicy, is_safe_url
 
-NORMALIZER_VERSION = "fenre-1.3.0"
+NORMALIZER_VERSION = "fenre-1.4.0"
 PROVIDER = "fenre"
 
 _DOMAIN_MAP_PATH = os.path.join(os.path.dirname(__file__), "domain_map.json")
@@ -46,6 +47,10 @@ _MAPPED = {
 _WAVES = ("crawl", "walk", "run")
 _CONTROL_TEST_KEYS = ("positiveScenario", "negativeScenario", "fixtureRef", "attackTechnique", "fixtureStatus")
 _TEXT_CAP = 4000
+_AI_REVIEWER = re.compile(r"\b(ai|llm|gpt|chatgpt|copilot|cursor|claude|anthropic|openai|gemini|agent[-\w]*|auto-?(generated|drafted)|bot)\b",
+                          re.IGNORECASE)
+_NA_REVIEWER = re.compile(r"^\s*n\s*/?\s*a\s*$", re.IGNORECASE)
+_ES_NAME = "splunk enterprise security"
 
 CONSUMED_FIELDS = (
     FieldContract("description", "string"), FieldContract("value", "string"),
@@ -210,7 +215,29 @@ class FenreNormalizer(Normalizer):
             provider_extras={k: v for k, v in raw.items() if k not in _MAPPED},
         )
         uc.requirements = self._requirements(uc, primary, cim_spl)
+        uc.quality_flags = self._quality_flags(raw, uc, primary)
         return uc
+
+    @staticmethod
+    def _quality_flags(raw: Dict[str, Any], uc: UseCase, primary: Optional[SplAnalysis]) -> List[str]:
+        flags = []
+        if uc.review_status.lower() in ("unknown", "draft", ""):
+            flags.append("unreviewed")
+        if _NA_REVIEWER.match(uc.reviewer):
+            flags.append("reviewer_na")
+        elif uc.reviewer and _AI_REVIEWER.search(uc.reviewer):
+            flags.append("ai_reviewed")
+        if any(m.attributes.get("requires_sme_review") is True for m in uc.framework_mappings):
+            flags.append("sme_review_pending")
+        if primary is not None and primary.unbounded_index:
+            flags.append("unbounded_index")
+        for item in raw.get("premiumApps") or []:
+            name = item if isinstance(item, str) else (item.get("name") if isinstance(item, dict) else "")
+            note = _s(item.get("note")) if isinstance(item, dict) else ""
+            if _s(name).lower() == _ES_NAME and not note.lower().startswith("optional"):
+                flags.append("es_required")
+                break
+        return ordered_flags(flags)
 
     # -- helpers -----------------------------------------------------------
     def _domains(self, raw: Dict[str, Any], category: Category) -> List[str]:

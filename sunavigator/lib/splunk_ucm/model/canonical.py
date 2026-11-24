@@ -160,6 +160,7 @@ class UseCase:
     reviewer: str = ""
     references: List[Reference] = dataclasses.field(default_factory=list)
     known_false_positives: str = ""
+    quality_flags: List[str] = dataclasses.field(default_factory=list)
     provider_extras: Dict[str, Any] = dataclasses.field(default_factory=dict)
     schema_version: str = USECASE_SCHEMA
 

@@ -12,13 +12,14 @@ from ..errors import ValidationError
 from ..model.canonical import CRITICALITY_RANK, DIFFICULTIES, DOMAINS
 from ..storage import collections as C
 from ..storage.kvstore import DocumentStore
+from .quality import QUALITY_FLAGS
 from .summary import STATUS_ACTIVE, STATUS_WITHDRAWN
 
 LIST_FIELDS = (
     "_key", "content_id", "record_id", "title", "summary", "domains", "category_key", "category_name",
     "subcategory", "criticality", "difficulty", "monitoring_types", "sourcetypes", "datamodels",
     "mitre_ids", "provider", "provider_status", "provider_version", "review_status", "has_spl",
-    "imported_at",
+    "imported_at", "quality_flags",
 )
 SORTS = {
     "id": [("sort_key", 1)],
@@ -41,6 +42,7 @@ class CatalogFilter:
     difficulty: Sequence[str] = ()
     sourcetype: str = ""
     mitre: str = ""
+    quality: Sequence[str] = ()
     provider_status: str = STATUS_ACTIVE
     sort: str = "id"
     offset: int = 0
@@ -81,6 +83,8 @@ def build_query(f: CatalogFilter) -> Dict[str, Any]:
         if not _MITRE_RE.match(f.mitre):
             raise ValidationError("invalid MITRE id")
         clauses.append({"mitre_ids": f.mitre})
+    if f.quality:
+        clauses.append({"quality_flags": {"$in": _check_all(f.quality, list(QUALITY_FLAGS), "quality flag")}})
     if f.q:
         if not _TOKEN_RE.match(f.q):
             raise ValidationError("invalid search text")

@@ -11,7 +11,8 @@ require([
     var state = {
         q: initial.q || "", domain: initial.domain || "", category: initial.category || "",
         criticality: initial.criticality || "", difficulty: initial.difficulty || "",
-        sourcetype: initial.sourcetype || "", mitre: initial.mitre || "", sort: initial.sort || "id",
+        sourcetype: initial.sourcetype || "", mitre: initial.mitre || "", quality: initial.quality || "",
+        sort: initial.sort || "id",
         offset: parseInt(initial.offset || "0", 10) || 0
     };
     var categories = [];
@@ -58,6 +59,9 @@ require([
             select("difficulty", "Difficulty", opts(ucm.DIFFICULTY), state.difficulty),
             textInput("sourcetype", "Sourcetype (exact)", "e.g. WinEventLog:Security"),
             textInput("mitre", "MITRE ATT&CK id", "e.g. T1110"),
+            select("quality", "Quality flag", Object.keys(ucm.QUALITY_FLAGS).map(function (k) {
+                return { value: k, label: ucm.QUALITY_FLAGS[k][1] };
+            }), state.quality),
             sortSel);
     }
 
@@ -75,7 +79,7 @@ require([
             el("td", { text: item.difficulty || "" }),
             el("td", { "class": "ucm-mono" }, ucm.chips(item.sourcetypes, 3)),
             el("td", { "class": "ucm-mono" }, ucm.chips(item.mitre_ids, 3)),
-            el("td", {}, ucm.badge(item.review_status || "unknown", "info")),
+            el("td", {}, ucm.badge(item.review_status || "unknown", "info"), ucm.qualityBadges(item.quality_flags)),
             el("td", {},
                 selections[item.content_id] ? ucm.badge(selections[item.content_id].intent, "ok") : null,
                 el("button", { "class": "btn", type: "button", text: "Select", onclick: function (e) {
@@ -90,7 +94,7 @@ require([
         ucm.clear(results);
         if (!data.items.length) {
             var filtered = state.q || state.domain || state.category || state.criticality ||
-                state.difficulty || state.sourcetype || state.mitre;
+                state.difficulty || state.sourcetype || state.mitre || state.quality;
             results.appendChild(filtered
                 ? ucm.stateBox("empty", "No use cases match these filters.", "Clear one or more filters to widen the search.")
                 : el("div", {}, ucm.stateBox("empty", "No content has been imported yet.",
@@ -101,7 +105,7 @@ require([
         var total = data.total === null ? "" : data.total + " use cases";
         results.appendChild(el("div", { "class": "ucm-summary-line", text: total }));
         var head = el("tr", {});
-        ["ID", "Use case", "Domains", "Category", "Criticality", "Difficulty", "Sourcetypes (from SPL)", "MITRE", "Review", "Backlog"]
+        ["ID", "Use case", "Domains", "Category", "Criticality", "Difficulty", "Sourcetypes (from SPL)", "MITRE", "Review and quality", "Backlog"]
             .forEach(function (h) { head.appendChild(el("th", { text: h })); });
         var body = el("tbody", {});
         data.items.forEach(function (item) { body.appendChild(row(item)); });
@@ -116,7 +120,7 @@ require([
         ucm.setQueryParams(state);
         ucm.clear(results).appendChild(el("div", { "class": "ucm-loading", text: "Loading…" }));
         var params = { offset: state.offset, count: PAGE, sort: state.sort };
-        ["q", "domain", "category", "criticality", "difficulty", "sourcetype", "mitre"].forEach(function (k) {
+        ["q", "domain", "category", "criticality", "difficulty", "sourcetype", "mitre", "quality"].forEach(function (k) {
             if (state[k]) { params[k] = state[k]; }
         });
         ucm.get("catalog", params).done(function (data) {

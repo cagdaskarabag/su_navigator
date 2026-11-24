@@ -228,7 +228,7 @@ def get_catalog(ctx: Context, req: Request) -> Response:
         q=req.arg("q").strip(), domains=req.args("domain"), category_keys=req.args("category"),
         criticality=req.args("criticality"), difficulty=req.args("difficulty"),
         sourcetype=req.arg("sourcetype").strip(), mitre=req.arg("mitre").strip().upper(),
-        provider_status=req.arg("status", "active"), sort=req.arg("sort", "id"),
+        quality=req.args("quality"), provider_status=req.arg("status", "active"), sort=req.arg("sort", "id"),
         offset=_int(req.arg("offset"), 0, "offset"), count=_int(req.arg("count"), 25, "count"),
         with_total=req.arg("total", "1") != "0")
     max_page = ctx.config.get_int("catalog", "max_page_size", 100, 10, 500)

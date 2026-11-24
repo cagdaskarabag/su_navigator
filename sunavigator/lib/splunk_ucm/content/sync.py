@@ -14,6 +14,7 @@ from concurrent.futures import ThreadPoolExecutor
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from ..audit import AuditService
+from ..catalog.quality import refresh_duplicate_flags
 from ..catalog.summary import STATUS_ACTIVE, STATUS_WITHDRAWN, catalog_summary
 from ..errors import ProviderError, SchemaIncompatibleError, UcmError, ValidationError
 from ..log import get_logger
@@ -104,6 +105,7 @@ class SyncService:
         self.state.save_job(job)
         try:
             self._run(job, provider)
+            refresh_duplicate_flags(self.store)
         except UcmError as exc:
             job["status"] = JOB_FAILED
             job["errors"].append(exc.to_dict())

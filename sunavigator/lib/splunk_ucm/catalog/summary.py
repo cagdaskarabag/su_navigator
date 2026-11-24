@@ -5,6 +5,7 @@ from typing import Any, Dict
 from ..model.canonical import CRITICALITY_RANK, UseCase
 from ..storage.collections import DOC_SCHEMA
 from ..util import dedupe, truncate
+from .quality import ordered, spl_hash
 
 STATUS_ACTIVE = "active"
 STATUS_WITHDRAWN = "withdrawn"
@@ -20,7 +21,7 @@ def sort_key_for(record_id: str) -> str:
 
 # Bump when catalog_summary gains or changes fields; the upgrade migration
 # re-derives older summaries from stored raw records (no network).
-SUMMARY_VERSION = 2
+SUMMARY_VERSION = 3
 
 
 def catalog_summary(uc: UseCase) -> Dict[str, Any]:
@@ -68,6 +69,8 @@ def catalog_summary(uc: UseCase) -> Dict[str, Any]:
         "has_spl": bool(uc.spl or uc.cim_spl),
         "requirement_count": len(uc.requirements),
         "review_status": uc.review_status,
+        "quality_flags": ordered(uc.quality_flags),
+        "spl_hash": spl_hash(uc.spl),
         "provider_status": STATUS_ACTIVE,
         "provider_version": uc.provenance.provider_version,
         "source_ref": uc.provenance.source_ref,

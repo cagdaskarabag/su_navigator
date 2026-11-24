@@ -270,8 +270,27 @@ define(["jquery", "splunk.util"], function ($, splunkUtil) {
         modal({ title: title, message: message, input: input, confirmLabel: confirmLabel || "OK" }, onConfirm);
     }
 
+    /* Keys match splunk_ucm.catalog.quality.QUALITY_FLAGS (checked by a unit test). */
+    var QUALITY_FLAGS = {
+        unreviewed: ["unreviewed", "No review status, or draft"],
+        reviewer_na: ["reviewer N/A", "Reviewer recorded as N/A"],
+        ai_reviewed: ["AI reviewer", "Reviewer is an automated or AI agent"],
+        sme_review_pending: ["SME review pending", "Compliance mapping awaits SME review"],
+        unbounded_index: ["index=*", "Primary SPL searches index=* or no index"],
+        es_required: ["needs ES", "Requires Splunk Enterprise Security"],
+        duplicate_spl: ["duplicate SPL", "Primary SPL is identical to another use case"]
+    };
+
+    function qualityBadges(flags) {
+        return (flags || []).filter(function (f) { return QUALITY_FLAGS[f]; }).map(function (f) {
+            var b = badge(QUALITY_FLAGS[f][0], "warn");
+            b.setAttribute("title", QUALITY_FLAGS[f][1]);
+            return b;
+        });
+    }
+
     return {
-        modal: modal, notify: notify, confirmAction: confirmAction, askText: askText,
+        modal: modal, qualityBadges: qualityBadges, QUALITY_FLAGS: QUALITY_FLAGS, notify: notify, confirmAction: confirmAction, askText: askText,
         get: get, post: post, postRaw: postRaw, el: el, clear: clear, badge: badge,
         criticalityBadge: criticalityBadge, chips: chips, stateBox: stateBox, queryParams: queryParams,
         setQueryParams: setQueryParams, pager: pager, debounce: debounce, shortSha: shortSha,
