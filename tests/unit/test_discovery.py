@@ -377,6 +377,29 @@ class InventoryRestParseTest(unittest.TestCase):
         self.assertEqual(models[0]["display_name"], "Network Traffic")
         self.assertTrue(models[0]["accelerated"])
 
+    def test_acceleration_from_the_10_2_9_listing(self):
+        """D-068: 10.2.9 reports ``acceleration`` as a top-level boolean, not inside ``eai:data``."""
+        import os
+        from splunk_ucm.discovery.inventory import _is_accelerated
+        path = os.path.join(os.path.dirname(__file__), "..", "fixtures", "rest", "data_models_10_2_9.json")
+        with open(path, encoding="utf-8") as handle:
+            payload = handle.read().encode("utf-8")
+
+        class T(SplunkdTransport):
+            def request(self, method, path, query=None, json_body=None, form=None, timeout=60.0):
+                return 200, payload
+
+        models = {m["name"]: m for m in SplunkInventory(T()).list_datamodels()}
+        self.assertTrue(models["sun_probe_dm"]["accelerated"])
+        self.assertEqual(models["sun_probe_dm"]["acceleration_earliest"], "-1d")
+        self.assertFalse(models["internal_server"]["accelerated"])
+        self.assertEqual(models["internal_server"]["acceleration_earliest"], "")
+        self.assertEqual(models["sun_probe_dm"]["app"], "search")
+        for value, expected in ((True, True), (False, False), ("1", True), ("0", False), (None, False),
+                                ('{"enabled":true,"earliest_time":"-1d"}', True), ('{"enabled":false}', False),
+                                ({"enabled": "1"}, True), ("", False)):
+            self.assertEqual(_is_accelerated(value), expected, value)
+
 
 if __name__ == "__main__":
     unittest.main()

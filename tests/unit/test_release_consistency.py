@@ -52,5 +52,23 @@ class ReleaseConsistencyTest(unittest.TestCase):
         self.assertEqual((badge, listed), (actual, actual))
 
 
+class LicenceFilesTest(unittest.TestCase):
+    """The package carries the same licence and notices as the repository (D-068)."""
+
+    def test_package_copies_equal_the_repository_files(self):
+        self.assertEqual(read("sunavigator", "LICENSE"), read("LICENSE"))
+        self.assertEqual(read("sunavigator", "THIRD_PARTY_NOTICES.md"), read("THIRD_PARTY_NOTICES.md"))
+
+    def test_fenre_licence_sits_next_to_the_shipped_schema(self):
+        self.assertEqual(read("sunavigator", "lib", "splunk_ucm", "content", "fenre", "LICENSE"),
+                         read("tests", "fixtures", "fenre", "LICENSE"))
+        self.assertIn("Fredrik Lima Sudmann", read("THIRD_PARTY_NOTICES.md"))
+
+    def test_readme_credits_both_content_sources(self):
+        text = read("README.md")
+        self.assertIn("MIT", text)
+        self.assertIn("Apache License 2.0", text)
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -12,7 +12,10 @@ Every command in a search is classified:
 
 Commands are collected from the raw SPL (static analysis, which sees subsearches)
 and from the pipeline Splunk's parser returns, which has macros expanded
-(including macros inside subsearches).
+(including macros inside subsearches). The parser does not list the commands of a
+subsearch or subpipeline, so only the static analysis sees ``appendpipe [ collect ... ]``;
+a leading command name in a bracket, a ``map`` string or an unprefixed search is read as
+the command Splunk runs (D-068).
 
 ``map search="..."`` carries a search as a string. That string is analysed as well
 (D-062): a side-effect command inside it is a side effect of the whole search. A ``map``
@@ -29,11 +32,7 @@ import re
 from typing import Callable, Dict, Iterable, List, Optional, Sequence, Tuple
 
 from ..platform.search import ParseResult, SearchClient
-from .analysis import SIDE_EFFECT_COMMANDS, _PIPE_START, _mask_quotes, _split_pipeline, analyze
-
-INDIRECT_COMMANDS = frozenset({
-    "map", "savedsearch", "loadjob", "rest", "dbxquery", "dbxlookup", "dbxinputs",
-})
+from .analysis import INDIRECT_COMMANDS, SIDE_EFFECT_COMMANDS, _mask_quotes, analyze, segment_commands
 
 # Indirect commands whose SPL or data the search text does not show; the browser's
 # interactive search refuses them (D-062).
@@ -65,7 +64,6 @@ _SAVEDSEARCH_DATASET = re.compile(r"(?<![\w.:])savedsearch:", re.IGNORECASE)
 _MAP_SEARCH = re.compile(r'(?:^|[^\w.])search\s*=\s*"((?:[^"\\]|\\.)*)"', re.IGNORECASE)
 _MAP_SAVED = re.compile(r"(?:^|[^\w.])savedsearch\s*=", re.IGNORECASE)
 _ESCAPED = re.compile(r'\\(["\\])')
-_COMMAND_WORD = re.compile(r"\s*([A-Za-z_][A-Za-z0-9_]*)")
 _FIT_INTO = re.compile(r"(?:^|[|\[])\s*fit\b[^|\]]*?\binto\b", re.IGNORECASE)
 
 
@@ -120,14 +118,10 @@ def _map_calls(spl: str) -> Tuple[List[str], int]:
     """The quoted ``search="..."`` of every ``map`` command, and how many ``map`` calls have no
     readable search (``savedsearch=``, an unquoted value)."""
     masked = _mask_quotes(spl)
-    segments, _ = _split_pipeline(masked)
     searches: List[str] = []
     opaque = 0
-    for start, end, kind in segments:
-        if kind != _PIPE_START:
-            continue
-        word = _COMMAND_WORD.match(masked[start:end])
-        if not word or word.group(1).lower() != "map":
+    for start, end, _, command in segment_commands(masked):
+        if command != "map":
             continue
         found = [_ESCAPED.sub(r"\1", m.group(1)) for m in _MAP_SEARCH.finditer(spl[start:end])]
         if not found or _MAP_SAVED.search(masked[start:end]):

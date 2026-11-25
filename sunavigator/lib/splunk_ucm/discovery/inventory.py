@@ -114,13 +114,19 @@ class SplunkInventory:
             if not name:
                 continue
             parsed = _parse_model(content.get("eai:data"))
+            acl = entry.get("acl") if isinstance(entry.get("acl"), dict) else {}
+            acceleration = content.get("acceleration")
+            if acceleration is None:
+                acceleration = parsed.get("acceleration")
             out.append({
                 "name": name,
-                "app": str(content.get("eai:appName") or ""),
+                "app": str(acl.get("app") or content.get("eai:appName") or ""),
                 "disabled": bool(content.get("disabled")),
                 "display_name": parsed.get("displayName") or name,
                 "objects": list(parsed.get("objectNameList") or []),
-                "accelerated": _is_accelerated(parsed.get("acceleration")),
+                "accelerated": _is_accelerated(acceleration),
+                "acceleration_earliest": str(content.get("acceleration.earliest_time") or "")
+                if _is_accelerated(acceleration) else "",
             })
         return out
 
@@ -144,8 +150,14 @@ def _parse_model(raw: Any) -> Dict[str, Any]:
     return {}
 
 
+_TRUE = (True, 1, "1", "true", "True")
+
+
 def _is_accelerated(value: Any) -> bool:
+    """``/services/data/models`` (10.2.9) reports a top-level boolean; ``datamodel/model`` a JSON
+    string with ``enabled``; older payloads a dict inside ``eai:data``."""
+    if isinstance(value, str) and value.lstrip().startswith("{"):
+        value = _parse_model(value)
     if isinstance(value, dict):
-        enabled = value.get("enabled")
-        return enabled in (True, "1", 1, "true", "True")
-    return False
+        return value.get("enabled") in _TRUE
+    return value in _TRUE

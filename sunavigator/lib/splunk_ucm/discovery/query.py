@@ -87,6 +87,7 @@ class InventoryQueryService:
         if f.with_total:
             total = self.store.count(C.ENVIRONMENT_SOURCES, query or None)
         return {"items": rows[:count], "offset": f.offset, "count": count, "has_more": has_more,
+                "next_offset": f.offset + count if has_more else None,
                 "total": total, "sort": f.sort}
 
 

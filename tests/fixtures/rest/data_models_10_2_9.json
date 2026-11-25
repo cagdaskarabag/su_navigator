@@ -1,0 +1,44 @@
+{
+ "_note": "GET /services/data/models?output_mode=json on Splunk Enterprise 10.2.9 (lab, 2026-11-25), trimmed to the keys discovery reads; sun_probe_dm was accelerated with earliest_time -1d. eai:data reduced to modelName, displayName, objectNameList (it has no acceleration key).",
+ "entry": [
+  {
+   "name": "internal_audit_logs",
+   "acl": {
+    "app": "search",
+    "sharing": "app"
+   },
+   "content": {
+    "disabled": false,
+    "eai:appName": "search",
+    "eai:data": "{\"modelName\": \"internal_audit_logs\", \"displayName\": \"Splunk's Internal Audit Logs - SAMPLE\", \"objectNameList\": [\"Audit\", \"searches\", \"modify\"]}"
+   }
+  },
+  {
+   "name": "internal_server",
+   "acl": {
+    "app": "search",
+    "sharing": "app"
+   },
+   "content": {
+    "disabled": false,
+    "eai:appName": "search",
+    "eai:data": "{\"modelName\": \"internal_server\", \"displayName\": \"Splunk's Internal Server Logs - SAMPLE\", \"objectNameList\": [\"server\", \"scheduler\", \"alerts\", \"scheduled_reports\", \"summaryindexing\", \"acceleration\", \"dm_acceleration\", \"report_acceleration\", \"licenser\", \"daily_usage\", \"peer_warn_summary\", \"quota\", \"pool_warnings\", \"metrics\", \"splunkdaccess\", \"pipeline\", \"queue\", \"systemwide_search_load_\", \"user_search_load\", \"Thruput\", \"job_endpoint\"]}"
+   }
+  },
+  {
+   "name": "sun_probe_dm",
+   "acl": {
+    "app": "search",
+    "sharing": "app"
+   },
+   "content": {
+    "acceleration": true,
+    "acceleration.earliest_time": "-1d",
+    "acceleration.cron_schedule": "*/30 * * * *",
+    "disabled": false,
+    "eai:appName": "search",
+    "eai:data": "{\"modelName\": \"sun_probe_dm\", \"displayName\": \"sun probe\", \"objectNameList\": [\"Probe\"]}"
+   }
+  }
+ ]
+}

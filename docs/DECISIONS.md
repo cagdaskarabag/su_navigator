@@ -1234,6 +1234,11 @@ as drift.
   string count as well. Escapes `\"` and `\\` are undone the way Splunk reads
   them. Allowlist extensions (`extra_safe_commands`) still cannot clear a nested
   finding.
+* *Amended by D-068 (0.9.2):* this record and the 0.8.6 text said the guard caught side-effect
+  commands in subsearches. It did not when the command was the **first** word of a bracket
+  (`appendpipe [ collect ... ]`, `append [ outputlookup ... ]`), of a `map` string without a
+  pipe, or of a search sent without `search`/`|`; Splunk 10.2.9 runs all of them. Fixed in both
+  guards in 0.9.2.
 * Decision, hidden SPL: `PolicyResult.hidden` lists what the page cannot show or
   check: `savedsearch`, `loadjob`, `dbxquery` (`HIDDEN_SPL_COMMANDS`), the
   `savedsearch:` dataset, a `map` whose search is not a readable quoted string
@@ -1642,7 +1647,7 @@ as drift.
   derived quality flag `provider_twin` next to `duplicate_spl` (both are derived; summary
   rebuilds clear both and the post-pass sets them again). The flag makes "has a twin" a filter
   (`quality=provider_twin`) and a count at no extra cost. The use-case page shows `spl_twins`
-  (up to 20, active only, found by an indexed `spl_hash` query) as
+  (up to 20, active only, found by an `spl_hash` query; *corrected by D-068:* the field was not declared or indexed in `collections.conf` until 0.9.2, so the query scanned the catalogue) as
   "Same detection in ESCU: <id>" with the title and a deploy-once note ("deploying both creates two
   saved searches"). Links work in both directions and the record is not required to have been
   summarised by 0.9.0: the lookup reads the hash that 0.8.x already stored.
@@ -1853,3 +1858,77 @@ as drift.
   discovery (`tstats count from datamodel`) for a validated model name, with a time limit. No
   new route, capability, collection or dependency; no SPL refusal, approval control, capability
   check or ACL was relaxed. Python 3.9 compatible, stdlib only. The build number is 13.
+
+## D-068 Leading command names in the SPL guard, a scheduler role that cannot write, acceleration read from the listing, licence
+
+*0.9.2 (Sprint 13 of the 2026-11 roadmap; research findings N-1, N-2, N-6, N-7, N-8, N-9).*
+* Context: an isolated research run on Splunk Enterprise 10.2.9 (2026-11-25) showed that Splunk
+  runs the first word of a bracket as a command when it is a command name, and that neither guard
+  saw it. `| makeresults count=3 | appendpipe [ collect index=x ]` wrote 3 events (interactive and
+  scheduled), `append [ outputlookup f.csv ]` emptied an existing lookup, and `append`,
+  `appendcols`, `union`, `join`, `multisearch` and an unpiped `map search="collect ..."` ran
+  `collect` too. Splunk's `/services/search/parser` lists only the outer commands
+  (`makeresults, eval, appendpipe`), so only the static analysis can see them. A role with only
+  `search` and `schedule_search` could write because Splunk's `[default]` stanza grants
+  `run_collect`; `ucm_scheduler` imported `user`, which also grants `output_file`, `run_dump`,
+  `run_sendalert`. D-062's claim that subsearch side effects were refused was therefore wrong for
+  this position.
+* **Decision, guard.** `analysis._split_pipeline` marks the first segment of a bracket as `sub`
+  (before: `level`, read as an implicit `search`). `_segment_command` resolves the command of every
+  segment, and Python and JS share the rule:
+  * `sub`: a word followed by a comparison (`delete=1`) stays a search term; otherwise a side-effect,
+    indirect or generating command name (`analysis.GENERATING_COMMANDS`) is that command; inside
+    `appendpipe [ ... ]` (a subpipeline, `_SUBPIPELINE_HOSTS`) every first word is a command, so an
+    unknown one needs review.
+  * `level` (start of the search, of a `map` string, of a search sent without `search`/`|`): a
+    side-effect or indirect command name is that command; anything else stays `search`.
+  * `INDIRECT_COMMANDS` moved to `analysis` (policy re-exports it); the JS guard carries
+    `GENERATING_COMMANDS`, checked equal by `GuardListsTest`. `map` is found with the same resolver,
+    so `[ map search="..." ]` is analysed as well.
+* Evidence: unit tests for every variant run on the lab (`LeadingCommandTest`, uppercase and
+  no-space forms, `delete`, `sendalert`, `dump`) and the Python/JS parity corpus extended with them.
+  Corpus run (old and new code, static analysis): Fenre `0e21f019` and ESCU 6.11.1, 21,985 primary
+  and CIM searches: **0** changes in side effects, indirect, unknown or hidden. 22 searches now list
+  `mstats`, `tstats` or `inputlookup` instead of `search` for the first word of a subsearch, which is
+  what Splunk runs; their lint findings are unchanged.
+* Residual: an add-on command written as the first word of an `append`/`join`/`union` subsearch is
+  still read as a search term (the guard cannot know every add-on command). The role below is the
+  barrier for that case.
+* **Decision, scheduler role.** `role_ucm_scheduler` no longer imports `user`. Measured on the lab:
+  a role that imports `user` and sets `run_collect = disabled` / `output_file = disabled` still holds
+  both (effective capabilities from `authentication/current-context`) and wrote with
+  `appendpipe [ collect ]`. A role without imports that lists `search`, `schedule_search`,
+  `get_metadata`, `input_file`, `list_metrics_catalog`, `run_custom_command`, `srchIndexesAllowed = *`,
+  `srchIndexesDefault = main` and `run_collect = disabled`, `run_mcollect = disabled` searched normally
+  and got "insufficient privileges" for `appendpipe [ collect ]` and `outputlookup`, and "capability
+  run_sendalert required" for `sendalert`. That is the shipped role. `run_custom_command` stays because
+  add-on commands in approved searches need it; they are reviewed at approval. Internal indexes
+  stay excluded as before (`*` never matches them, D-063). `tests/unit/test_scheduler_role.py` and
+  the live `LiveSchedulerRoleTest` check it. An operator who extended the role through `user` has to
+  add those grants to `ucm_scheduler` directly (operator guide §4).
+* **Decision, acceleration.** `GET /services/data/models` on 10.2.9 reports `acceleration` as a
+  top-level boolean (and `acceleration.earliest_time`); `eai:data` has no `acceleration` key;
+  `datamodel/model/<name>` returns it as a JSON string. Discovery read only a dict inside `eai:data`,
+  so every model was `accelerated = false` and `summariesonly=t` requirements were `not_accelerated`.
+  `_is_accelerated` now accepts the boolean, the JSON string and the old dict; the model's app is
+  taken from `acl.app` first. A trimmed real response is `tests/fixtures/rest/data_models_10_2_9.json`
+  (an accelerated temporary model, created and deleted on the lab). Discovery stores
+  `acceleration_earliest` with the model. A CIM model in `Splunk_SA_CIM` was not available on the lab;
+  the app attribution for it is unverified.
+* **Paging (N-7).** Not a server defect: every list caps the page at `[catalog] max_page_size` (100)
+  and returns the effective `count`; a client that advanced the offset by the requested 500 read 7
+  pages of 100 from 3,271 rows (700) and stopped. Lists now return `next_offset` (the offset of the
+  next page, or `null`) next to `has_more`; `tests/unit/test_paging.py`.
+* **`spl_hash` (N-6).** D-066 said the twin lookup used an indexed field; `collections.conf` declared
+  neither the field nor an index. Both are declared now (`accelerated_fields.by_spl_hash`).
+* **Licence (N-8).** The repository and the package carry `LICENSE` (proprietary, all rights reserved,
+  the owner's choice pending; equal to the legal position without a file) and
+  `THIRD_PARTY_NOTICES.md`: Fenre (MIT; the app ships `uc.schema.json` verbatim, now with Fenre's
+  `LICENSE` next to it; test fixtures are verbatim records) and ESCU/`security_content` (Apache
+  License 2.0; no ESCU content is shipped; bundles built from an ESCU package keep that licence).
+  `app.manifest` names the licence. `LicenceFilesTest` keeps the package copies equal. The product
+  research of 2026-11 used other apps for ideas only; nothing of theirs is in the repository.
+* Drift (N-9): `ARCHITECTURE.md` now says the first 1,500 characters of the description are
+  searched; `config.py` defaults for the deployment time range equal `ucm.conf` (`-20m@m`, `-5m@m`).
+* No route, collection or dependency was added; no refusal was relaxed. Python 3.9 compatible,
+  stdlib only. The build number is 14.

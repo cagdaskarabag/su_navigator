@@ -300,7 +300,8 @@ Full model: `docs/SECURITY.md`.
   10.2.9, does not expand macros and never changes a gate or score (D-065).
 * Free-text search is a case-insensitive substring match (all terms must
   match) over a precomputed `search_text` field holding id, title,
-  sourcetypes, tags and MITRE ids; descriptions are not searched. No ranking.
+  sourcetypes, tags, MITRE ids and the first 1,500 characters of the
+  description (`catalog/summary.py`, `SEARCH_DESCRIPTION_CHARS`). No ranking.
 * Derived requirements are lexical hypotheses (D-013), not evidence.
 * `populated` (0.9.1) is a snapshot from the last discovery: one 24-hour count per model, not a
   field, tagging or acceleration check, and it never changes a score (D-067, issue #13).

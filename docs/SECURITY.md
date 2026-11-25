@@ -34,7 +34,7 @@ Status: 0.9.1 (catalogue, discovery, readiness, selection, SPL validation, deplo
 | `ucm_analyst` | `ucm_viewer` | `ucm_run_discovery` |
 | `ucm_content_manager` | `ucm_analyst` | `ucm_manage_content` |
 | `ucm_deployment_operator` | `ucm_analyst` | `ucm_deploy` |
-| `ucm_scheduler` | `user` | `schedule_search`. Owner of deployed searches only; assign it to one account and set `scheduled_owner` (D-051). |
+| `ucm_scheduler` | none | `search`, `schedule_search`, `get_metadata`, `input_file`, `list_metrics_catalog`, `run_custom_command`; `run_collect` and `run_mcollect` disabled; no `output_file`, `run_dump`, `run_sendalert`; indexes `*`, default `main` (D-068). Owner of deployed searches only; assign it to one account and set `scheduled_owner` (D-051). |
 | `ucm_admin` | content manager + deployment operator | all |
 
 `admin` and `sc_admin` receive all app capabilities.
@@ -130,6 +130,16 @@ Controls that remain, and their limits:
   `outputlookup`, `sendemail`, `delete` and the rest are side effects of the
   whole search. The server applies the same rule, so preview, submit and
   deployment refuse such a search too.
+* **Leading command names (D-068, 0.9.2).** Splunk runs the first word of a
+  bracket, of a `map` string and of a search sent without `search`/`|` as a
+  command when it is a command name: `appendpipe [ collect ... ]` and
+  `append [ outputlookup ... ]` wrote on Splunk 10.2.9, and Splunk's parser does
+  not list commands inside brackets. Both guards read a side-effect, indirect or
+  generating command name in those positions as that command, and every word that
+  opens `appendpipe [ ... ]` (a subpipeline) as a command. Other leading words stay
+  search terms; an add-on command written first in a subsearch of `append`, `join`
+  or `union` is therefore not seen. The scheduler role is the second barrier: it
+  has no capability to write (`docs/OPERATOR_GUIDE.md` §4).
 * **Hidden SPL is refused (D-062).** The button stays disabled for `savedsearch`,
   `loadjob`, `dbxquery`, the `savedsearch:` dataset, a `map` whose search cannot
   be read (`savedsearch=`, unquoted), a macro inside a `map` string, and nesting

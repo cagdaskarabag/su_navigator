@@ -1,10 +1,10 @@
-# SUNavigator 0.9.1 — operator guide
+# SUNavigator 0.9.2 — operator guide
 
 **SUNavigator** (short for **Splunk use case navigator**) discovers, assesses,
 selects, validates and deploys monitoring use cases in Splunk.
 
 This is the install, usage and troubleshooting guide for **SUNavigator
-0.9.1**. It is written for a single Splunk Enterprise instance
+0.9.2**. It is written for a single Splunk Enterprise instance
 (search head + indexer on one host), including a local macOS install. Search
 head clusters and Splunk Cloud are **not** validated in this version.
 
@@ -22,6 +22,34 @@ Related documents (design, not how-to):
 ---
 
 ## What changed in 0.9.x
+
+### 0.9.2
+
+0.9.2 is a trust and correctness release (D-068). Upgrade as usual and restart Splunk (the
+scheduler role changed).
+
+- **SPL guard: side-effect commands at the start of a bracket.** Splunk runs the first word of
+  `appendpipe [ ... ]`, of a subsearch, of a `map search="..."` string and of a search sent without
+  `search` or `|` as a command when it is a command name. `appendpipe [ collect index=x ]` wrote
+  events and `append [ outputlookup x.csv ]` emptied a lookup on Splunk 10.2.9, and both guards
+  (server and browser) missed them. Both now classify that word as the command, so preview,
+  submit, approval, deploy, enable and the interactive search refuse it. The Fenre and ESCU
+  corpora (21,985 searches) classify exactly as before.
+- **Scheduler role cannot write.** See *What the scheduler role may do* in §4. A deployed search
+  that writes fails in Splunk even if the guard misses it. If the role was ever edited in Splunk
+  Web, a local copy may still import `user`; §4 says how to check and clear it.
+- **Data model acceleration is read correctly.** Discovery read acceleration from a place Splunk
+  10.2.9 does not use, so every model showed as not accelerated and `summariesonly=t` searches
+  were reported as `not_accelerated`. It now reads the listing's own flag and also records the
+  summary range (`acceleration_earliest`). Run discovery once after the upgrade.
+- **Paged lists return `next_offset`.** The catalogue, readiness and inventory lists cap a page
+  at `[catalog] max_page_size` (100) and say so in `count`; `next_offset` is the offset of the next
+  page (or `null`). A client that advanced by the requested size skipped rows.
+- **Licence and notices.** `LICENSE` (proprietary, all rights reserved) and
+  `THIRD_PARTY_NOTICES.md` (Fenre, MIT; ESCU, Apache License 2.0) are in the repository and the
+  package; Fenre's licence sits next to the schema the app ships.
+- Smaller: the `spl_hash` field is declared and indexed (the twin lookup no longer scans); code
+  defaults for the deployment time range match `ucm.conf` (`-20m@m` to `-5m@m`).
 
 ### 0.9.1
 
@@ -420,7 +448,7 @@ commands (`delete`, `outputlookup`, `collect`, script, and similar). Deployed
 searches have **no email, webhook or script alert actions**; the default
 alert mode only writes to Splunk's Triggered Alerts.
 
-**Not in 0.9.1:** PDF export of coverage, a bundled regulation-control
+**Not in 0.9.2:** PDF export of coverage, a bundled regulation-control
 catalogue, SHC validation with a deployer and indexer peers (issue #2), Splunk Cloud
 vetting submission (issue #3), and any Enterprise Security output mode (issue #4; 0.9.1 only
 reads ES and ESCU state and hands off, §5.2b).
@@ -434,7 +462,7 @@ reads ES and ESCU state and hands off, §5.2b).
 | Splunk | Enterprise 10.x (validated on 10.2.9 in development; tested by operators on 10.4.3 Darwin arm64). Python 3.9 or 3.13 in Splunk. |
 | KV Store | Must reach `status: ready`. The app stores catalogue, inventory, readiness, selections, deployments and audit in KV collections. |
 | Role | First-time setup needs `admin` (or `sc_admin` on Cloud). |
-| Disk | The 0.9.1 package is a few megabytes. Category 9 of Fenre is about 120 records; the full Fenre corpus is tens of thousands of records. |
+| Disk | The 0.9.2 package is a few megabytes. Category 9 of Fenre is about 120 records; the full Fenre corpus is tens of thousands of records. |
 | Network | Optional. Remote sync needs HTTPS to `api.github.com` and `raw.githubusercontent.com`. Offline import needs none. |
 | Browser | Splunk Web. The app is a set of Simple XML views plus JavaScript under `/en-US/app/sunavigator/`. |
 
@@ -451,7 +479,7 @@ Placeholders used below:
 
 ```bash
 ./tools/package.sh
-# writes dist/sunavigator-0.9.1.tar.gz
+# writes dist/sunavigator-0.9.2.tar.gz
 ```
 
 The tarball has a single top-level folder `sunavigator/`
@@ -469,11 +497,11 @@ then fails in the UI with `500 Internal Server Error` even though splunkd is
 still unpacking. Use the CLI:
 
 ```bash
-$SPLUNK_HOME/bin/splunk install app /path/to/sunavigator-0.9.1.tar.gz \
+$SPLUNK_HOME/bin/splunk install app /path/to/sunavigator-0.9.2.tar.gz \
   -auth "$SPLUNK_USER:$SPLUNK_PASSWORD"
 # first install: omit -update
 # upgrade of an existing copy:
-$SPLUNK_HOME/bin/splunk install app /path/to/sunavigator-0.9.1.tar.gz \
+$SPLUNK_HOME/bin/splunk install app /path/to/sunavigator-0.9.2.tar.gz \
   -update 1 -auth "$SPLUNK_USER:$SPLUNK_PASSWORD"
 
 $SPLUNK_HOME/bin/splunk restart
@@ -607,6 +635,27 @@ so grant it read access to the indexes your use cases search. Operators have
 no write access to the saved searches themselves: editing one in Splunk Web
 returns 403, and so does deleting it.
 
+**What the scheduler role may do (0.9.2, D-068).** `ucm_scheduler` no longer imports
+`user`. It holds `search`, `schedule_search`, `get_metadata`, `input_file`,
+`list_metrics_catalog` and `run_custom_command`, searches `*` (non-internal indexes) with
+`main` as default, and has `run_collect` and `run_mcollect` disabled. It has no
+`output_file`, `run_dump`, `run_sendalert` or `upload_lookup_files`. So a deployed search
+that tries to write (`collect`, `outputlookup`, `outputcsv`, `sendalert`, `dump`) fails in
+Splunk with "insufficient privileges", even if the app's SPL guard missed it. Splunk 10.2.9
+does not let a role disable a capability it imports, which is why the role lists its
+capabilities itself. If you added capabilities or indexes to `ucm_scheduler` through
+`user`, add them to `ucm_scheduler` directly (Settings > Roles) after the upgrade.
+
+A local copy of the role wins over the app's. If `ucm_scheduler` was ever edited in Splunk Web,
+`etc/system/local/authorize.conf` may still say `importRoles = user`, and then the role keeps
+every capability of `user`. Check with
+`$SPLUNK_HOME/bin/splunk btool authorize list role_ucm_scheduler --debug`; if `importRoles`
+comes from a `local` file, clear the inheritance (Settings > Roles > ucm_scheduler >
+Inheritance: none, or `POST /services/authorization/roles/ucm_scheduler imported_roles=`).
+This was the case on the development lab. Splunk's own `[default]` role stanza also gives every
+role `edit_own_objects`, `list_all_objects` and `schedule_rtsearch`; none of them lets a
+scheduled search write data.
+
 **Scheduler account and indexes (0.8.7, D-063).** The account must be allowed to
 search every index its searches read, or the search runs, returns nothing and is
 logged as `success`. The app reads the account's roles and tells you:
@@ -620,7 +669,7 @@ logged as `success`. The app reads the account's roles and tells you:
   A search with no `index=` reads the account's **default** indexes: with an empty
   default list it sees nothing, and the built-in `user` role's default is `main`
   only. Imported roles count; the app reads them already resolved.
-- A role that imports `user` (as `ucm_scheduler` does) therefore holds `*` and cannot
+- `ucm_scheduler` holds `*` (before 0.9.2 through `user`, now directly) and cannot
   search `_internal` until you add `_internal` (or `_*`) to its **Indexes searched by
   default / allowed** in **Settings > Roles**. Many Fenre use cases in categories 13 and
   similar read `_internal`/`_audit`; ESCU searches mostly read data models.
@@ -1551,7 +1600,7 @@ app. Do the steps in this order:
    $SPLUNK_HOME/bin/splunk restart
    ```
 
-4. **Install SUNavigator 0.9.1** as in §3.2. The first install omits
+4. **Install SUNavigator 0.9.2** as in §3.2. The first install omits
    `-update`, because `sunavigator` is a new app ID.
 5. **Re-create the GitHub token** if you use one (§3.6). It must be stored in
    realm `sunavigator`. The 0.7.0 token in realm `splunk_use_case_manager` is
@@ -1930,7 +1979,7 @@ Full table: [ARCHITECTURE.md §6](ARCHITECTURE.md).
 
 ---
 
-## 12. Known limitations (0.9.1)
+## 12. Known limitations (0.9.2)
 
 Each item says where to read more and ends with its tracking: an issue number on GitHub, a draft
 (`N-nn`) in `docs/ISSUES_PENDING.md` that has not been filed yet, or "no issue" for a limit that is
@@ -2006,6 +2055,11 @@ by design.
   `search` capability sees the button disabled; that case is covered by unit tests, not
   by a lab check (issue #15). Required mitigations of issue #11 are implemented (D-058, D-062); what
   remains is the accepted residual risk of no SUN audit.
+- The SPL guard reads the first word of a bracket as a command only when it is a known
+  side-effect, indirect or generating command (and always inside `appendpipe [ ... ]`). An
+  add-on command written first in an `append`, `join` or `union` subsearch is read as a search
+  term. The scheduler role cannot write (§4), so such a command cannot write from a deployed
+  search; in a preview it runs with your own rights (D-068). No issue: residual by design.
 
 **Deployments**
 
@@ -2053,7 +2107,7 @@ by design.
 
 ## 13. Quick start checklist
 
-1. `splunk install app sunavigator-0.9.1.tar.gz` then `splunk restart`.
+1. `splunk install app sunavigator-0.9.2.tar.gz` then `splunk restart`.
 2. `splunk show kvstore-status` → `ready` (macOS: §9.2 if stuck on `starting`).
 3. Open **SUNavigator → Administration**; all platform pills green.
 4. **Check provider for categories** → tick **9** → **Synchronize**, **or**

@@ -91,6 +91,7 @@ class ReadinessQueryService:
                                 limit=count + 1, fields=list(LIST_FIELDS))
         total: Optional[int] = self.store.count(C.READINESS, query or None) if f.with_total else None
         return {"items": rows[:count], "offset": f.offset, "count": count, "has_more": len(rows) > count,
+                "next_offset": f.offset + count if len(rows) > count else None,
                 "total": total, "sort": f.sort}
 
     def summary(self) -> Dict[str, Any]:

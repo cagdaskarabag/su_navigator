@@ -157,6 +157,52 @@ class NestedSearchTest(unittest.TestCase):
         self.assertEqual(p.side_effects, ["collect"])
 
 
+class LeadingCommandTest(unittest.TestCase):
+    """D-068: Splunk 10.2.9 ran every one of these side-effect commands (research run, 2026-11-25)."""
+
+    PREFIX = "| makeresults count=3 | eval a=1 | "
+
+    def test_first_command_of_a_bracket_is_classified(self):
+        for body, cmd in (("appendpipe [ collect index=x sourcetype=y ]", "collect"),
+                          ("appendpipe [collect index=x]", "collect"),
+                          ("appendpipe [ COLLECT index=x ]", "collect"),
+                          ("appendpipe [ outputlookup x.csv ]", "outputlookup"),
+                          ("append [ outputlookup x.csv ]", "outputlookup"),
+                          ("appendcols [ collect index=x ]", "collect"),
+                          ("union [ collect index=x ]", "collect"),
+                          ("join type=left a [ collect index=x ]", "collect"),
+                          ("multisearch [ collect index=x ]", "collect"),
+                          ("append [ delete ]", "delete"),
+                          ("appendpipe [ sendalert risk ]", "sendalert"),
+                          ("appendpipe [ dump basefilename=x ]", "dump"),
+                          ("appendpipe [ stats count ] | appendpipe [ collect index=x ]", "collect")):
+            spl = self.PREFIX + body
+            with self.subTest(spl=spl):
+                self.assertIn(cmd, classify(spl).side_effects)
+                self.assertIn(cmd, classify(spl, parsed(("makeresults", "count=3"), ("eval", "a=1"),
+                                                        ("appendpipe", "[...]"))).side_effects)
+
+    def test_map_string_without_a_pipe(self):
+        self.assertIn("collect", classify(self.PREFIX + 'map search="collect index=x"').side_effects)
+        self.assertIn("outputlookup", classify(self.PREFIX + 'map search="outputlookup x.csv"').side_effects)
+
+    def test_unprefixed_search_starting_with_a_side_effect_command(self):
+        self.assertEqual(classify("collect index=x").side_effects, ["collect"])
+        self.assertEqual(classify("outputlookup x.csv").side_effects, ["outputlookup"])
+
+    def test_appendpipe_bracket_is_a_pipeline(self):
+        self.assertEqual(classify(self.PREFIX + "appendpipe [ customcmd a=1 ]").unknown, ["customcmd"])
+        self.assertEqual(classify(self.PREFIX + "appendpipe [ eval x=1 ]").unknown, [])
+
+    def test_search_terms_stay_search_terms(self):
+        for spl in ("index=a [ search index=b | fields host ]", "index=a [ index=b | fields host ]",
+                    "index=a [ delete=1 ]", "index=a [ delete!=1 ]", "index=a | join host [ search index=b ]",
+                    "error OR failed index=a", "index=a [ inputlookup hosts.csv | fields host ]"):
+            with self.subTest(spl=spl):
+                p = classify(spl)
+                self.assertEqual((p.side_effects, p.indirect, p.unknown), ([], [], []))
+
+
 COMMAND_TABLE = [
     ("read_only", c) for c in (
         "stats", "eval", "where", "table", "fields", "rename", "rex", "spath", "lookup", "inputlookup",

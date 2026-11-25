@@ -188,6 +188,7 @@ class CatalogQueryService:
         """``total_capped``: the KV Store returns at most ``max_rows_per_query`` rows, so a total at that
         number is a lower bound, not a count."""
         return {"items": rows[:count], "offset": f.offset, "count": count, "has_more": len(rows) > count,
+                "next_offset": f.offset + count if len(rows) > count else None,
                 "total": total if f.with_total else None, "total_capped": bool(capped and f.with_total),
                 "sort": f.sort}
 

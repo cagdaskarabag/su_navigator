@@ -321,7 +321,8 @@ def _model_docs(models, imported, job_id, populated=None) -> List[Dict[str, Any]
         doc = _doc(
             kind="datamodel", name=model["name"], index="", sourcetype="",
             extra={"app": model.get("app"), "display_name": model.get("display_name"),
-                   "objects": model.get("objects") or [], "accelerated": model.get("accelerated")},
+                   "objects": model.get("objects") or [], "accelerated": model.get("accelerated"),
+                   "acceleration_earliest": model.get("acceleration_earliest") or ""},
             window_count=0, last_time=None, now=0, imported=imported, job_id=job_id,
             identity=(model["name"],))
         outcome = (populated or {}).get(model["name"])
