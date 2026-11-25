@@ -1996,3 +1996,83 @@ class LiveActionsTest(unittest.TestCase):
         self.assertEqual([str(live["action.email"]).lower(), str(live["action.webhook"]).lower()].count("true"), 0, live)
         self.assertEqual(body["deployment"]["live"]["drift"], [])
         self.act(self.operator, "retire")
+
+
+@unittest.skipUnless(LIVE, "set UCM_LIVE_SPLUNK=1 to run against a real Splunk instance")
+class LiveLifecycleRefinementsTest(unittest.TestCase):
+    """D-075: the audit chain verifies on the real KV Store; withdraw, outcome and revision diff round-trip."""
+
+    OPERATOR = "ucm_test_life_" + uuid.uuid4().hex[:6]
+    OPERATOR_PW = "T3st!" + uuid.uuid4().hex
+    UC = "fenre:UC-9.1.2"
+    KEY = "dep_fenre_UC-9.1.2"
+    SAVED = "/servicesNS/nobody/sunavigator/saved/searches/"
+
+    @classmethod
+    def setUpClass(cls):
+        cls.admin = transport()
+        cls.kv = KVStore(cls.admin)
+        status, _ = cls.admin.request("POST", "/services/authentication/users",
+                                      form={"name": cls.OPERATOR, "password": cls.OPERATOR_PW, "roles": "ucm_deployment_operator"})
+        assert status in (200, 201), status
+        cls.operator = transport(cls.OPERATOR, cls.OPERATOR_PW)
+        status, body = api(cls.admin, "POST", "import", raw=json.dumps(helpers.fixture_bundle(record_ids=["9.1.2"])).encode("utf-8"))
+        assert status == 200, body
+        cls.kv.delete(C.DEPLOYMENTS, cls.KEY)
+
+    @classmethod
+    def tearDownClass(cls):
+        from urllib.parse import quote
+        doc = cls.kv.get(C.DEPLOYMENTS, cls.KEY)
+        if doc:
+            cls.admin.request("DELETE", cls.SAVED + quote(doc["saved_search"]["name"], safe=""))
+            cls.kv.delete(C.DEPLOYMENTS, cls.KEY)
+        cls.admin.request("DELETE", "/services/authentication/users/" + cls.OPERATOR)
+
+    def act(self, who, action, **body):
+        body["id"] = self.UC
+        return api(who, "POST", "deployment/" + action, body=body)
+
+    def test_audit_chain_survives_the_real_kv_store(self):
+        status, before = api(self.admin, "GET", "audit/verify")
+        self.assertEqual(status, 200, before)
+        self.assertTrue(before["ok"], before)
+        self.assertEqual(api(self.operator, "GET", "audit/verify")[0], 403)
+        self.act(self.operator, "draft")
+        status, after = api(self.admin, "GET", "audit/verify")
+        self.assertTrue(after["ok"], after)
+        self.assertEqual(after["modified_count"], 0, after)
+        self.assertGreater(after["chained"], before["chained"], (before, after))
+        self.assertTrue(after["head"] and after["head"] != before["head"])
+
+    def test_withdraw_outcome_and_revision_diff(self):
+        self.assertEqual(self.act(self.operator, "draft")[0], 200)
+        self.assertEqual(self.act(self.operator, "submit")[0], 200)
+        status, body = self.act(self.admin, "withdraw", note="x")
+        self.assertEqual(status, 409, body)
+        self.assertEqual(self.act(self.admin, "approve")[0], 200)
+        status, body = self.act(self.admin, "withdraw", note="wrong cron, redo")
+        self.assertEqual((status, body["deployment"]["state"]), (200, "pending_approval"), body)
+        self.assertEqual(self.act(self.operator, "deploy")[0], 409)
+        self.assertEqual(self.act(self.admin, "approve")[0], 200)
+        status, body = self.act(self.operator, "deploy")
+        self.assertEqual(status, 200, body)
+        status, body = self.act(self.operator, "outcome", outcome="needs_tuning")
+        self.assertEqual(status, 400, body)
+        status, body = self.act(self.operator, "outcome", outcome="needs_tuning", note="fires on every admin login")
+        self.assertEqual(status, 200, body)
+        self.assertEqual(body["deployment"]["outcome"]["value"], "needs_tuning")
+        status, listed = api(self.admin, "GET", "deployments", {"outcome": "needs_tuning", "summary": "1"})
+        self.assertIn(self.UC, [i["content_id"] for i in listed["items"]])
+        self.assertGreaterEqual(listed["summary"]["pipeline"]["needs_tuning"], 1)
+        status, body = self.act(self.operator, "draft", cron="17 * * * *")
+        self.assertEqual(status, 200, body)
+        revs = [r["rev"] for r in body["deployment"]["revisions"]]
+        self.assertGreaterEqual(len(revs), 2, revs)
+        status, diff = api(self.operator, "GET", "deployment/diff", {"id": self.UC, "from": str(revs[-2]), "to": str(revs[-1])})
+        self.assertEqual(status, 200, diff)
+        self.assertTrue(diff["available"], diff)
+        self.assertIn("cron", [f["field"] for f in diff["fields"]])
+        status, verify = api(self.admin, "GET", "audit/verify")
+        self.assertTrue(verify["ok"], verify)
+        self.act(self.operator, "retire")

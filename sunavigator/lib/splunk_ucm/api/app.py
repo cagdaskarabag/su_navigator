@@ -418,6 +418,18 @@ def get_audit(ctx: Context, req: Request) -> Response:
     return Response(200, {"events": ctx.audit.recent(limit, req.arg("prefix"))})
 
 
+def get_audit_verify(ctx: Context, req: Request) -> Response:
+    caps = ctx.capabilities()
+    if CAP_ADMIN not in caps and CAP_MANAGE_CONTENT not in caps:
+        raise PermissionDenied("missing capability %s" % CAP_ADMIN)
+    result = ctx.audit.verify_chain()
+    ctx.audit.record(ctx.user, "audit.verified", "audit", "*", outcome="success" if result["ok"] else "failure",
+                     details={"rows": result["rows"], "modified": result["modified_count"],
+                              "missing": result["missing_count"], "restarts": result["restart_count"],
+                              "head": result["head"]})
+    return Response(200, result)
+
+
 def get_inventory(ctx: Context, req: Request) -> Response:
     f = InventoryFilter(
         kind=req.arg("kind", "pair"), status=req.arg("status", "active"), q=req.arg("q").strip(),
@@ -612,6 +624,10 @@ def _deployment_view(ctx: Context, svc: DeploymentService, doc: Optional[Dict[st
             "scheduler_access": svc.scheduler_access_for(doc),
             "settings": {"require_approval": svc.settings.require_approval,
                          "allow_self_approval": svc.settings.allow_self_approval,
+                         "enable_second_person": svc.settings.enable_second_person,
+                         "enable_request_hours": svc.settings.enable_request_hours,
+                         "override_days": svc.settings.override_days,
+                         "override_expiry_action": svc.settings.override_expiry_action,
                          "block_enable_states": list(svc.settings.block_enable_states),
                          "defaults": svc.settings.defaults(), "actions": svc.settings.actions.public()}}
 
@@ -619,7 +635,8 @@ def _deployment_view(ctx: Context, svc: DeploymentService, doc: Optional[Dict[st
 def get_deployments(ctx: Context, req: Request) -> Response:
     svc = ctx.deployment_service()
     out = svc.list(req.args("state"), req.args("live"), _int(req.arg("offset"), 0, "offset"),
-                   _int(req.arg("count"), 50, "count"), drifted=req.arg("drift") == "1")
+                   _int(req.arg("count"), 50, "count"), drifted=req.arg("drift") == "1",
+                   outcomes=req.args("outcome"), override_active=req.arg("override") == "1")
     if req.arg("summary") == "1":
         out["summary"] = svc.summary()
     return Response(200, out)
@@ -635,6 +652,14 @@ def post_controltest_import(ctx: Context, req: Request) -> Response:
 
 def get_deployments_export(ctx: Context, req: Request) -> Response:
     return Response(200, ctx.deployment_service().export(ctx.user))
+
+
+def get_deployment_diff(ctx: Context, req: Request) -> Response:
+    use_case_id = req.arg("id")
+    if not use_case_id:
+        raise ValidationError("id is required")
+    return Response(200, ctx.deployment_service().diff(use_case_id, _int(req.arg("from"), 0, "from"),
+                                                       _int(req.arg("to"), 0, "to")))
 
 
 def get_deployment(ctx: Context, req: Request) -> Response:
@@ -663,6 +688,8 @@ def _deployment_action(action: str) -> Handler:
             doc = svc.save_draft(ctx.user, use_case_id, body)
         elif action == "enable":
             doc = svc.enable(ctx.user, use_case_id, str(body.get("override_reason") or ""))
+        elif action == "outcome":
+            doc = svc.set_outcome(ctx.user, use_case_id, str(body.get("outcome") or ""), note)
         elif action == "verify":
             doc = svc.verify(ctx.user, use_case_id)
         elif action == "controltest":
@@ -820,8 +847,8 @@ def post_dashboard_delete(ctx: Context, req: Request) -> Response:
     return Response(200, {"deleted": True})
 
 
-DEPLOYMENT_ACTIONS = ("draft", "submit", "approve", "reject", "deploy", "enable", "disable", "rollback",
-                      "retire", "verify", "controltest")
+DEPLOYMENT_ACTIONS = ("draft", "submit", "approve", "reject", "withdraw", "deploy", "enable", "cancel_enable", "disable",
+                      "rollback", "retire", "verify", "controltest", "outcome")
 
 
 def build_router() -> Router:
@@ -837,6 +864,7 @@ def build_router() -> Router:
     router.add("POST", "catalog/reindex", post_reindex)
     router.add("GET", "platform", get_platform)
     router.add("GET", "audit", get_audit)
+    router.add("GET", "audit/verify", get_audit_verify)
     router.add("GET", "inventory", get_inventory)
     router.add("GET", "inventory/coverage", get_inventory_coverage)
     router.add("GET", "environment/health", get_environment_health)
@@ -863,6 +891,7 @@ def build_router() -> Router:
     router.add("GET", "deployments/export", get_deployments_export)
     router.add("POST", "controltest/import", post_controltest_import)
     router.add("GET", "deployment", get_deployment)
+    router.add("GET", "deployment/diff", get_deployment_diff)
     for action in DEPLOYMENT_ACTIONS:
         router.add("POST", "deployment/" + action, _deployment_action(action))
     router.add("GET", "frameworks", get_frameworks)

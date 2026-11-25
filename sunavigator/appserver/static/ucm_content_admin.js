@@ -259,6 +259,28 @@ function ucmViewMain($, ucm) {
         }).fail(function () { ucm.clear(reindexBox); });
     }
 
+    function verifyResult(r) {
+        var problems = r.modified_count + r.missing_count + r.restart_count;
+        var lines = [r.chained + " of " + r.rows + " rows are chained" + (r.legacy ? " (" + r.legacy + " older rows from before the chain are not checked)" : "") + ".",
+            "Head " + (r.head || "none") + ". Record it outside Splunk to also detect removal of the newest rows."];
+        if (r.branches) { lines.push(r.branches + " rows were written at the same moment as another; that is normal and not a failure."); }
+        if (r.truncated) { lines.push("Only the first " + r.rows + " rows were checked."); }
+        if (!problems) { return ucm.stateBox("info", "The audit chain is intact.", lines.join(" ")); }
+        var found = [];
+        if (r.modified_count) { found.push(r.modified_count + " row(s) were changed after they were written: " + r.modified.map(function (m) { return m.action + " at " + m.time; }).join("; ")); }
+        if (r.missing_count) { found.push(r.missing_count + " row(s) follow a row that no longer exists: " + r.missing_predecessor.map(function (m) { return m.action + " at " + m.time; }).join("; ")); }
+        if (r.restart_count) { found.push("the chain restarted " + r.restart_count + " time(s), for example after the previous row could not be read: " + r.restarts.map(function (m) { return m.time; }).join("; ")); }
+        return ucm.stateBox("warn", "The audit chain has problems.", found.join(". ") + ". " + lines.join(" "));
+    }
+
+    function auditIntegrity() {
+        var out = el("div", {});
+        return el("div", { "class": "ucm-actions" }, el("button", { "class": "btn", type: "button", text: "Verify audit chain", onclick: function () {
+            ucm.get("audit/verify").done(function (r) { ucm.clear(out).appendChild(verifyResult(r)); })
+                .fail(function (err) { ucm.clear(out).appendChild(ucm.stateBox("error", "Could not verify the audit chain.", err.message)); });
+        } }), el("span", { "class": "ucm-sub", text: "Each audit row carries a hash of itself and of the row before it. Verification finds an edited row or one removed from the middle." }), out);
+    }
+
     function renderAudit() {
         ucm.get("audit", { limit: 15, prefix: "content." }).done(function (data) {
             var body = el("tbody", {});
@@ -269,7 +291,7 @@ function ucmViewMain($, ucm) {
             ucm.clear(auditBox).appendChild(el("div", { "class": "ucm-section" }, el("h3", { text: "Content audit trail" }),
                 data.events.length ? el("table", { "class": "ucm-table" }, el("thead", {}, el("tr", {},
                     el("th", { text: "Time (UTC)" }), el("th", { text: "Actor" }), el("th", { text: "Action" }),
-                    el("th", { text: "Object" }), el("th", { text: "Outcome" }))), body) : ucm.stateBox("empty", "No audit events yet.")));
+                    el("th", { text: "Object" }), el("th", { text: "Outcome" }))), body) : ucm.stateBox("empty", "No audit events yet."), auditIntegrity()));
         }).fail(function () { ucm.clear(auditBox); });
     }
 

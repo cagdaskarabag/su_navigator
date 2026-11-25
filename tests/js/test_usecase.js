@@ -288,7 +288,7 @@ var tests = {
         var dds = details[0].find(function (n) { return n.tagName === "DD"; });
         var dts = details[0].find(function (n) { return n.tagName === "DT"; });
         assert.strictEqual(dts.length, dds.length);
-        assert.strictEqual(dts.length, 10, "every action except draft is unavailable here");
+        assert.strictEqual(dts.length, 13, "every action except draft is unavailable here");
         dds.forEach(function (d) { assert.ok(d.textContent.length > 10); });
         assert.ok(/Already retired/.test(details[0].textContent));
     },
