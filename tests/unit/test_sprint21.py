@@ -189,6 +189,17 @@ class RefusedActionsAreAuditedTest(unittest.TestCase):
         row = self.rows()[0]
         self.assertEqual((row["details"]["code"], row["object_id"]), ("validation_error", ""))
 
+    def test_two_conflicts_with_different_reasons_are_two_refusals(self):
+        audit = AuditService(self.store)
+        refusals = RefusalAudit(audit, window=300)
+        first = ConflictError("a", {"code": "readiness_gate"})
+        second = ConflictError("b", {"code": "second_person_required"})
+        self.assertTrue(refusals.record("op", "POST", "deployment/enable", first, {"id": UC}))
+        self.assertTrue(refusals.record("op", "POST", "deployment/enable", second, {"id": UC}))
+        self.assertIsNone(refusals.record("op", "POST", "deployment/enable", second, {"id": UC}))
+        rows = sorted((r["details"]["code"], r["details"]["error"]) for r in self.rows())
+        self.assertEqual(rows, [("readiness_gate", "conflict"), ("second_person_required", "conflict")])
+
     def clocked(self, clock):
         patcher = mock.patch("splunk_ucm.audit.epoch_now", lambda: clock[0])
         patcher.start()

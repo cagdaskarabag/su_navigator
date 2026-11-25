@@ -4,7 +4,7 @@ A refused request (missing capability, failed validation, conflict with the work
 them is what an attempted bypass looks like. They are written to the same hash-chained audit trail, as
 ``refused.<route>`` with ``outcome=refused``, under limits so that nobody can use refusals to flood the chain:
 
-* a request that repeats (same user, route, object and error code) inside ``refusal_window_seconds`` is not written again;
+* a request that repeats (same user, route, object and reason code) inside ``refusal_window_seconds`` is not written again;
 * one user writes at most ``refusal_actor_per_hour`` rows per hour, everyone together at most ``refusal_total_per_hour``;
 * the first request over a limit writes one ``refused.rate_limited`` row for that hour, then nothing more;
 * only POST requests to the governance routes below count, only client errors (400, 403, 409), and only an error
@@ -58,6 +58,11 @@ def _object_id(body: Any) -> str:
     return ""
 
 
+def _code(error: UcmError) -> str:
+    """The specific reason when the error names one (a ``conflict`` can be five different refusals)."""
+    return str((error.details or {}).get("code") or error.code)[:80]
+
+
 class RefusalAudit:
     def __init__(self, audit: Any, enabled: bool = True, window: int = DEFAULT_WINDOW, per_actor: int = DEFAULT_PER_ACTOR,
                  total: int = DEFAULT_TOTAL, now: Callable[[], float] = epoch_now):
@@ -82,6 +87,7 @@ class RefusalAudit:
                 return None
             actor = actor or "unknown"
             action = _PREFIX + path.replace("/", ".")
+            code = _code(error)
             object_id = _object_id(body)
             store = self.audit.store
             now = self.now()
@@ -90,7 +96,7 @@ class RefusalAudit:
                                                                                   "details"])
             if self.window and any(
                     r.get("actor") == actor and r.get("action") == action and r.get("object_id") == object_id
-                    and (r.get("details") or {}).get("code") == error.code and float(r.get("time") or 0) >= now - self.window
+                    and (r.get("details") or {}).get("code") == code and float(r.get("time") or 0) >= now - self.window
                     for r in hour):
                 return None
             limited = [r for r in hour if r.get("action") == _LIMITED]
@@ -109,7 +115,7 @@ class RefusalAudit:
                                                "per": "hour", "first_dropped_route": path})
                 return None
             return self.audit.record(actor, action, path.split("/")[0], object_id, outcome="refused",
-                                     details={"code": error.code, "status": error.http_status, "route": path,
+                                     details={"code": code, "error": error.code, "status": error.http_status, "route": path,
                                               "message": clean_message(error.message)})
         except Exception:
             log.exception("refusal audit failed", extra={"path": path})
