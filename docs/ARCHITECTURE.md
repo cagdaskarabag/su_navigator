@@ -165,7 +165,7 @@ All collections are app-scoped (`nobody` owner) and replicated in SHC.
 | `uc_validation` | same as `uc_catalog` | shared | REST (system token) | Parser outcome, side-effects, advisory lint findings (`lint`, absent before 0.8.9), bounded preview metadata (no event payloads), field samples. |
 | `uc_control_fixtures` | `cf_<catalog key>` | shared | REST (system token), import only | Control-test fixture: sourcetype, host, `min_count`, raw positive and negative text, import `batch` (D-054). |
 | `uc_deployments` | `dep_<catalog key>` | shared | REST (system token), worker | Workflow `state`, `revisions[]` (frozen SPL, schedule, parse result, submitter, approver, deploy time), `deployed_revision`, `live` (status, drift, owner, next run), `history[]` (last 100), `override` (reason, by, at, expires_at, blocked_by, reminded_at), `override_active`, `enable_request`, `outcome` and `outcome_value`, `revision_log[]` (stubs of trimmed revisions), `version`. |
-| `uc_frameworks` | `fw_<id>_<version>` / `active_<id>` | shared | REST (system token) | Imported framework definitions (`ucm.framework/1`) and the active version per framework. Bundled versions are files, not documents. |
+| `uc_frameworks` | `fw_<id>_<version>` / `active_<id>` | shared | REST (system token) | Imported framework definitions (`ucm.framework/1` ATT&CK, `ucm.framework/2` control catalogues, D-076) and the active version per framework. Bundled versions are files, not documents. |
 | `uc_dashboards` | `dash_<view name>` | shared | REST (system token) | Generated view record: template, params, label, XML hash, created/updated by. |
 
 Accelerated fields (`collections.conf`): `uc_catalog` on `category_key`,
@@ -261,7 +261,8 @@ Downgrades are not supported (D-033).
 | `GET ucm/frameworks/navigator` | read | ATT&CK Navigator layer 4.5 (`framework_id`, `version`, `domain`, `operational=1`, `hours`): `layer`, `filename`. |
 | `GET ucm/frameworks/clause` | read | Use cases of one clause (`framework`, `clause`) with readiness, deployment and mapping substance. |
 | `GET ucm/frameworks/evidence` | read | Deterministic evidence pack (`framework`, optional `clause`, `format=json\|csv`): `content`, `sha256`, `filename`, `meta`. |
-| `POST ucm/frameworks/import` | `ucm_manage_content` | Import a `ucm.framework/1` definition (JSON body). |
+| `GET ucm/frameworks/catalogue` | read | A control catalogue (`framework_id`, optional `version`) with every control, its best level, use cases, ancestor roll-ups, totals, and the mapped clauses that match no control (D-076). |
+| `POST ucm/frameworks/import` | `ucm_manage_content` | Import a `ucm.framework/1` or `ucm.framework/2` definition (JSON body). |
 | `POST ucm/frameworks/activate` | `ucm_manage_content` | Choose the active version (`framework_id`, `version`). |
 | `GET ucm/operations` | read (scheduler logs need `_internal`) | Run status of deployed searches (`hours` = 1, 4, 24, 72 or 168): `health` (`operational`, `no_runs`, `unhealthy`, `failing_dispatch`, `disabled`, `unknown`), run counts, `dispatch_errors`, `last_error`, `last_skip_reason`, `p90_run_time`, `max_run_time`, `cadence_seconds` and `advisories` (H001–H004, D-069). |
 | `GET ucm/dashboards` | read | Templates and generated views. |
@@ -272,6 +273,24 @@ Writes check an app capability (`authorize.conf`) from the request context in
 addition to collection ACLs (defence in depth). Request bodies must be sent as
 `Content-Type: application/json`; splunkd rejects other bodies before the
 handler runs. Errors are JSON `{"error": {code, message, details}}`.
+
+### Control catalogue format (`ucm.framework/2`, D-076)
+
+```json
+{"format": "ucm.framework/2", "kind": "controls", "framework_id": "nist-800-53", "framework": "NIST SP 800-53",
+ "name": "...", "version_label": "Rev. 5.2.0", "sort_key": [5, 2, 0], "match": "nist-800-53",
+ "regulation_ids": ["nist-800-53"], "source": "https://...", "source_sha256": "...", "attribution": "...",
+ "controls": [{"id": "AC", "title": "Access Control", "parent": null, "kind": "family"},
+              {"id": "AC-2", "title": "Account Management", "parent": "AC", "kind": "control"},
+              {"id": "AC-2(1)", "title": "...", "parent": "AC-2", "kind": "enhancement"},
+              {"id": "AC-13", "title": "...", "parent": "AC", "kind": "control", "withdrawn": true}]}
+```
+
+`kind` is one of `family`, `function`, `category` (groups) or `control`, `enhancement`, `requirement`, `subcategory`
+(assessed). A parent must appear before its children; ids are unique after canonicalisation. `match` is `exact` or
+`nist-800-53`. `sort_key` holds one to four whole numbers and becomes the stored version (`5.2.0`). Limits: 20000
+controls, 5 MB. `regulation_ids` name the content provider's `regulation:<id>` frameworks whose clauses are matched to
+the controls.
 
 ## 7. Platform adapter
 

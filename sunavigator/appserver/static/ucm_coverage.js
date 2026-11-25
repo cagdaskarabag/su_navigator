@@ -20,7 +20,9 @@ function ucmViewMain($, ucm) {
         framework_id: params.framework_id || "mitre_attack_enterprise", version: params.version || "",
         domain: params.domain || "", operational: params.operational || "", hours: params.hours || "24",
         technique: params.technique || "", framework: params.framework || "",
-        clause: params.clause || "", gaps: params.gaps || ""
+        clause: params.clause || "", gaps: params.gaps || "",
+        cat: params.cat || "", catv: params.catv || "", catq: params.catq || "", catu: params.catu || "",
+        catg: params.catg || "", catw: params.catw || ""
     };
     var LEVEL_LABEL = { catalogue: "In catalogue", ready: "Data ready", deployed: "Deployed", enabled: "Enabled",
         operational: "Ran without error (not a statement about data)" };
@@ -45,7 +47,8 @@ function ucmViewMain($, ucm) {
     function persist() {
         ucm.setQueryParams({ framework_id: state.framework_id, version: state.version, domain: state.domain,
             operational: state.operational, hours: state.operational ? state.hours : "",
-            technique: state.technique, framework: state.framework, clause: state.clause, gaps: state.gaps });
+            technique: state.technique, framework: state.framework, clause: state.clause, gaps: state.gaps,
+            cat: state.cat, catv: state.catv, catq: state.catq, catu: state.catu, catg: state.catg, catw: state.catw });
     }
 
     function query(extra) {
@@ -339,6 +342,150 @@ function ucmViewMain($, ucm) {
         }).fail(failBox(target, "Could not load controls."));
     }
 
+    var ASSESSED = ["control", "enhancement", "requirement", "subcategory"];
+    var KIND_LABEL = { family: "family", "function": "function", category: "category", control: "control",
+        enhancement: "enhancement", requirement: "requirement", subcategory: "subcategory" };
+
+    function catalogueRowVisible(row, filters) {
+        var assessed = ASSESSED.indexOf(row.kind) >= 0;
+        if (row.withdrawn && !row.mapped && !filters.withdrawn) { return false; }
+        if (!filters.q && !filters.unmapped && !filters.gaps) { return true; }
+        if (!assessed) { return false; }
+        if (filters.unmapped && (row.mapped || row.withdrawn)) { return false; }
+        if (filters.gaps && !row.gap) { return false; }
+        if (filters.q && (row.id + " " + row.title).toLowerCase().indexOf(filters.q) < 0) { return false; }
+        return true;
+    }
+
+    function catalogueTable(rows, depths, data, clauseBox) {
+        var body = el("tbody", {});
+        rows.forEach(function (row) {
+            var depth = Math.min(depths[row.id] || 0, 3);
+            var mapped = row.mapped && row.clauses && row.clauses.length;
+            var idCell = mapped
+                ? el("a", { href: "#", text: row.id, onclick: function (e) {
+                    e.preventDefault();
+                    state.framework = "regulation:" + data.regulation_ids[0]; state.clause = row.clauses[0]; persist();
+                    renderClause(clauseBox);
+                } })
+                : el("span", { text: row.id });
+            body.appendChild(el("tr", { "class": "ucm-depth-" + depth + (ASSESSED.indexOf(row.kind) < 0 ? " ucm-group-row" : "") },
+                el("td", { "class": "ucm-mono ucm-catalogue-id" }, idCell),
+                el("td", { "class": "ucm-title" }, el("span", { text: row.title }), " ",
+                    el("span", { "class": "ucm-sub", text: KIND_LABEL[row.kind] || row.kind }),
+                    row.withdrawn ? ucm.badge("withdrawn", "neutral") : null),
+                el("td", {}, ASSESSED.indexOf(row.kind) < 0
+                    ? el("span", { "class": "ucm-sub", text: row.below.controls ? row.below.mapped + " of " + row.below.controls + " mapped" : "" })
+                    : (row.mapped ? levelCell(row.level) : (row.withdrawn ? null : ucm.badge("no mapped use case", "warn")))),
+                el("td", {}, (row.use_cases || []).slice(0, 6).map(function (id) {
+                    return el("a", { "class": "ucm-chip", href: "ucm_usecase?id=" + encodeURIComponent(id), text: id });
+                }), row.counts && row.counts.catalogue > 6 ? el("span", { "class": "ucm-sub", text: " +" + (row.counts.catalogue - 6) }) : null)));
+        });
+        return el("table", { "class": "ucm-table ucm-catalogue" }, el("thead", {}, el("tr", {},
+            ["Control", "Title", "Best level", "Use cases"].map(function (h) { return el("th", { text: h }); }))), body);
+    }
+
+    function renderCatalogueBody(target, data) {
+        ucm.clear(target);
+        var t = data.totals;
+        var cat = data.catalogue;
+        var clauseBox = el("div", {});
+        var cards = el("div", { "class": "ucm-cards" });
+        [["Controls", t.controls, ""], ["With a mapped use case", t.mapped, ""], ["Without any mapped use case", t.unmapped, "warn"],
+            ["Data ready or better", t.ready, ""], ["Deployed or better", t.deployed, ""], ["Enabled", t.enabled, ""]].forEach(function (c) {
+            cards.appendChild(el("div", { "class": "ucm-card" + (c[2] ? " ucm-card-" + c[2] : "") },
+                el("div", { "class": "ucm-card-value", text: String(c[1]) }), el("div", { "class": "ucm-card-label", text: c[0] })));
+        });
+        target.appendChild(cards);
+        target.appendChild(el("div", { "class": "ucm-sub", text: cat.name + " (" + cat.version_label + ")." +
+            (t.withdrawn ? " " + t.withdrawn + " withdrawn controls are not counted." : "") +
+            " Mapped means the catalogue provider mapped at least one use case to the control; it says nothing about how well the control is met." }));
+        var filters = { q: state.catq.toLowerCase(), unmapped: !!state.catu, gaps: !!state.catg, withdrawn: !!state.catw };
+        var active = !!(filters.q || filters.unmapped || filters.gaps);
+        var depths = {};
+        var byId = {};
+        data.controls.forEach(function (r) { byId[r.id] = r; depths[r.id] = r.parent ? (depths[r.parent] || 0) + 1 : 0; });
+        var groups = [];
+        data.controls.forEach(function (r) {
+            if (!r.parent) { groups.push({ top: r, rows: [] }); } else { groups[groups.length - 1].rows.push(r); }
+        });
+        var shown = 0;
+        groups.forEach(function (g) {
+            var rows = g.rows.filter(function (r) { return catalogueRowVisible(r, filters); });
+            if (active && !rows.length) { return; }
+            shown++;
+            var inner = el("div", {});
+            var filled = false;
+            function fill() {
+                if (filled) { return; }
+                filled = true;
+                inner.appendChild(rows.length ? catalogueTable(rows, depths, data, clauseBox)
+                    : el("div", { "class": "ucm-sub", text: "Nothing to show here with the current filters." }));
+            }
+            var below = g.top.below;
+            var details = el("details", { "class": "ucm-details", ontoggle: function (e) { if (e.target && e.target.open !== false) { fill(); } } },
+                el("summary", {}, el("span", { "class": "ucm-mono", text: g.top.id }), " " + g.top.title + " ",
+                    el("span", { "class": "ucm-sub", text: below.controls
+                        ? below.mapped + " of " + below.controls + " mapped, " + below.ready + " data ready or better, " + (below.controls - below.mapped) + " without a use case"
+                        : "" })),
+                inner);
+            if (active) { details.setAttribute("open", "open"); fill(); }
+            target.appendChild(details);
+        });
+        if (!shown) { target.appendChild(ucm.stateBox("empty", "No control matches these filters.", "")); }
+        target.appendChild(clauseBox);
+        if (state.framework === "regulation:" + data.regulation_ids[0] && state.clause) { renderClause(clauseBox); }
+        if (data.unmatched_count) {
+            var body = el("tbody", {});
+            data.unmatched.forEach(function (u) {
+                body.appendChild(el("tr", {}, el("td", { "class": "ucm-mono", text: u.clause }), el("td", {}, levelCell(u.level)),
+                    el("td", {}, u.use_cases.slice(0, 6).map(function (id) {
+                        return el("a", { "class": "ucm-chip", href: "ucm_usecase?id=" + encodeURIComponent(id), text: id });
+                    }))));
+            });
+            target.appendChild(el("details", { "class": "ucm-details" },
+                el("summary", { text: "Mapped clauses that are not in this catalogue (" + data.unmatched_count + ")" }),
+                el("div", { "class": "ucm-sub", text: "Use cases map these clauses, but no control here has that identifier: usually another version of the standard, or a spelling this catalogue does not use. They are not counted above." }),
+                el("table", { "class": "ucm-table" }, el("thead", {}, el("tr", {},
+                    ["Clause as mapped", "Best level", "Use cases"].map(function (h) { return el("th", { text: h }); }))), body)));
+        }
+        target.appendChild(el("div", { "class": "ucm-sub ucm-attribution" }, cat.attribution + " ",
+            cat.source ? el("span", { "class": "ucm-mono", text: cat.source }) : null, cat.modified ? " (content modified " + cat.modified.slice(0, 10) + ")" : ""));
+    }
+
+    function renderCatalogues(target, defs) {
+        ucm.clear(target);
+        var cats = (defs || []).filter(function (d) { return d.kind === "controls"; });
+        if (!cats.length) { return; }
+        var ids = [];
+        cats.forEach(function (d) { if (ids.indexOf(d.framework_id) < 0) { ids.push(d.framework_id); } });
+        if (ids.indexOf(state.cat) < 0) { state.cat = ids[0]; state.catv = ""; }
+        target.appendChild(el("h3", { text: "Control catalogues" }));
+        target.appendChild(el("div", { "class": "ucm-sub", text: "A catalogue lists every control of a standard, so a control that no use case maps to is visible instead of missing. " +
+            "Identifiers and titles come from public NIST content; the mapping of use cases to controls comes from the catalogue provider." }));
+        var versions = cats.filter(function (d) { return d.framework_id === state.cat; });
+        var bodyBox = el("div", { "class": "ucm-loading", text: "Loading catalogue…" });
+        function reload() { persist(); renderCatalogues(target, defs); }
+        target.appendChild(el("div", { "class": "ucm-toolbar" },
+            select(ids.map(function (id) { return { value: id, label: cats.filter(function (d) { return d.framework_id === id; })[0].name }; }),
+                state.cat, function (v) { state.cat = v; state.catv = ""; reload(); }),
+            select(versions.map(function (d) { return { value: d.version, label: d.version_label + (d.active ? " (active)" : "") }; }),
+                state.catv, function (v) { state.catv = v; reload(); }, "Active version"),
+            el("input", { type: "search", "class": "ucm-input", placeholder: "Find a control", value: state.catq, onchange: function (e) {
+                state.catq = e.target.value.trim(); reload(); } }),
+            el("label", { "class": "ucm-sub" }, el("input", { type: "checkbox", checked: state.catu ? "checked" : null,
+                onchange: function (e) { state.catu = e.target.checked ? "1" : ""; reload(); } }), " No mapped use case"),
+            el("label", { "class": "ucm-sub" }, el("input", { type: "checkbox", checked: state.catg ? "checked" : null,
+                onchange: function (e) { state.catg = e.target.checked ? "1" : ""; reload(); } }), " Gaps (below data ready)"),
+            el("label", { "class": "ucm-sub" }, el("input", { type: "checkbox", checked: state.catw ? "checked" : null,
+                onchange: function (e) { state.catw = e.target.checked ? "1" : ""; reload(); } }), " Show withdrawn")));
+        target.appendChild(bodyBox);
+        ucm.get("frameworks/catalogue", query({ framework_id: state.cat, version: state.catv })).done(function (data) {
+            bodyBox.className = "";
+            renderCatalogueBody(bodyBox, data);
+        }).fail(failBox(bodyBox, "Could not load the catalogue."));
+    }
+
     function renderOperations(target) {
         ucm.clear(target);
         target.appendChild(el("h3", { text: "Run status of deployed searches" }));
@@ -384,14 +531,17 @@ function ucmViewMain($, ucm) {
         var matrixBox = el("div", { "class": "ucm-loading", text: "Loading matrix…" });
         var techniqueBox = el("div", {});
         var frameworksBox = el("div", {});
+        var cataloguesBox = el("div", {});
         var opsBox = el("div", {});
         root.appendChild(toolbar);
         root.appendChild(matrixBox);
         root.appendChild(techniqueBox);
         root.appendChild(frameworksBox);
+        root.appendChild(cataloguesBox);
         root.appendChild(opsBox);
         ucm.get("frameworks", query()).done(function (data) {
-            var defs = data.definitions || [];
+            var allDefs = data.definitions || [];
+            var defs = allDefs.filter(function (d) { return d.kind !== "controls"; });
             var ids = [];
             defs.forEach(function (d) { if (ids.indexOf(d.framework_id) < 0) { ids.push(d.framework_id); } });
             toolbar.appendChild(select(ids.map(function (id) {
@@ -412,6 +562,7 @@ function ucmViewMain($, ucm) {
                     state.hours, function (v) { state.hours = v; load(); }));
             }
             renderFrameworks(frameworksBox, data);
+            renderCatalogues(cataloguesBox, allDefs);
         }).fail(failBox(toolbar, "Could not load frameworks."));
         ucm.get("frameworks/matrix", query({ framework_id: state.framework_id, version: state.version }))
             .done(function (m) { matrixBox.className = ""; renderMatrix(matrixBox, m); })

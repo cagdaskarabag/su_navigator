@@ -1,10 +1,10 @@
-# SUNavigator 0.9.8 — operator guide
+# SUNavigator 0.9.9 — operator guide
 
 **SUNavigator** (short for **Splunk use case navigator**) discovers, assesses,
 selects, validates and deploys monitoring use cases in Splunk.
 
 This is the install, usage and troubleshooting guide for **SUNavigator
-0.9.8**. It is written for a single Splunk Enterprise instance
+0.9.9**. It is written for a single Splunk Enterprise instance
 (search head + indexer on one host), including a local macOS install. Search
 head clusters and Splunk Cloud are **not** validated in this version.
 
@@ -22,6 +22,23 @@ Related documents (design, not how-to):
 ---
 
 ## What changed in 0.9.x
+
+### 0.9.9
+
+0.9.9 adds reference catalogues of whole standards, so controls that no use case covers are visible (D-076). No
+migration is needed.
+
+- **Control catalogues (Coverage).** Below the other frameworks you find NIST SP 800-53 Rev. 5.2.0, SP 800-171 Rev. 3
+  and CSF 2.0. Each family opens to its controls and shows how many are mapped, data ready or enabled. Use **No mapped
+  use case** to list the controls nothing covers, **Gaps** for those below *data ready*, and the search box to find one.
+  Withdrawn controls are hidden unless a use case still maps to one (or you tick **Show withdrawn**).
+- **Mapped is not met.** A use case mapped to a control is the content provider's mapping. It does not say the control is
+  satisfied.
+- **Clauses we cannot place.** If use cases map clauses that are not in the catalogue (usually another revision's
+  numbering), they are listed separately and not counted.
+- **Your own catalogue.** A content manager can import a `ucm.framework/2` file (Content administration, or
+  `POST ucm/frameworks/import`). It needs `version_label` (text), `sort_key` (numbers) and the list of controls in tree
+  order. See `docs/ARCHITECTURE.md`.
 
 ### 0.9.8
 
@@ -591,7 +608,7 @@ searches have **no script alert actions**. Email and webhook actions exist only 
 an administrator has listed permitted destinations in `[actions]` and the approver has acknowledged
 them (0.9.5, D-072); the default alert mode only writes to Splunk's Triggered Alerts.
 
-**Not in 0.9.8:** PDF export of coverage, a bundled regulation-control
+**Not in 0.9.9:** PDF export of coverage, a bundled regulation-control
 catalogue, SHC validation with a deployer and indexer peers (issue #2), Splunk Cloud
 vetting submission (issue #3), and any Enterprise Security output mode (issue #4; 0.9.1 only
 reads ES and ESCU state and hands off, §5.2b).
@@ -605,7 +622,7 @@ reads ES and ESCU state and hands off, §5.2b).
 | Splunk | Enterprise 10.x (validated on 10.2.9 in development; tested by operators on 10.4.3 Darwin arm64). Python 3.9 or 3.13 in Splunk. |
 | KV Store | Must reach `status: ready`. The app stores catalogue, inventory, readiness, selections, deployments and audit in KV collections. |
 | Role | First-time setup needs `admin` (or `sc_admin` on Cloud). |
-| Disk | The 0.9.8 package is a few megabytes. Category 9 of Fenre is about 120 records; the full Fenre corpus is tens of thousands of records. |
+| Disk | The 0.9.9 package is a few megabytes. Category 9 of Fenre is about 120 records; the full Fenre corpus is tens of thousands of records. |
 | Network | Optional. Remote sync needs HTTPS to `api.github.com` and `raw.githubusercontent.com`. Offline import needs none. |
 | Browser | Splunk Web. The app is a set of Simple XML views plus JavaScript under `/en-US/app/sunavigator/`. |
 
@@ -622,7 +639,7 @@ Placeholders used below:
 
 ```bash
 ./tools/package.sh
-# writes dist/sunavigator-0.9.8.tar.gz
+# writes dist/sunavigator-0.9.9.tar.gz
 ```
 
 The tarball has a single top-level folder `sunavigator/`
@@ -640,11 +657,11 @@ then fails in the UI with `500 Internal Server Error` even though splunkd is
 still unpacking. Use the CLI:
 
 ```bash
-$SPLUNK_HOME/bin/splunk install app /path/to/sunavigator-0.9.8.tar.gz \
+$SPLUNK_HOME/bin/splunk install app /path/to/sunavigator-0.9.9.tar.gz \
   -auth "$SPLUNK_USER:$SPLUNK_PASSWORD"
 # first install: omit -update
 # upgrade of an existing copy:
-$SPLUNK_HOME/bin/splunk install app /path/to/sunavigator-0.9.8.tar.gz \
+$SPLUNK_HOME/bin/splunk install app /path/to/sunavigator-0.9.9.tar.gz \
   -update 1 -auth "$SPLUNK_USER:$SPLUNK_PASSWORD"
 
 $SPLUNK_HOME/bin/splunk restart
@@ -1757,7 +1774,7 @@ app. Do the steps in this order:
    $SPLUNK_HOME/bin/splunk restart
    ```
 
-4. **Install SUNavigator 0.9.8** as in §3.2. The first install omits
+4. **Install SUNavigator 0.9.9** as in §3.2. The first install omits
    `-update`, because `sunavigator` is a new app ID.
 5. **Re-create the GitHub token** if you use one (§3.6). It must be stored in
    realm `sunavigator`. The 0.7.0 token in realm `splunk_use_case_manager` is
@@ -2134,7 +2151,7 @@ Full table: [ARCHITECTURE.md §6](ARCHITECTURE.md).
 
 ---
 
-## 12. Known limitations (0.9.8)
+## 12. Known limitations (0.9.9)
 
 Each item says where to read more and ends with its tracking: an issue number on GitHub, a draft
 (`N-nn`) in `docs/ISSUES_PENDING.md` that has not been filed yet, or "no issue" for a limit that is
@@ -2262,7 +2279,7 @@ by design.
 
 ## 13. Quick start checklist
 
-1. `splunk install app sunavigator-0.9.8.tar.gz` then `splunk restart`.
+1. `splunk install app sunavigator-0.9.9.tar.gz` then `splunk restart`.
 2. `splunk show kvstore-status` → `ready` (macOS: §9.2 if stuck on `starting`).
 3. Open **SUNavigator → Administration**; all platform pills green.
 4. **Check provider for categories** → tick **9** → **Synchronize**, **or**
