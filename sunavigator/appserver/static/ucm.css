@@ -71,6 +71,7 @@ textarea.ucm-input { font-family: Menlo, Consolas, monospace; font-size: 12px; }
 .ucm-matrix-cell.lvl-ready { background: #a8d5a2; }
 .ucm-matrix-cell.lvl-deployed { background: #5fb760; color: #fff; }
 .ucm-matrix-cell.lvl-enabled { background: #1e7b34; color: #fff; }
+.ucm-matrix-cell.ucm-matrix-elsewhere { outline: 2px dashed #6b4fa3; outline-offset: -2px; }
 .ucm-legend span { display: inline-block; padding: 2px 8px; margin-right: 6px; font-size: 11px; border-radius: 2px; }
 .ucm-matrix-cell:hover { outline: 1px solid #1f4e79; text-decoration: none; }
 .ucm-matrix-sub { margin-left: 10px; }
@@ -142,3 +143,4 @@ textarea.ucm-modal-input { min-height: 72px; resize: vertical; }
 .ucm-plan-panel { margin-top: 10px; border-top: 1px solid #e3e8ee; padding-top: 6px; }
 .ucm-lineage { margin: 8px 0; }
 .ucm-lineage li { margin: 3px 0; }
+.ucm-infostrip { background: #f3f7fb; border-left: 3px solid #9db4cc; padding: 6px 10px; margin: 6px 0; }

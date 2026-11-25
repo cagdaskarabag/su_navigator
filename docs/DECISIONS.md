@@ -2135,3 +2135,45 @@ as drift.
   `security_content` in the app.
 * Evidence: `tests/unit/test_escu_enrich.py`, `test_event_checks.py`, `tests/js/test_guidance.js`; on the lab
   (`LiveEventCheckTest`, an enriched ESCU 6.11.1 bundle imported and checked).
+
+## D-074 Brownfield and navigation: graded coverage, data maturity, detections that already run (Sprint 17)
+
+*0.9.7 (Sprint 17).*
+
+* **Decision, graded coverage (finding F-14).** Each technique cell gets a grade: the best single use case on it, its level
+  weight times how directly it maps. Level weights: catalogue 0, ready 0.25, deployed 0.5, enabled 0.9, ran without error
+  1.0. Match weights: this technique 1.0, through a sub-technique 0.6, through the parent technique 0.4. The best use case,
+  not a sum, so many weak detections never add up to a strong one. The counts, the per-level percentages and the D-031
+  roll-up are unchanged; the grade is shown beside them (cell tooltip, a *Graded coverage* card, the average over all
+  techniques). The weights are SUNavigator's own judgement and are listed on the page, not a Splunk or MITRE measure.
+* **Decision, coverage gaps.** The matrix response lists three buckets, first 300 each: data is ready and nothing is
+  deployed (the shortest path to coverage), content exists and no use case is ready, and no content in the catalogue.
+* **Decision, data maturity is SUNavigator's own scale.** *Raw* (events only), *normalized* (reads a data model),
+  *enriched* (also reads a lookup) and *correlated* (reads Enterprise Security data or three or more sourcetypes). It is
+  derived from the requirements of a use case, shown as a catalogue facet, and says nothing about Splunk's own definitions.
+  A use case that reads no data has no level. Summary version 7 and facets version 4: run **Reindex** once (migration 0005).
+* **Decision, catalogue and use-case navigation.** An information strip per provider (version, count, import date), a
+  button that copies the address with the current filters, and on a requirement that is not met a specific hint and a
+  bounded search (`tstats` or `| search`, built from validated names, opened in Search in a new tab).
+* **Decision, detections that already run (finding F-13).** Discovery lists the saved searches the discovery account can
+  read in other apps and, for each, computes the hash of its text (the catalogue's `spl_hash`). Candidates are catalogue use
+  cases with the same hash (*same search text*), or the same normalised title (`ESCU - ` and ` - Rule` removed) with
+  (*same title and technique*) or without (*same title only*) a shared ATT&CK id from the correlation search's
+  annotations. The result is a **proposal**; a person with `ucm_run_discovery` accepts one candidate, rejects or resets it.
+  * Only the app, name, owner, sharing, enabled and scheduled flags, the hash, technique ids and the candidates are stored
+    (`uc_external_matches`). The search text is hashed and dropped, so no role can read another app's search through
+    SUNavigator. Searches in SUNavigator's own app are skipped; a search with no candidate is counted, not stored.
+  * An accepted match marks the use case *enabled elsewhere* (matrix cell outline, a card, a gap row, a note on the use-case
+    page). It never changes `level`: a search SUNavigator did not deploy is not "enabled" in its coverage, because it has no
+    revision, approval or drift check. Disabled matches count as matched but not as enabled elsewhere.
+  * A decision stands while the search text is unchanged. If the hash changes the proposal is reset and the previous state is
+    shown. A search that disappears is marked `missing` and stops counting. A truncated listing never marks anything missing.
+  * The listing needs no new role: it is the saved-search endpoint the discovery account already reads. If it is refused,
+    matching is skipped and the job is not marked partial. Reading the proposals needs `ucm_run_discovery`; the use-case page
+    shows search names only to those holders and counts to everyone.
+  * Settings: `[discovery] external_match` (default true), `external_max_searches` (default 20000).
+* Not built: an import of another app's SPL, a match by anything but hash, title and technique, counting a foreign search
+  towards SUNavigator's levels, and any write to another app's searches.
+* Evidence: `tests/unit/test_external_matches.py`, `test_coverage_grading.py`, `test_data_maturity.py`;
+  `tests/js/test_external.js`, `test_coverage.js`, `test_catalogue_f20.js`, `test_resolution.js`; on the lab
+  (`LiveExternalMatchTest`; a discovery run listed 2436 saved searches and matched 125 to the ESCU bundle by hash).

@@ -16,13 +16,15 @@ from .summary import SUMMARY_VERSION
 FACETS_KEY = "catalog::facets"
 # 2 adds global counts per domain, category, criticality and difficulty (D-059). 3 adds providers,
 # waves, analytic stories, data sources and the number of summaries older than SUMMARY_VERSION (D-066).
-FACETS_VERSION = 3
+# 4 adds data maturity (D-074).
+FACETS_VERSION = 4
 # Longest value list stored per facet (analytic stories and data sources): most frequent first.
 MAX_FACET_VALUES = 600
 _PAGE = 5000
 _FIELDS = ["_key", "spl_hash", "quality_flags", "provider_status", "review_status", "frameworks",
            "regulation_labels", "domains", "category_key", "criticality", "difficulty", "provider", "wave",
-           "analytic_stories", "data_sources", "summary_version"]
+           "data_maturity", "analytic_stories", "data_sources", "summary_version",
+           "provider_version", "imported_at"]
 
 
 def scan_catalog(store: DocumentStore) -> List[Dict[str, Any]]:
@@ -93,8 +95,10 @@ def compute_facets(rows: List[Dict[str, Any]]) -> Dict[str, Any]:
     difficulty: Dict[str, int] = {}
     providers: Dict[str, int] = {}
     waves: Dict[str, int] = {}
+    maturities: Dict[str, int] = {}
     stories: Dict[str, int] = {}
     sources: Dict[str, int] = {}
+    info: Dict[str, Dict[str, Any]] = {}
     active = 0
     outdated = 0
     for row in rows:
@@ -103,7 +107,12 @@ def compute_facets(rows: List[Dict[str, Any]]) -> Dict[str, Any]:
         active += 1
         if (row.get("summary_version") or 0) < SUMMARY_VERSION:
             outdated += 1
-        for field, counts in (("provider", providers), ("wave", waves)):
+        if row.get("provider"):
+            entry = info.setdefault(row["provider"], {"count": 0, "version": "", "updated": ""})
+            entry["count"] += 1
+            if (row.get("imported_at") or "") >= entry["updated"]:
+                entry["updated"], entry["version"] = row.get("imported_at") or "", row.get("provider_version") or ""
+        for field, counts in (("provider", providers), ("wave", waves), ("data_maturity", maturities)):
             if row.get(field):
                 counts[row[field]] = counts.get(row[field], 0) + 1
         for field, counts in (("analytic_stories", stories), ("data_sources", sources)):
@@ -135,6 +144,8 @@ def compute_facets(rows: List[Dict[str, Any]]) -> Dict[str, Any]:
         "difficulty": difficulty,
         "providers": providers,
         "waves": waves,
+        "maturities": maturities,
+        "provider_info": info,
         "analytic_stories": _top(stories),
         "data_sources": _top(sources),
         "analytic_stories_total": len(stories),
@@ -160,7 +171,7 @@ def get_facets(store: DocumentStore) -> Dict[str, Any]:
     if doc is None or (doc.get("facets_version") or 0) < FACETS_VERSION:
         doc = dict(compute_facets(scan_catalog(store)), computed_at=None)
     return {k: doc.get(k) for k in ("review_statuses", "regulations", "quality_flags", "domains", "categories",
-                                    "criticality", "difficulty", "providers", "waves", "analytic_stories",
+                                    "criticality", "difficulty", "providers", "waves", "maturities", "provider_info", "analytic_stories",
                                     "data_sources", "analytic_stories_total", "data_sources_total", "summary",
                                     "active", "computed_at")}
 

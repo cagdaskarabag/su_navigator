@@ -17,6 +17,7 @@ from .keys import source_key
 from .mapping import MappingService
 from .populated import WINDOW, PopulatedSettings, check_models, summarize
 from .events import EventCheckSettings, run_event_checks
+from .external import ExternalSettings, run_external
 from .profile import ProfileSettings, run_profile
 from .repositories import DiscoveryStateRepository, SourceRepository
 from .spl import chunk_indexes, tstats_future, tstats_searches, tstats_volume, validate_index_name, validate_time
@@ -40,6 +41,7 @@ class DiscoverySettings:
     freshness_days: int = 30
     profile: ProfileSettings = dataclasses.field(default_factory=ProfileSettings)
     events: EventCheckSettings = dataclasses.field(default_factory=EventCheckSettings)
+    external: ExternalSettings = dataclasses.field(default_factory=ExternalSettings)
     populated: PopulatedSettings = dataclasses.field(default_factory=PopulatedSettings)
 
 
@@ -125,6 +127,7 @@ class DiscoveryService:
         freshness = self._freshness(event_indexes, pairs, searched)
         profile = self._profile(job["job_id"])
         event_checks = self._event_checks(job["job_id"])
+        external = self._external(job["job_id"])
         populated = check_models(self.search, models, self._referenced_models(), self.settings.populated)
         imported = utc_now_iso()
         now = self.now_epoch()
@@ -165,7 +168,7 @@ class DiscoveryService:
             "populated": summarize(populated, self.settings.populated.enabled),
             "missing": missing, "truncated": truncated, "auto_mappings": auto,
             "freshness": freshness,
-            "field_profile": profile, "event_checks": event_checks,
+            "field_profile": profile, "event_checks": event_checks, "external": external,
         }
         job["totals"] = totals
         job["results"] = {"eligible_indexes": event_indexes[:200]}
@@ -220,6 +223,13 @@ class DiscoveryService:
         except Exception as exc:
             log.warning("event checks failed", extra={"error": str(exc)[:200]})
             return {"enabled": self.settings.events.enabled, "errors": 1, "checked": 0}
+
+    def _external(self, job_id: str) -> Dict[str, Any]:
+        try:
+            return run_external(self.store, self.inventory, self.settings.external, job_id)
+        except Exception as exc:
+            log.warning("matching existing detections failed", extra={"error": str(exc)[:200]})
+            return {"enabled": self.settings.external.enabled, "errors": 1, "listed": 0, "matched": 0}
 
     def _freshness(self, indexes: Sequence[str], pairs: List[Dict[str, Any]], searched: set) -> Dict[str, Any]:
         """Add 30-day volume and future-dated counts to ``pairs``; append pairs seen only before the window.

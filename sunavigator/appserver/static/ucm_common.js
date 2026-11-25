@@ -461,9 +461,9 @@ define(["jquery", "splunk.util"], function ($, splunkUtil) {
      */
     function reindexHint(summary, active, action) {
         if (!summary || !(summary.outdated > 0)) { return null; }
-        var box = stateBox("warn", "Reindex needed to enable the wave, analytic story and data source filters",
+        var box = stateBox("warn", "Reindex needed to enable the wave, data maturity, analytic story and data source filters",
             summary.outdated + " of " + (active || 0) + " active use cases were summarised by an earlier version, so they have no wave, " +
-            "analytic story or data source yet and those three filters skip them. The provider filter and the other filters work. " +
+            "data maturity, analytic story or data source yet and those four filters skip them. The provider filter and the other filters work. " +
             "Reindex re-reads the stored records (no download).");
         if (action) { box.appendChild(action); }
         return box;

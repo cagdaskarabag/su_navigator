@@ -125,10 +125,12 @@ function runView(file, rootId, routes, opts) {
     global.document.querySelectorAll = function () { return []; };
     var windowListeners = {};
     var urls = [];
-    global.window = { location: { search: opts.search || "", hash: opts.hash || "", pathname: opts.pathname || "/view", protocol: "https:", host: "splunk.test:8000" },
+    global.window = { location: { search: opts.search || "", hash: opts.hash || "", pathname: opts.pathname || "/view", protocol: "https:", host: "splunk.test:8000",
+            href: "https://splunk.test:8000" + (opts.pathname || "/view") + (opts.search || "") },
         history: { replaceState: function (a, b, url) { urls.push(url); } }, scrollTo: function () {},
         addEventListener: function (t, f) { (windowListeners[t] = windowListeners[t] || []).push(f); } };
     var $ = Object.assign(opts.jquery || function () { throw new Error("jQuery call not stubbed"); }, jq, {
+        extend: function () { return Object.assign.apply(null, arguments); },
         when: function () {
             var args = Array.prototype.slice.call(arguments);
             var ok = true, err = null, vals = [];

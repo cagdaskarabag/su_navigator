@@ -68,13 +68,52 @@ function ucmViewMain($, ucm) {
         var c = t.counts || {};
         return t.id + " " + t.name + "\nUse cases: " + (c.catalogue || 0) + " in catalogue, " + (c.ready || 0) + " ready, " +
             (c.deployed || 0) + " deployed, " + (c.enabled || 0) + " enabled" +
-            (c.operational ? ", " + c.operational + " ran without error" : "");
+            (c.operational ? ", " + c.operational + " ran without error" : "") +
+            (t.grade ? "\nGrade " + t.grade.toFixed(2) + " (" + ({ direct: "a use case maps to this technique", sub: "through a sub-technique",
+                parent: "through the parent technique" }[t.basis] || t.basis) + ")" : "") +
+            (t.elsewhere ? "\nEnabled elsewhere: " + t.elsewhere + " use case(s) you matched to a search that runs in another app. Not counted above." : "");
+    }
+
+    function gapSection(title, help, rows, columns) {
+        if (!rows.length) { return null; }
+        return el("details", { "class": "ucm-details" }, el("summary", { text: title + " (" + rows.length + ")" }),
+            el("div", { "class": "ucm-sub", text: help }),
+            el("table", { "class": "ucm-table" }, el("thead", {}, el("tr", {}, columns.map(function (c) { return el("th", { text: c[0] }); }))),
+                el("tbody", {}, rows.map(function (g) {
+                    return el("tr", {}, columns.map(function (c) { return c[1](g); }));
+                }))));
+    }
+
+    function gapColumns(extra) {
+        return [["Technique", function (g) {
+            return el("td", {}, el("a", { href: "#", "class": "ucm-mono", text: g.id, onclick: function (e) {
+                e.preventDefault(); state.technique = g.id; persist(); load();
+            } }), " " + g.name, g.elsewhere ? ucm.badge("enabled elsewhere", "info") : null);
+        }], ["Tactics", function (g) { return el("td", { "class": "ucm-sub", text: (g.tactics || []).join(", ") }); }]].concat(extra);
+    }
+
+    function renderGaps(target, m) {
+        var g = m.gaps;
+        if (!g) { return; }
+        var parts = [
+            gapSection("Data is ready, nothing is deployed", "Use cases for these techniques have all the data they need (readiness: ready) and none is deployed. The shortest path to more coverage.",
+                g.data_ready, gapColumns([["Ready use cases", function (r) { return el("td", { text: String(r.ready) }); }],
+                    ["In catalogue", function (r) { return el("td", { text: String(r.catalogue) }); }]])),
+            gapSection("Content exists, data is missing", "The catalogue has use cases for these techniques but none is ready. Open a use case to see which data source is missing.",
+                g.content_no_data, gapColumns([["In catalogue", function (r) { return el("td", { text: String(r.catalogue) }); }]])),
+            gapSection("No content in the catalogue", "No imported use case maps to these techniques. A sub-technique may still be covered by a use case for its parent (see the grade).",
+                g.no_content, gapColumns([]))
+        ].filter(Boolean);
+        if (!parts.length) { return; }
+        target.appendChild(el("h3", { text: "Coverage gaps" }));
+        parts.forEach(function (p) { target.appendChild(p); });
+        if (g.truncated) { target.appendChild(el("div", { "class": "ucm-sub", text: "Each list shows its first 300 techniques." })); }
     }
 
     function cell(t, sub) {
         var n = (t.counts && t.counts.catalogue) || 0;
         return el("a", {
-            "class": "ucm-matrix-cell" + (t.level ? " lvl-" + t.level : "") + (sub ? " ucm-matrix-sub" : "") +
+            "class": "ucm-matrix-cell" + (t.level ? " lvl-" + t.level : "") + (sub ? " ucm-matrix-sub" : "") + (t.elsewhere ? " ucm-matrix-elsewhere" : "") +
                 (state.technique === t.id ? " ucm-matrix-selected" : ""),
             title: cellTitle(t), href: "#",
             onclick: function (e) { e.preventDefault(); state.technique = t.id; persist(); load(); }
@@ -95,6 +134,19 @@ function ucmViewMain($, ucm) {
                 return ucm.kpiCard({ label: LEVEL_LABEL[l], value: pct(n), detail: n + " of " + tot.techniques + " techniques",
                     how: LEVEL_HOW[l] + " Percentage = techniques at this level ÷ techniques in the framework." });
             })));
+        if (tot.grade_avg !== undefined) {
+            target.appendChild(el("div", { "class": "ucm-cards ucm-kpis" }, ucm.kpiCard({
+                label: "Graded coverage", value: Math.round(100 * tot.grade_avg) + "%", detail: "average over " + tot.techniques + " techniques",
+                how: "Each technique gets the best single use case: its level (ready 0.25, deployed 0.5, enabled 0.9, ran without error 1.0) times how directly it maps " +
+                    "(this technique 1.0, through a sub-technique 0.6, through the parent technique 0.4). Only a use case that ran without error reaches 1.0." })));
+        }
+        if (tot.elsewhere) {
+            target.appendChild(el("div", { "class": "ucm-cards ucm-kpis" }, ucm.kpiCard({
+                label: "Enabled elsewhere", value: String(tot.elsewhere), detail: "techniques with a matched search in another app",
+                how: "Techniques with a use case you matched to an enabled search that runs in another app (Data Inventory, Detections already running here). " +
+                    "Shown with a dashed border on the matrix. These never count as deployed or enabled by SUNavigator, and do not change the percentages above."
+            })));
+        }
         if (m.operational && !m.operational.available) {
             target.appendChild(ucm.stateBox("info", "Run status is not available.", m.operational.reason ||
                 "Your role cannot search the scheduler logs in index=_internal, so the Ran without error level is not shown."));
@@ -114,6 +166,7 @@ function ucmViewMain($, ucm) {
                         .map(function (s) { return cell(s, true); }));
                 }));
         })));
+        renderGaps(target, m);
         target.appendChild(el("div", { "class": "ucm-sub", text: m.name + " " + m.version + ". Techniques are counted once per use case and sub-technique mappings also count towards their parent. Only active, non-deprecated techniques are shown." }));
         if (m.attribution) { target.appendChild(el("div", { "class": "ucm-sub", text: m.attribution })); }
         if ((m.remapped || []).length || (m.unresolved || []).length) {

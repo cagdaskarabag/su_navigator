@@ -27,7 +27,7 @@ EPOCH = NOW.timestamp()
 
 # POST routes any authenticated app user may call; everything else needs a capability.
 CALLER_SCOPED_POSTS = {"selections", "selections/delete", "dashboards/preview"}
-RESTRICTED_GETS = {"audit", "provider/manifest"}
+RESTRICTED_GETS = {"audit", "provider/manifest", "external"}
 
 
 def _load_worker_module():
@@ -168,11 +168,11 @@ class MigrationTest(unittest.TestCase):
                                     "applied": [MIGRATIONS[0][0]]})
         runner = MigrationRunner(store, lambda: "t")
         self.assertEqual(runner.pending(), ["0002_normalizer_" + NORMALIZER_VERSION, "0003_catalog_facets_v2",
-                                            "0004_catalog_facets_v3"])
+                                            "0004_catalog_facets_v3", "0005_catalog_facets_v4"])
         results = runner.run()
         self.assertEqual(results[0]["details"]["reindexed"], store.count(C.CATALOG))
         self.assertEqual(store.count(C.CATALOG, {"normalizer_version": NORMALIZER_VERSION}), store.count(C.CATALOG))
-        self.assertEqual(store.get(C.SYNC_STATE, "catalog::facets")["facets_version"], 3)
+        self.assertEqual(store.get(C.SYNC_STATE, "catalog::facets")["facets_version"], 4)
         self.assertEqual(runner.run(), [])
 
     def test_fresh_install_marks_not_needed(self):

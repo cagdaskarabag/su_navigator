@@ -51,6 +51,12 @@ var tests = {
         var t = open(enriched()).root.textContent;
         assert.ok(t.indexOf("Unsafe") >= 0 && t.indexOf("http://insecure.example") >= 0);
     },
+    "the header names the catalogue version and the import time": function () {
+        var uc = enriched();
+        uc.provenance.provider_version = "6.11.1";
+        uc.provenance.imported_at = "2026-11-24T10:00:00Z";
+        assert.ok(/Catalogue version 6\.11\.1, imported 2026-11-24 10:00:00 UTC/.test(open(uc).root.textContent));
+    },
     "a deprecated record shows a warning": function () {
         var uc = enriched();
         uc.provider_extras.status = "deprecated";

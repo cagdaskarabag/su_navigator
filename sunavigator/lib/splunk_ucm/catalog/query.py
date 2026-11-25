@@ -35,6 +35,7 @@ _FACET_RE = re.compile(r"^[a-z0-9][a-z0-9._-]{0,79}$")
 MAX_TERMS = 6
 MAX_FACET_VALUES = 50
 WAVES = ("crawl", "walk", "run")
+MATURITIES = ("raw", "normalized", "enriched", "correlated")
 NOT_ASSESSED = "not_assessed"
 AVAILABILITY = tuple(READINESS_STATES) + (NOT_ASSESSED,)
 # Largest key list sent to the KV Store as ``_key $in``. Measured on Splunk 10.2.9: 8000 keys of 44
@@ -62,6 +63,7 @@ class CatalogFilter:
     regulation: Any = ()
     providers: Sequence[str] = ()
     waves: Sequence[str] = ()
+    maturities: Sequence[str] = ()
     stories: Sequence[str] = ()
     data_sources: Sequence[str] = ()
     exclude_quality: Sequence[str] = ()
@@ -129,6 +131,8 @@ def build_query(f: CatalogFilter) -> Dict[str, Any]:
         clauses.append({"provider": {"$in": list(f.providers)}})
     if f.waves:
         clauses.append({"wave": {"$in": _check_all(f.waves, WAVES, "wave")}})
+    if f.maturities:
+        clauses.append({"data_maturity": {"$in": _check_all(f.maturities, MATURITIES, "data maturity")}})
     for field, values, name in (("analytic_stories", f.stories, "analytic story"),
                                 ("data_sources", f.data_sources, "data source")):
         if values:

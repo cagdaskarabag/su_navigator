@@ -15,6 +15,7 @@ from ..util import utc_now
 from .inventory import SplunkInventory
 from .populated import PopulatedSettings
 from .events import EventCheckSettings
+from .external import ExternalSettings
 from .profile import ProfileSettings, parse_placeholders
 from .service import (JOB_FAILED, JOB_RUNNING, DiscoveryService, DiscoverySettings,
                       new_job)
@@ -51,6 +52,9 @@ def settings_from_config(config: AppConfig) -> DiscoverySettings:
             max_checks=config.get_int("discovery", "event_max_checks", 100, 0, 1000),
             timeout_seconds=config.get_int("discovery", "event_timeout_seconds", 30, 5, 300),
             budget_seconds=config.get_int("discovery", "event_budget_seconds", 300, 30, 3600)),
+        external=ExternalSettings(
+            enabled=config.get_bool("discovery", "external_match", True),
+            max_searches=config.get_int("discovery", "external_max_searches", 20000, 100, 100000)),
         job_timeout_seconds=job_timeout,
         populated=PopulatedSettings(
             enabled=config.get_bool("discovery", "populated_check", True),

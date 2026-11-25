@@ -14,7 +14,7 @@ from typing import Any, Callable, Dict, List, Optional, Tuple
 from .. import APP_NAME
 from ..audit import AuditService
 from ..catalog.derived import get_facets
-from ..catalog.detail import UseCaseDetailService
+from ..catalog.detail import UseCaseDetailService, key_from_id
 from ..catalog.query import DEFAULT_KV_ROW_LIMIT, DEFAULT_MAX_JOIN_KEYS, CatalogFilter, CatalogQueryService
 from ..config import AppConfig, load_config
 from ..content.importer import BundleImportService
@@ -22,6 +22,7 @@ from ..content.fenre.provider import check_ref_name, parse_allowed_refs
 from ..content.registry import remote_provider
 from ..content.reindex import ReindexService
 from ..content.sync import SyncService, SyncSettings, new_job
+from ..discovery.external import ExternalMatchService
 from ..discovery.health import environment_health
 from ..discovery.inventory import SplunkInventory
 from ..discovery.mapping import MappingService
@@ -253,7 +254,7 @@ def get_catalog(ctx: Context, req: Request) -> Response:
         criticality=req.args("criticality"), difficulty=req.args("difficulty"),
         sourcetype=req.arg("sourcetype").strip(), mitre=req.arg("mitre").strip().upper(),
         quality=req.args("quality"), review=req.args("review"), regulation=req.args("regulation"),
-        providers=req.args("provider"), waves=req.args("wave"), stories=req.args("story"),
+        providers=req.args("provider"), waves=req.args("wave"), maturities=req.args("maturity"), stories=req.args("story"),
         data_sources=req.args("data_source"), exclude_quality=req.args("exclude_quality"),
         availability=req.args("availability"), bookmarked=req.arg("bookmarked") == "1",
         provider_status=req.arg("status", "active"), sort=req.arg("sort", "id"),
@@ -288,7 +289,34 @@ def get_usecase(ctx: Context, req: Request) -> Response:
                                          detail.get("provider_extras") or {})
     svc = ctx.deployment_service()
     detail["deployment"] = _deployment_view(ctx, svc, svc.get(req.arg("id")))
+    detail["external"] = _external_for(ctx, req.arg("id"))
     return Response(200, detail)
+
+
+def _external_for(ctx: Context, use_case_id: str) -> Dict[str, Any]:
+    """Accepted and proposed matches for one use case; search names only for people who may manage discovery."""
+    key = key_from_id(use_case_id)
+    service = ExternalMatchService(ctx.store, ctx.audit)
+    accepted = service.for_content(key) if key else []
+    out: Dict[str, Any] = {"enabled": sum(1 for m in accepted if m["enabled"]), "accepted": len(accepted),
+                           "proposed": service.proposals_for(key) if key else 0, "matches": None}
+    if CAP_RUN_DISCOVERY in ctx.capabilities() or CAP_ADMIN in ctx.capabilities():
+        out["matches"] = accepted
+    return out
+
+
+def get_external(ctx: Context, req: Request) -> Response:
+    ctx.require(CAP_RUN_DISCOVERY)
+    return Response(200, ExternalMatchService(ctx.store, ctx.audit).list(
+        req.arg("state"), _int(req.arg("offset"), 0, "offset"), _int(req.arg("count"), 50, "count")))
+
+
+def post_external(ctx: Context, req: Request) -> Response:
+    ctx.require(CAP_RUN_DISCOVERY)
+    body = req.json()
+    row = ExternalMatchService(ctx.store, ctx.audit).decide(
+        ctx.user, str(body.get("id") or ""), str(body.get("decision") or ""), str(body.get("content_key") or ""))
+    return Response(200, {"match": row})
 
 
 def get_categories(ctx: Context, req: Request) -> Response:
@@ -664,7 +692,8 @@ def _levels(ctx: Context, req: Request) -> Tuple[Dict[str, Dict[str, Any]], Opti
     domain = req.arg("domain")
     if domain and domain not in DASHBOARD_DOMAINS:
         raise ValidationError("invalid domain")
-    return CoverageService(ctx.store).use_case_levels(operational, domain), health
+    elsewhere = ExternalMatchService(ctx.store, ctx.audit).elsewhere()
+    return CoverageService(ctx.store).use_case_levels(operational, domain, elsewhere), health
 
 
 def get_frameworks(ctx: Context, req: Request) -> Response:
@@ -813,6 +842,8 @@ def build_router() -> Router:
     router.add("GET", "environment/health", get_environment_health)
     router.add("GET", "discovery", get_discovery)
     router.add("POST", "discovery", post_discovery)
+    router.add("GET", "external", get_external)
+    router.add("POST", "external", post_external)
     router.add("GET", "mappings", get_mappings)
     router.add("POST", "mappings", post_mappings)
     router.add("POST", "mappings/delete", post_mappings_delete)

@@ -16,5 +16,6 @@ FRAMEWORKS = "uc_frameworks"
 DASHBOARDS = "uc_dashboards"
 FIELD_PROFILE = "uc_field_profile"
 EVENT_CHECK = "uc_event_check"
+EXTERNAL_MATCHES = "uc_external_matches"
 
 DOC_SCHEMA = 1

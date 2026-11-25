@@ -17,11 +17,15 @@ function ucmViewMain($, ucm) {
     var root = document.getElementById("ucm-catalogue");
     var PAGE = 25;
     var initial = ucm.queryParams();
-    var MULTI = ["provider", "domain", "category", "wave", "criticality", "difficulty", "availability", "review", "quality",
+    var MULTI = ["provider", "domain", "category", "wave", "maturity", "criticality", "difficulty", "availability", "review", "quality",
         "exclude_quality", "regulation", "story", "data_source"];
-    var FILTER_NAMES = { story: "analytic story", data_source: "data source", exclude_quality: "hide quality flag" };
+    var FILTER_NAMES = { story: "analytic story", data_source: "data source", exclude_quality: "hide quality flag", maturity: "data maturity" };
     var NUMBERED_PROVIDERS = ["fenre"];
     var WAVES = ["crawl", "walk", "run"];
+    var MATURITIES = [["raw", "Reads events (sourcetypes and indexes) and nothing else."],
+        ["normalized", "Needs a CIM data model: the data must be tagged and normalized first."],
+        ["enriched", "Needs a lookup, such as an asset, identity or threat list, on top of the data."],
+        ["correlated", "Needs Enterprise Security, or reads three or more sourcetypes."]];
     var LONG_LISTS = ["story", "data_source"];
     var TEXT = ["q", "sourcetype", "mitre"];
     var AVAILABILITY = ucm.READINESS_STATES.concat(["not_assessed"]);
@@ -31,7 +35,7 @@ function ucmViewMain($, ucm) {
     TEXT.forEach(function (k) { state[k] = initial[k] || ""; });
     var categories = [];
     var facets = { review_statuses: [], regulations: [], quality_flags: [], domains: {}, categories: {}, criticality: {},
-        difficulty: {}, providers: {}, waves: {}, analytic_stories: [], data_sources: [], summary: null, active: 0 };
+        difficulty: {}, providers: {}, waves: {}, maturities: {}, provider_info: {}, analytic_stories: [], data_sources: [], summary: null, active: 0 };
     var assessment = null;
     var selections = {};
     var requestSeq = 0;
@@ -63,6 +67,11 @@ function ucmViewMain($, ucm) {
             });
         }
         if (key === "wave") { return fromMap(WAVES, facets.waves); }
+        if (key === "maturity") {
+            return MATURITIES.map(function (m) {
+                return { value: m[0], label: m[0], count: (facets.maturities || {})[m[0]] || 0, title: m[1] };
+            });
+        }
         if (key === "story") { return fromList(facets.analytic_stories, state.story); }
         if (key === "data_source") { return fromList(facets.data_sources, state.data_source); }
         if (key === "exclude_quality") {
@@ -246,13 +255,50 @@ function ucmViewMain($, ucm) {
                 el("span", { "class": "ucm-sub", text: " (Reindex needs the ucm_content_manager role)" })));
     }
 
+    function infoStrip() {
+        var info = facets.provider_info || {};
+        var names = Object.keys(info).sort();
+        if (!names.length) { return null; }
+        return el("div", { "class": "ucm-infostrip" },
+            el("strong", { text: (facets.active || 0) + " active use cases. " }),
+            names.map(function (p) {
+                var i = info[p];
+                return el("span", { "class": "ucm-sub", text: ucm.providerLabel(p) + " " + (i.version || "") + ": " + i.count +
+                    (i.updated ? ", imported " + i.updated.replace("T", " ").replace("Z", " UTC") : "") + ".  " });
+            }),
+            el("span", { "class": "ucm-sub", text: "Counts next to each filter value are for the whole catalogue." }));
+    }
+
+    function copyLink() {
+        var url = window.location.href;
+        var ok = typeof navigator !== "undefined" && navigator.clipboard && navigator.clipboard.writeText;
+        if (ok) {
+            navigator.clipboard.writeText(url).then(function () { copiedNote.textContent = " Link copied."; shown.setAttribute("hidden", "hidden"); },
+                function () { shown.removeAttribute("hidden"); shown.value = url; if (shown.select) { shown.select(); } });
+        } else {
+            shown.removeAttribute("hidden");
+            shown.value = url;
+            if (shown.select) { shown.select(); }
+        }
+    }
+    var copiedNote = el("span", { "class": "ucm-sub", text: "" });
+    var shown = el("input", { type: "text", readonly: "readonly", hidden: "hidden", "class": "ucm-search", "aria-label": "Link to this view" });
+
+    function linkTool() {
+        return el("div", { "class": "ucm-field" },
+            el("button", { "class": "btn", type: "button", text: "Copy link to this view",
+                title: "The address holds your filters, search, sort and page. \"Only my bookmarks\" shows each reader their own bookmarks.",
+                onclick: copyLink }), copiedNote, shown);
+    }
+
     function toolbar() {
         return el("div", {},
+            infoStrip(),
             el("div", { "class": "ucm-toolbar" },
                 textInput("q", "Search", "Title, description, id, sourcetype, MITRE id…", "ucm-search"),
                 textInput("sourcetype", "Sourcetype (exact)", "e.g. WinEventLog:Security"),
                 textInput("mitre", "MITRE ATT&CK id", "e.g. T1110"),
-                sortSelect(), bookmarkToggle()),
+                sortSelect(), bookmarkToggle(), linkTool()),
             reindexHint(),
             el("div", { "class": "ucm-facets" },
                 facetGroup("provider", "Provider", "Where the use case comes from. A twin has the same primary SPL in another provider."),
@@ -261,6 +307,9 @@ function ucmViewMain($, ucm) {
                     "Category ids are the providers' own: Fenre numbers 1 to 25, ESCU categories are Endpoint, Network, Threat, " +
                     "Identity, Access, Audit and Unassigned. Use Analytic story or Data source to find ESCU detections in Unassigned."),
                 facetGroup("wave", "Maturity wave", "Fenre rollout order: crawl first, then walk, then run. ESCU has no wave."),
+                facetGroup("maturity", "Data maturity", "How deep a use case goes into your data, defined by SUNavigator (not Splunk's levels): " +
+                    "raw, then normalized (CIM), enriched (lookups), then correlated (Enterprise Security or several sourcetypes). " +
+                    "A use case that reads no data has no level. Needs Reindex after upgrading."),
                 facetGroup("criticality", "Criticality"),
                 facetGroup("difficulty", "Difficulty"),
                 facetGroup("availability", "Availability",
@@ -360,10 +409,10 @@ function ucmViewMain($, ucm) {
         ucm.clear(results);
         if (!data.items.length) {
             var filtered = activeFilters().length > 0;
-            var degraded = summaryOutdated() && (state.wave.length || state.story.length || state.data_source.length);
+            var degraded = summaryOutdated() && (state.wave.length || state.maturity.length || state.story.length || state.data_source.length);
             if (degraded) {
                 results.appendChild(ucm.stateBox("warn", "Some use cases cannot match this filter yet",
-                    "Use cases summarised before 0.9.0 carry no wave, analytic story or data source until Reindex runs " +
+                    "Use cases summarised by an earlier version carry no wave, data maturity, analytic story or data source until Reindex runs " +
                     "(" + summaryOutdated().outdated + " of " + (facets.active || 0) + " are affected)."));
             }
             results.appendChild(filtered
