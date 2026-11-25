@@ -98,9 +98,9 @@ class BundledCatalogueTest(unittest.TestCase):
     def setUp(self):
         self.reg = FrameworkRegistry(InMemoryStore())
 
-    def test_the_three_public_catalogues_are_bundled_and_valid(self):
+    def test_the_public_catalogues_are_bundled_and_valid(self):
         listed = {d["framework_id"]: d for d in self.reg.list() if d.get("kind") == "controls"}
-        self.assertEqual(set(listed), {"nist-800-53", "nist-800-171", "nist-csf"})
+        self.assertEqual(set(listed), {"nist-800-53", "nist-800-171", "nist-csf", "cmmc-l2"})
         self.assertEqual((listed["nist-800-53"]["version_label"], listed["nist-800-171"]["version_label"],
                           listed["nist-csf"]["version_label"]), ("Rev. 5.2.0", "Rev. 3", "2.0"))
         for d in listed.values():
@@ -113,7 +113,7 @@ class BundledCatalogueTest(unittest.TestCase):
         self.assertEqual(kinds["mitre_attack_ics"], "attack")
 
     def test_contents_are_what_the_standard_says(self):
-        for fw, count in (("nist-800-53", 20), ("nist-800-171", 17), ("nist-csf", 6)):
+        for fw, count in (("nist-800-53", 20), ("nist-800-171", 17), ("nist-csf", 6), ("cmmc-l2", 14)):
             roots = [c for c in self.reg.get(fw)["controls"] if c["parent"] is None]
             self.assertEqual(len(roots), count, fw)
         ids = {c["id"] for c in self.reg.get("nist-800-53")["controls"]}
@@ -126,6 +126,9 @@ class BundledCatalogueTest(unittest.TestCase):
         self.assertEqual(sum(1 for c in csf.values() if c["kind"] == "subcategory" and not c.get("withdrawn")), 106)
         r3 = {c["id"]: c for c in self.reg.get("nist-800-171")["controls"]}
         self.assertEqual((r3["03.01.01"]["title"], r3["03.01.01"]["parent"]), ("Account Management", "03.01"))
+        self.assertEqual(sum(len(c.get("objectives", [])) for c in r3.values()), 422)
+        self.assertIn("[organization-defined value]", json.dumps(r3["03.01.01"]["objectives"]))
+        self.assertNotIn("{{", json.dumps(list(r3.values())))
 
     def test_shipped_files_carry_identifiers_and_titles_only(self):
         for name in os.listdir(os.path.join(DATA_DIR, "controls")):
@@ -133,8 +136,12 @@ class BundledCatalogueTest(unittest.TestCase):
                 doc = json.load(handle)
             self.assertLess(os.path.getsize(os.path.join(DATA_DIR, "controls", name)), 200000, name)
             for c in doc["controls"]:
-                self.assertLessEqual(set(c), {"id", "title", "parent", "kind", "withdrawn"}, c)
-            self.assertTrue(doc["source"].startswith("https://raw.githubusercontent.com/usnistgov/oscal-content/"))
+                self.assertLessEqual(set(c), {"id", "title", "parent", "kind", "withdrawn", "objectives", "weight", "partial_weight",
+                                              "precondition"}, c)
+                if "objectives" in c:
+                    self.assertEqual(doc["framework_id"], "nist-800-171")
+            self.assertTrue(doc["source"].startswith(("https://raw.githubusercontent.com/usnistgov/oscal-content/",
+                                                      "https://web.archive.org/web/2023/https://www.acq.osd.mil/")), doc["source"])
             self.assertEqual(len(doc["source_sha256"]), 64)
 
 
@@ -270,7 +277,7 @@ class CatalogueApiTest(unittest.TestCase):
         status, body = call(self.viewer, "GET", "frameworks")
         self.assertEqual(status, 200)
         self.assertEqual({d["framework_id"] for d in body["definitions"] if d["kind"] == "controls"},
-                         {"nist-800-53", "nist-800-171", "nist-csf"})
+                         {"nist-800-53", "nist-800-171", "nist-csf", "cmmc-l2"})
 
 
 if __name__ == "__main__":

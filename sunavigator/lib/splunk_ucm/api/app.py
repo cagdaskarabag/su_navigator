@@ -36,10 +36,11 @@ from ..deployment.controltest import DEFAULT_TEST_INDEX, splunk_runner
 from ..deployment.savedsearch import SavedSearchClient
 from ..deployment.service import DeploymentService
 from ..deployment.worker import settings_from_config as deployment_settings
-from ..errors import PermissionDenied, UcmError, UnsupportedOperation, ValidationError
+from ..errors import NotFoundError, PermissionDenied, UcmError, UnsupportedOperation, ValidationError
 from ..frameworks.coverage import CoverageService
 from ..frameworks.evidence import EvidenceService
 from ..frameworks.operations import OperationsService
+from ..frameworks.assessment import AssessmentService
 from ..frameworks.controls import catalogue_coverage
 from ..frameworks.registry import FrameworkRegistry
 from ..platform.search import SearchClient
@@ -65,6 +66,7 @@ CAP_MANAGE_CONTENT = "ucm_manage_content"
 CAP_ADMIN = "ucm_admin"
 CAP_RUN_DISCOVERY = "ucm_run_discovery"
 CAP_DEPLOY = "ucm_deploy"
+CAP_ASSESS = "ucm_assess"
 
 
 @dataclasses.dataclass
@@ -755,6 +757,97 @@ def get_framework_catalogue(ctx: Context, req: Request) -> Response:
     return Response(200, out)
 
 
+def _assessment_scope(ctx: Context, framework_id: Any, version: Any) -> Tuple[AssessmentService, Dict[str, Any]]:
+    ctx.require(CAP_ASSESS)
+    framework_id = str(framework_id or "")
+    if not framework_id:
+        raise ValidationError("framework_id is required")
+    definition = FrameworkRegistry(ctx.records()).get(framework_id, str(version or ""))
+    if definition.get("kind") != "controls":
+        raise ValidationError("this framework has no control catalogue")
+    return AssessmentService(ctx.records(), ctx.audit), definition
+
+
+def get_assessment(ctx: Context, req: Request) -> Response:
+    svc, definition = _assessment_scope(ctx, req.arg("framework_id"), req.arg("version"))
+    out = svc.view(definition)
+    out["catalogue"] = {k: definition.get(k, "") for k in ("framework_id", "name", "version", "version_label")}
+    return Response(200, out)
+
+
+def get_assessment_control(ctx: Context, req: Request) -> Response:
+    svc, definition = _assessment_scope(ctx, req.arg("framework_id"), req.arg("version"))
+    control_id = req.arg("control_id")
+    control = next((c for c in definition["controls"] if c["id"] == control_id), None)
+    if control is None:
+        raise NotFoundError("no such control in this catalogue version")
+    doc = svc.docs(definition["framework_id"]).get(control_id)
+    return Response(200, {"control": control, "assessment": svc.public(doc, definition["version"]) if doc else None})
+
+
+def post_assessment(ctx: Context, req: Request) -> Response:
+    body = req.json()
+    svc, definition = _assessment_scope(ctx, body.get("framework_id"), body.get("version"))
+    saved = svc.set(ctx.user, definition, str(body.get("control_id") or ""), str(body.get("status") or ""),
+                    body.get("note"), body.get("objectives"))
+    docs = svc.docs(definition["framework_id"])
+    return Response(200, {"assessment": saved, "summary": svc.summary(definition, docs), "score": svc.score(definition, docs)})
+
+
+def post_assessment_clear(ctx: Context, req: Request) -> Response:
+    body = req.json()
+    svc, definition = _assessment_scope(ctx, body.get("framework_id"), body.get("version"))
+    out = svc.clear(ctx.user, definition, str(body.get("control_id") or ""), body.get("note"))
+    docs = svc.docs(definition["framework_id"])
+    return Response(200, dict(out, summary=svc.summary(definition, docs), score=svc.score(definition, docs)))
+
+
+def get_poam(ctx: Context, req: Request) -> Response:
+    svc, definition = _assessment_scope(ctx, req.arg("framework_id"), req.arg("version"))
+    return Response(200, svc.poam_list(definition["framework_id"], req.args("state"), req.arg("control_id"),
+                                       req.arg("overdue") == "1", _int(req.arg("offset"), 0, "offset"),
+                                       _int(req.arg("count"), 100, "count")))
+
+
+def post_poam(ctx: Context, req: Request) -> Response:
+    body = req.json()
+    svc, definition = _assessment_scope(ctx, body.get("framework_id"), body.get("version"))
+    return Response(200, {"item": svc.poam_create(ctx.user, definition, body)})
+
+
+def _poam_action(action: str) -> Handler:
+    def handler(ctx: Context, req: Request) -> Response:
+        ctx.require(CAP_ASSESS)
+        body = req.json()
+        svc = AssessmentService(ctx.records(), ctx.audit)
+        item_id = str(body.get("id") or "")
+        if action == "update":
+            return Response(200, {"item": svc.poam_update(ctx.user, item_id, body)})
+        if action == "close":
+            return Response(200, {"item": svc.poam_close(ctx.user, item_id, str(body.get("resolution") or "closed"), body.get("note"))})
+        return Response(200, {"item": svc.poam_reopen(ctx.user, item_id, body.get("note"))})
+    return handler
+
+
+def post_assessment_snapshot(ctx: Context, req: Request) -> Response:
+    body = req.json()
+    svc, definition = _assessment_scope(ctx, body.get("framework_id"), body.get("version"))
+    levels, _ = _levels(ctx, req)
+    coverage = catalogue_coverage(definition, levels)
+    use_cases = {u["content_id"]: u for u in levels.values()}
+    return Response(200, {"snapshot": svc.snapshot(ctx.user, definition, coverage, use_cases, str(body.get("label") or ""))})
+
+
+def get_assessment_snapshots(ctx: Context, req: Request) -> Response:
+    svc, definition = _assessment_scope(ctx, req.arg("framework_id"), req.arg("version"))
+    return Response(200, {"items": svc.snapshots(definition["framework_id"])})
+
+
+def get_assessment_snapshot(ctx: Context, req: Request) -> Response:
+    ctx.require(CAP_ASSESS)
+    return Response(200, AssessmentService(ctx.records(), ctx.audit).snapshot_get(req.arg("id")))
+
+
 def get_framework_matrix(ctx: Context, req: Request) -> Response:
     registry = FrameworkRegistry(ctx.records())
     definition = _attack_definition(registry, req)
@@ -925,6 +1018,18 @@ def build_router() -> Router:
     router.add("GET", "frameworks/navigator", get_framework_navigator)
     router.add("GET", "frameworks/controls", get_framework_controls)
     router.add("GET", "frameworks/catalogue", get_framework_catalogue)
+    router.add("GET", "assessment", get_assessment)
+    router.add("GET", "assessment/control", get_assessment_control)
+    router.add("POST", "assessment", post_assessment)
+    router.add("POST", "assessment/clear", post_assessment_clear)
+    router.add("POST", "assessment/snapshot", post_assessment_snapshot)
+    router.add("GET", "assessment/snapshots", get_assessment_snapshots)
+    router.add("GET", "assessment/snapshot", get_assessment_snapshot)
+    router.add("GET", "poam", get_poam)
+    router.add("POST", "poam", post_poam)
+    router.add("POST", "poam/update", _poam_action("update"))
+    router.add("POST", "poam/close", _poam_action("close"))
+    router.add("POST", "poam/reopen", _poam_action("reopen"))
     router.add("GET", "frameworks/clause", get_framework_clause)
     router.add("GET", "frameworks/evidence", get_framework_evidence)
     router.add("POST", "frameworks/import", post_framework_import)

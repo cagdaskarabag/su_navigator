@@ -1,10 +1,10 @@
-# SUNavigator 0.9.9 — operator guide
+# SUNavigator 0.10.0 — operator guide
 
 **SUNavigator** (short for **Splunk use case navigator**) discovers, assesses,
 selects, validates and deploys monitoring use cases in Splunk.
 
 This is the install, usage and troubleshooting guide for **SUNavigator
-0.9.9**. It is written for a single Splunk Enterprise instance
+0.10.0**. It is written for a single Splunk Enterprise instance
 (search head + indexer on one host), including a local macOS install. Search
 head clusters and Splunk Cloud are **not** validated in this version.
 
@@ -21,7 +21,30 @@ Related documents (design, not how-to):
 
 ---
 
-## What changed in 0.9.x
+## What changed in 0.9.x and 0.10
+
+### 0.10.0
+
+0.10.0 lets a person record whether a control is met (D-077). No migration is needed; three collections are created on
+upgrade.
+
+- **Who.** Give the user the role `ucm_compliance_assessor` (or `ucm_admin`). Without the capability `ucm_assess` the
+  Coverage page shows no assessment at all.
+- **Assess (Coverage, Control catalogues).** Each control has **Assess** or **Edit**. Choose a status and say why (the
+  reason is required). The row shows the status, who and when are kept, and **History** lists earlier answers.
+- **Per objective.** For SP 800-171 Rev. 3 the dialog lists the assessment objectives. Mark each met, not met or not
+  applicable; the requirement's status follows from them (all met: implemented; a mix: partially implemented; none met: not implemented). Until every objective has a result it is flagged *incomplete* and shows at most *partially implemented*.
+- **CMMC Level 2.** A new catalogue with the DoD methodology's score: 110 at best, -203 at worst. Anything not assessed
+  counts as not implemented, so the score rises as you record work. *Best possible score* shows what is reachable. A plan
+  of action does not lift the score. If 3.12.4 (system security plan) is not implemented the page says so.
+- **Plan of action and milestones.** Add a plan item for a weakness with an owner, a due date and milestones. Start it,
+  close it with a note, or accept the risk with a longer note. Overdue items are flagged.
+- **Evidence snapshots.** **Take a snapshot** freezes the assessment, coverage and plan items with a SHA-256. Download
+  checks that the stored copy still matches. Copy the SHA-256 into a ticket: that is what protects against someone
+  rewriting the KV Store.
+- **Older catalogue version.** After a catalogue update, assessments made on the previous version are marked; open each
+  and confirm it still applies.
+- **Still manual.** CMMC conditional status rules, objectives for 800-53 and CMMC, and signed snapshots are not built.
 
 ### 0.9.9
 
@@ -608,7 +631,7 @@ searches have **no script alert actions**. Email and webhook actions exist only 
 an administrator has listed permitted destinations in `[actions]` and the approver has acknowledged
 them (0.9.5, D-072); the default alert mode only writes to Splunk's Triggered Alerts.
 
-**Not in 0.9.9:** PDF export of coverage, a bundled regulation-control
+**Not in 0.10.0:** PDF export of coverage, a bundled regulation-control
 catalogue, SHC validation with a deployer and indexer peers (issue #2), Splunk Cloud
 vetting submission (issue #3), and any Enterprise Security output mode (issue #4; 0.9.1 only
 reads ES and ESCU state and hands off, §5.2b).
@@ -622,7 +645,7 @@ reads ES and ESCU state and hands off, §5.2b).
 | Splunk | Enterprise 10.x (validated on 10.2.9 in development; tested by operators on 10.4.3 Darwin arm64). Python 3.9 or 3.13 in Splunk. |
 | KV Store | Must reach `status: ready`. The app stores catalogue, inventory, readiness, selections, deployments and audit in KV collections. |
 | Role | First-time setup needs `admin` (or `sc_admin` on Cloud). |
-| Disk | The 0.9.9 package is a few megabytes. Category 9 of Fenre is about 120 records; the full Fenre corpus is tens of thousands of records. |
+| Disk | The 0.10.0 package is a few megabytes. Category 9 of Fenre is about 120 records; the full Fenre corpus is tens of thousands of records. |
 | Network | Optional. Remote sync needs HTTPS to `api.github.com` and `raw.githubusercontent.com`. Offline import needs none. |
 | Browser | Splunk Web. The app is a set of Simple XML views plus JavaScript under `/en-US/app/sunavigator/`. |
 
@@ -639,7 +662,7 @@ Placeholders used below:
 
 ```bash
 ./tools/package.sh
-# writes dist/sunavigator-0.9.9.tar.gz
+# writes dist/sunavigator-0.10.0.tar.gz
 ```
 
 The tarball has a single top-level folder `sunavigator/`
@@ -657,11 +680,11 @@ then fails in the UI with `500 Internal Server Error` even though splunkd is
 still unpacking. Use the CLI:
 
 ```bash
-$SPLUNK_HOME/bin/splunk install app /path/to/sunavigator-0.9.9.tar.gz \
+$SPLUNK_HOME/bin/splunk install app /path/to/sunavigator-0.10.0.tar.gz \
   -auth "$SPLUNK_USER:$SPLUNK_PASSWORD"
 # first install: omit -update
 # upgrade of an existing copy:
-$SPLUNK_HOME/bin/splunk install app /path/to/sunavigator-0.9.9.tar.gz \
+$SPLUNK_HOME/bin/splunk install app /path/to/sunavigator-0.10.0.tar.gz \
   -update 1 -auth "$SPLUNK_USER:$SPLUNK_PASSWORD"
 
 $SPLUNK_HOME/bin/splunk restart
@@ -1774,7 +1797,7 @@ app. Do the steps in this order:
    $SPLUNK_HOME/bin/splunk restart
    ```
 
-4. **Install SUNavigator 0.9.9** as in §3.2. The first install omits
+4. **Install SUNavigator 0.10.0** as in §3.2. The first install omits
    `-update`, because `sunavigator` is a new app ID.
 5. **Re-create the GitHub token** if you use one (§3.6). It must be stored in
    realm `sunavigator`. The 0.7.0 token in realm `splunk_use_case_manager` is
@@ -2151,7 +2174,7 @@ Full table: [ARCHITECTURE.md §6](ARCHITECTURE.md).
 
 ---
 
-## 12. Known limitations (0.9.9)
+## 12. Known limitations (0.10.0)
 
 Each item says where to read more and ends with its tracking: an issue number on GitHub, a draft
 (`N-nn`) in `docs/ISSUES_PENDING.md` that has not been filed yet, or "no issue" for a limit that is
@@ -2279,7 +2302,7 @@ by design.
 
 ## 13. Quick start checklist
 
-1. `splunk install app sunavigator-0.9.9.tar.gz` then `splunk restart`.
+1. `splunk install app sunavigator-0.10.0.tar.gz` then `splunk restart`.
 2. `splunk show kvstore-status` → `ready` (macOS: §9.2 if stuck on `starting`).
 3. Open **SUNavigator → Administration**; all platform pills green.
 4. **Check provider for categories** → tick **9** → **Synchronize**, **or**

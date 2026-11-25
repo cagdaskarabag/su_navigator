@@ -3,7 +3,7 @@
 [![Version](https://img.shields.io/badge/version-0.9.x-blue.svg)](docs/OPERATOR_GUIDE.md#what-changed-in-09x)
 [![Splunk Compatibility](https://img.shields.io/badge/splunk-Enterprise%2010.x%20%7C%20Cloud%3A%20not%20validated-orange.svg)](docs/OPERATOR_GUIDE.md#2-requirements)
 [![Python Support](https://img.shields.io/badge/python-3.9%20%7C%203.13-brightgreen.svg)](docs/DECISIONS.md#d-005-stdlib-only-python-compatible-with-39313)
-[![Tests](https://img.shields.io/badge/unit%20tests-982%20passed-success.svg)](tests/)
+[![Tests](https://img.shields.io/badge/unit%20tests-1024%20passed-success.svg)](tests/)
 [![AppInspect](https://img.shields.io/badge/Splunk%20AppInspect-Clean-brightgreen.svg)](docs/DECISIONS.md#d-019-packaging-constraints-from-appinspect)
 
 **SUNavigator** is a native Splunk application for Splunk Enterprise (Splunk Cloud: the package passes AppInspect, but runtime on a Cloud stack is not validated yet) that bridges the gap between external security detection catalogues and live production environments. It empowers SOC and detection engineering teams to **discover**, **assess**, **backlog**, **validate**, and **safely deploy** monitoring use cases with built-in four-eyes governance.
@@ -127,7 +127,7 @@ Package the production `.tar.gz` bundle from this repository:
 git clone https://github.com/cagdaskarabag/sun_navigator.git
 cd sun_navigator
 ./tools/package.sh
-# Output: dist/sunavigator-0.9.9.tar.gz
+# Output: dist/sunavigator-0.10.0.tar.gz
 ```
 
 ### CLI Installation (Recommended)
@@ -135,7 +135,7 @@ cd sun_navigator
 Splunk Web's UI upload times out on packages over standard browser HTTP limits. Install via the Splunk CLI:
 
 ```bash
-$SPLUNK_HOME/bin/splunk install app dist/sunavigator-0.9.9.tar.gz \
+$SPLUNK_HOME/bin/splunk install app dist/sunavigator-0.10.0.tar.gz \
   -auth "$SPLUNK_USER:$SPLUNK_PASSWORD"
 
 $SPLUNK_HOME/bin/splunk restart
@@ -185,7 +185,7 @@ python3 tools/ucm_cli.py build-escu-bundle --package DA-ESS-ContentUpdate-latest
 
 With `--security-content <checkout of github.com/splunk/security_content>` the ESCU bundle also carries each detection's data sources, supported add-ons, event types, drilldowns, risk entities, test-data links, macro definitions and upstream status (0.9.6, D-073); discovery then checks whether those event types exist in your data.
 
-Since 0.9.9 Coverage lists the whole of NIST SP 800-53, SP 800-171 and CSF 2.0, so controls that no use case maps to are visible (D-076); the catalogues carry identifiers and titles only, attributed to NIST.
+Since 0.10.0 a user with the `ucm_assess` capability can record whether each control is met (per objective for SP 800-171 Rev. 3), track a plan of action and milestones, take hashed evidence snapshots and see the DoD-methodology score for CMMC Level 2 (D-077). Since 0.9.9 Coverage lists the whole of NIST SP 800-53, SP 800-171 and CSF 2.0, so controls that no use case maps to are visible (D-076); the catalogues carry identifiers and titles only, attributed to NIST.
 
 Since 0.9.8 every audit row is linked to the one before it by a hash, and **Verify audit chain** reports edited or deleted rows; approvals can be withdrawn, enabling can require a second person, overrides expire, and a deployed use case can be marked *needs tuning* or *waiting on data* (D-075).
 
@@ -253,7 +253,7 @@ sun_navigator/
 │   └── appserver/static/         # Simple XML JS modules and styles
 ├── tools/                        # Development, packaging, and bundle CLI tools
 ├── tests/                        # Automated test suites
-│   ├── unit/                     # 982 mocked unit tests (runs without Splunk)
+│   ├── unit/                     # 1024 mocked unit tests (runs without Splunk)
 │   ├── js/                       # Node tests of the browser modules (run by the unit suite when Node is present)
 │   ├── fixtures/readiness/       # Readiness regression corpus and its baseline
 │   └── live/                     # Integration tests against live Splunk instances

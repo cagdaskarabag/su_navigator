@@ -357,7 +357,273 @@ function ucmViewMain($, ucm) {
         return true;
     }
 
-    function catalogueTable(rows, depths, data, clauseBox) {
+    var canAssess = false;
+    var STATUS_LABEL = { implemented: "Implemented", partially_implemented: "Partially implemented", planned: "Planned",
+        not_implemented: "Not implemented", not_applicable: "Not applicable" };
+    var STATUS_KIND = { implemented: "ok", partially_implemented: "warn", planned: "warn", not_implemented: "critical", not_applicable: "info" };
+    var RESULT_LABEL = { met: "Met", not_met: "Not met", not_applicable: "Not applicable" };
+    var POAM_LABEL = { open: "Open", in_progress: "In progress", closed: "Closed", risk_accepted: "Risk accepted" };
+
+    function when(iso) { return iso ? String(iso).replace("T", " ").slice(0, 16) + " UTC" : ""; }
+
+    function assessBadge(a) {
+        if (!a || !a.status) { return el("span", { "class": "ucm-sub", text: "Not assessed" }); }
+        return el("span", {}, ucm.badge(STATUS_LABEL[a.status] || a.status, STATUS_KIND[a.status] || "neutral"),
+            a.complete === false ? ucm.badge("incomplete", "warn") : null,
+            a.stale_version ? ucm.badge("older catalogue version", "info") : null);
+    }
+
+    function assessSummary(box, assess) {
+        ucm.clear(box);
+        var s = assess.summary, sc = assess.score;
+        var items = [["Assessed", s.assessed + " of " + s.controls, ""], ["Not assessed", s.not_assessed, s.not_assessed ? "warn" : ""]];
+        Object.keys(STATUS_LABEL).forEach(function (k) { items.push([STATUS_LABEL[k], (s.by_status || {})[k] || 0, ""]); });
+        if (sc) {
+            items.push(["Score now", sc.score, sc.blocked_by.length ? "warn" : ""]);
+            items.push(["Best possible score", sc.ceiling, ""]);
+        }
+        box.appendChild(el("h4", { text: "Assessment" }));
+        box.appendChild(el("div", { "class": "ucm-cards" }, items.map(function (c) {
+            return el("div", { "class": "ucm-card" + (c[2] ? " ucm-card-" + c[2] : "") },
+                el("div", { "class": "ucm-card-value", text: String(c[1]) }), el("div", { "class": "ucm-card-label", text: c[0] }));
+        })));
+        if (sc) {
+            box.appendChild(el("div", { "class": "ucm-sub", text: "Score now counts every requirement that is not assessed as not implemented, so it can only go up as " +
+                "you assess. Best possible score assumes every requirement not assessed yet will be implemented. " + sc.note +
+                " Points lost so far: " + sc.points_lost + "." }));
+            if (sc.blocked_by.length) {
+                box.appendChild(ucm.stateBox("warn", "A requirement that must be implemented is not: " + sc.blocked_by.join(", "),
+                    "The methodology does not let the assessment pass while it is open, whatever the score."));
+            }
+        }
+        if (s.stale_version) {
+            box.appendChild(el("div", { "class": "ucm-sub", text: s.stale_version + " assessment(s) were made against another version of this catalogue. Open them to confirm they still apply." }));
+        }
+        if (s.objectives) { box.appendChild(el("div", { "class": "ucm-sub", text: s.objectives_assessed + " of " + s.objectives + " assessment objectives have a result." })); }
+        if ((assess.orphaned || []).length) {
+            box.appendChild(el("div", { "class": "ucm-sub", text: assess.orphaned.length + " stored assessment(s) refer to controls this catalogue version no longer has: " +
+                assess.orphaned.slice(0, 10).map(function (o) { return o.control_id; }).join(", ") + "." }));
+        }
+    }
+
+    function historyList(a) {
+        if (!a || !(a.history || []).length) { return null; }
+        return el("details", { "class": "ucm-details" }, el("summary", { text: "History (" + a.history.length + ")" }),
+            el("ul", {}, a.history.slice().reverse().map(function (h) {
+                return el("li", { "class": "ucm-sub", text: when(h.at) + " " + h.by + ": " + (STATUS_LABEL[h.status] || h.status || h.action || "") +
+                    (h.note ? " (" + h.note + ")" : "") });
+            })));
+    }
+
+    function openEditor(box, row, data, assess, refresh) {
+        ucm.clear(box);
+        box.appendChild(el("div", { "class": "ucm-loading", text: "Loading " + row.id + "…" }));
+        ucm.get("assessment/control", { framework_id: data.catalogue.framework_id, version: data.catalogue.version, control_id: row.id }).done(function (res) {
+            ucm.clear(box);
+            var control = res.control, a = res.assessment;
+            var error = el("div", { "class": "ucm-modal-error", role: "alert" });
+            var note = el("textarea", { "class": "ucm-input", maxlength: 2000, "aria-label": "Why this assessment" });
+            note.value = "";
+            var statusSel = null;
+            var objectiveSel = [];
+            var form = el("div", {});
+            if (control.objectives && control.objectives.length) {
+                form.appendChild(el("div", { "class": "ucm-sub", text: "The status of this requirement comes from its " + control.objectives.length +
+                    " assessment objectives: met if every one is met or not applicable, not implemented if any is not met." }));
+                var body = el("tbody", {});
+                control.objectives.forEach(function (o) {
+                    var cur = (a && a.objectives && a.objectives[o.id]) || {};
+                    var sel = el("select", { "class": "ucm-input", "aria-label": "Result for " + o.id },
+                        el("option", { value: "", text: "Not assessed" }),
+                        ["met", "not_met", "not_applicable"].map(function (k) { return el("option", { value: k, text: RESULT_LABEL[k] }); }));
+                    sel.value = cur.result || "";
+                    var objNote = el("input", { type: "text", "class": "ucm-input", maxlength: 500, placeholder: "Note (needed for not applicable)", "aria-label": "Note for " + o.id });
+                    objNote.value = cur.note || "";
+                    objectiveSel.push({ id: o.id, sel: sel, note: objNote, was: cur.result || "", wasNote: cur.note || "" });
+                    body.appendChild(el("tr", {}, el("td", { "class": "ucm-mono", text: o.id }), el("td", { text: o.text }), el("td", {}, sel), el("td", {}, objNote)));
+                });
+                form.appendChild(el("table", { "class": "ucm-table" }, el("thead", {}, el("tr", {},
+                    ["Objective", "Determination statement", "Result", "Note"].map(function (h) { return el("th", { text: h }); }))), body));
+            } else {
+                statusSel = el("select", { "class": "ucm-input", "aria-label": "Status" },
+                    el("option", { value: "", text: "Choose a status" }),
+                    Object.keys(STATUS_LABEL).map(function (k) { return el("option", { value: k, text: STATUS_LABEL[k] }); }));
+                statusSel.value = (a && a.status) || "";
+                form.appendChild(el("label", { "class": "ucm-sub" }, "Status ", statusSel));
+            }
+            var save = el("button", { "class": "btn btn-primary", type: "button", text: "Save assessment", onclick: function () {
+                var req = { framework_id: data.catalogue.framework_id, version: data.catalogue.version, control_id: control.id, note: note.value.trim() };
+                if (statusSel) {
+                    req.status = statusSel.value;
+                } else {
+                    req.objectives = {};
+                    objectiveSel.forEach(function (o) {
+                        var changed = o.sel.value !== o.was || (o.sel.value && o.note.value !== o.wasNote);
+                        if (changed) { req.objectives[o.id] = o.sel.value ? { result: o.sel.value, note: o.note.value.trim() } : { result: "not_assessed" }; }
+                    });
+                }
+                ucm.post("assessment", req).done(function (out) {
+                    assess.assessments[control.id] = out.assessment;
+                    assess.summary = out.summary;
+                    assess.score = out.score;
+                    refresh(control.id);
+                    openEditor(box, row, data, assess, refresh);
+                }).fail(function (err) { error.textContent = err.message; });
+            } });
+            var buttons = el("div", { "class": "ucm-actions" }, save,
+                a ? el("button", { "class": "btn", type: "button", text: "Remove assessment", onclick: function () {
+                    ucm.askText("Remove the assessment of " + control.id, "The assessment is removed and the removal is recorded with your reason.",
+                        { label: "Reason", minLength: 5, maxLength: 500 }, "Remove", function (reason) {
+                            ucm.post("assessment/clear", { framework_id: data.catalogue.framework_id, version: data.catalogue.version, control_id: control.id, note: reason })
+                                .done(function (out) {
+                                    delete assess.assessments[control.id];
+                                    assess.summary = out.summary; assess.score = out.score;
+                                    refresh(control.id);
+                                    openEditor(box, row, data, assess, refresh);
+                                }).fail(function (err) { ucm.notify(err.message); });
+                        });
+                } }) : null,
+                el("button", { "class": "btn", type: "button", text: "Add plan item", onclick: function () { poamForm.prefill(control.id); } }),
+                el("button", { "class": "btn", type: "button", text: "Close", onclick: function () { ucm.clear(box); } }));
+            box.appendChild(el("div", { "class": "ucm-assess-editor" },
+                el("h4", {}, el("span", { "class": "ucm-mono", text: control.id }), " " + control.title),
+                a ? el("div", { "class": "ucm-sub", text: "Assessed by " + a.assessed_by + " on " + when(a.assessed_at) +
+                    (a.first_assessed_by && a.first_assessed_by !== a.assessed_by ? "; first assessed by " + a.first_assessed_by + " on " + when(a.first_assessed_at) : "") +
+                    ". Reason: " + (a.note || "") }) : el("div", { "class": "ucm-sub", text: "Not assessed yet." }),
+                form,
+                el("label", { "class": "ucm-modal-label" }, el("span", { text: "Why (required, at least 5 characters; at least 10 for not applicable)" }), note),
+                error, buttons, historyList(a)));
+        }).fail(function (err) { ucm.clear(box).appendChild(ucm.stateBox("error", "Could not load the control.", err.message)); });
+    }
+
+    function poamDate(item) {
+        return el("span", {}, item.due || "", item.overdue ? " " : "", item.overdue ? ucm.badge("overdue", "error") : null);
+    }
+
+    function renderPoam(target, data, assess) {
+        ucm.clear(target);
+        var fw = data.catalogue.framework_id;
+        target.appendChild(el("h4", { text: "Plan of action and milestones" }));
+        var listBox = el("div", { "class": "ucm-loading", text: "Loading plan items…" });
+        var stateSel = el("select", { "class": "ucm-input", "aria-label": "Plan item state", onchange: function () { state.poamState = stateSel.value; load(); } },
+            el("option", { value: "", text: "All states" }),
+            Object.keys(POAM_LABEL).map(function (k) { return el("option", { value: k, text: POAM_LABEL[k] }); }));
+        stateSel.value = state.poamState || "";
+        var controlIn = el("input", { type: "text", "class": "ucm-input", placeholder: "Control id", "aria-label": "Control id" });
+        var titleIn = el("input", { type: "text", "class": "ucm-input", placeholder: "Title", maxlength: 200, "aria-label": "Title" });
+        var weakIn = el("textarea", { "class": "ucm-input", maxlength: 2000, placeholder: "What is weak or missing", "aria-label": "Weakness" });
+        var ownerIn = el("input", { type: "text", "class": "ucm-input", placeholder: "Owner", maxlength: 100, "aria-label": "Owner" });
+        var dueIn = el("input", { type: "text", "class": "ucm-input", placeholder: "Due YYYY-MM-DD", maxlength: 10, "aria-label": "Due date" });
+        var mileIn = el("textarea", { "class": "ucm-input", placeholder: "Milestones, one per line. Start a line with a date (YYYY-MM-DD) to give that milestone a due date.", "aria-label": "Milestones" });
+        var formErr = el("div", { "class": "ucm-modal-error", role: "alert" });
+        var formBox = el("details", { "class": "ucm-details" }, el("summary", { text: "Add a plan item" }),
+            el("div", { "class": "ucm-sub", text: "A plan item records how and when a weakness will be fixed. It does not change the control's status." }),
+            controlIn, titleIn, weakIn, ownerIn, dueIn, mileIn, formErr,
+            el("div", { "class": "ucm-actions" }, el("button", { "class": "btn btn-primary", type: "button", text: "Add plan item", onclick: function () {
+                var milestones = mileIn.value.split("\n").map(function (l) { return l.trim(); }).filter(Boolean).map(function (l) {
+                    var m = /^(\d{4}-\d{2}-\d{2})\s+(.*)$/.exec(l);
+                    return m ? { text: m[2], due: m[1] } : { text: l, due: "" };
+                });
+                ucm.post("poam", { framework_id: fw, version: data.catalogue.version, control_id: controlIn.value.trim(), title: titleIn.value.trim(),
+                    weakness: weakIn.value.trim(), owner: ownerIn.value.trim(), due: dueIn.value.trim(), milestones: milestones }).done(function () {
+                    renderPoam(target, data, assess);
+                }).fail(function (err) { formErr.textContent = err.message; });
+            } })));
+        target.appendChild(el("div", { "class": "ucm-toolbar" }, stateSel));
+        target.appendChild(listBox);
+        target.appendChild(formBox);
+        poamForm.prefill = function (controlId) { controlIn.value = controlId; formBox.setAttribute("open", "open"); };
+
+        function act(label, item, path, extra, minLength, message) {
+            return el("button", { "class": "btn", type: "button", text: label, onclick: function () {
+                ucm.askText(label + ": " + item.title, message, { label: "Note", minLength: minLength, maxLength: 500 }, label, function (text) {
+                    ucm.post(path, $.extend({ id: item.id, note: text }, extra)).done(load).fail(function (err) { ucm.notify(err.message); });
+                });
+            } });
+        }
+        function load() {
+            ucm.get("poam", { framework_id: fw, version: data.catalogue.version, state: stateSel.value }).done(function (res) {
+                listBox.className = "";
+                ucm.clear(listBox);
+                if (!res.items.length) {
+                    listBox.appendChild(ucm.stateBox("empty", "No plan items" + (stateSel.value ? " in this state" : " yet") + ".", ""));
+                    return;
+                }
+                listBox.appendChild(el("div", { "class": "ucm-sub", text: res.counts.open + " open, " + res.counts.in_progress + " in progress, " +
+                    res.counts.overdue + " overdue, " + res.counts.closed + " closed, " + res.counts.risk_accepted + " risk accepted." }));
+                var body = el("tbody", {});
+                res.items.forEach(function (item) {
+                    var isOpen = item.state === "open" || item.state === "in_progress";
+                    body.appendChild(el("tr", {},
+                        el("td", { "class": "ucm-mono", text: item.control_id }),
+                        el("td", {}, el("div", { "class": "ucm-title", text: item.title }), el("div", { "class": "ucm-sub", text: item.weakness }),
+                            (item.milestones || []).length ? el("ul", {}, item.milestones.map(function (m) {
+                                return el("li", { "class": "ucm-sub", text: (m.due ? m.due + " " : "") + m.text });
+                            })) : null,
+                            item.close_note ? el("div", { "class": "ucm-sub", text: "Closed by " + item.closed_by + " on " + when(item.closed_at) + ": " + item.close_note }) : null),
+                        el("td", { text: item.owner }),
+                        el("td", {}, poamDate(item)),
+                        el("td", {}, ucm.badge(POAM_LABEL[item.state] || item.state, item.state === "closed" ? "ok" : (item.overdue ? "error" : "info")),
+                            item.control_status ? el("div", { "class": "ucm-sub", text: "Control: " + (STATUS_LABEL[item.control_status] || item.control_status) }) : null),
+                        el("td", {}, isOpen
+                            ? [item.state === "open" ? el("button", { "class": "btn", type: "button", text: "Start", onclick: function () {
+                                ucm.post("poam/update", { id: item.id, state: "in_progress" }).done(load).fail(function (err) { ucm.notify(err.message); });
+                            } }) : null,
+                                act("Close", item, "poam/close", { resolution: "closed" }, 5, "Say what was done."),
+                                act("Accept risk", item, "poam/close", { resolution: "risk_accepted" }, 10, "Say why the risk is accepted and by whom (at least 10 characters).")]
+                            : act("Reopen", item, "poam/reopen", {}, 5, "Say why this item is open again."))));
+                });
+                listBox.appendChild(el("table", { "class": "ucm-table" }, el("thead", {}, el("tr", {},
+                    ["Control", "Plan item", "Owner", "Due", "State", ""].map(function (h) { return el("th", { text: h }); }))), body));
+            }).fail(failBox(listBox, "Could not load plan items."));
+        }
+        load();
+    }
+    var poamForm = { prefill: function () {} };
+
+    function renderSnapshots(target, data) {
+        ucm.clear(target);
+        var fw = data.catalogue.framework_id;
+        target.appendChild(el("h4", { text: "Evidence snapshots" }));
+        target.appendChild(el("div", { "class": "ucm-sub", text: "A snapshot freezes the assessment, the coverage of every control and the plan items as they are now, with the " +
+            "SHA-256 of its content. Snapshots cannot be changed or deleted from the app." }));
+        var listBox = el("div", { "class": "ucm-loading", text: "Loading snapshots…" });
+        var msg = el("div", { "class": "ucm-sub", role: "status" });
+        target.appendChild(el("div", { "class": "ucm-actions" }, el("button", { "class": "btn", type: "button", text: "Take a snapshot", onclick: function () {
+            ucm.askText("Take a snapshot", "Records the current assessment of " + data.catalogue.name + " (" + data.catalogue.version_label + ").",
+                { label: "Label (optional)", maxLength: 100 }, "Take snapshot", function (label) {
+                    ucm.post("assessment/snapshot", { framework_id: fw, version: data.catalogue.version, label: label }).done(load)
+                        .fail(function (err) { ucm.notify(err.message); });
+                });
+        } })));
+        target.appendChild(msg);
+        target.appendChild(listBox);
+        function load() {
+            ucm.get("assessment/snapshots", { framework_id: fw, version: data.catalogue.version }).done(function (res) {
+                listBox.className = "";
+                ucm.clear(listBox);
+                if (!res.items.length) { listBox.appendChild(ucm.stateBox("empty", "No snapshots yet.", "")); return; }
+                var body = el("tbody", {});
+                res.items.forEach(function (s) {
+                    body.appendChild(el("tr", {}, el("td", { text: when(s.created_at) }), el("td", { text: s.created_by }), el("td", { text: s.label }),
+                        el("td", { text: s.version_label }), el("td", { "class": "ucm-mono", title: s.sha256, text: s.sha256.slice(0, 16) + "…" }),
+                        el("td", {}, el("button", { "class": "btn", type: "button", text: "Download", onclick: function () {
+                            ucm.get("assessment/snapshot", { id: s.id }).done(function (snap) {
+                                download(snap.filename, snap.content, "application/json");
+                                msg.textContent = snap.integrity.ok
+                                    ? "Downloaded " + snap.filename + ". Integrity check passed. SHA-256 " + snap.sha256
+                                    : "WARNING: the stored snapshot does not match its recorded SHA-256 (recorded " + snap.integrity.expected + ", actual " + snap.integrity.actual + ").";
+                            }).fail(function (err) { ucm.notify(err.message); });
+                        } }))));
+                });
+                listBox.appendChild(el("table", { "class": "ucm-table" }, el("thead", {}, el("tr", {},
+                    ["Taken", "By", "Label", "Catalogue version", "SHA-256", ""].map(function (h) { return el("th", { text: h }); }))), body));
+            }).fail(failBox(listBox, "Could not load snapshots."));
+        }
+        load();
+    }
+
+    function catalogueTable(rows, depths, data, clauseBox, ctx) {
         var body = el("tbody", {});
         rows.forEach(function (row) {
             var depth = Math.min(depths[row.id] || 0, 3);
@@ -379,14 +645,36 @@ function ucmViewMain($, ucm) {
                     : (row.mapped ? levelCell(row.level) : (row.withdrawn ? null : ucm.badge("no mapped use case", "warn")))),
                 el("td", {}, (row.use_cases || []).slice(0, 6).map(function (id) {
                     return el("a", { "class": "ucm-chip", href: "ucm_usecase?id=" + encodeURIComponent(id), text: id });
-                }), row.counts && row.counts.catalogue > 6 ? el("span", { "class": "ucm-sub", text: " +" + (row.counts.catalogue - 6) }) : null)));
+                }), row.counts && row.counts.catalogue > 6 ? el("span", { "class": "ucm-sub", text: " +" + (row.counts.catalogue - 6) }) : null),
+                ctx && ctx.assess ? assessCell(row, ctx) : null));
         });
         return el("table", { "class": "ucm-table ucm-catalogue" }, el("thead", {}, el("tr", {},
-            ["Control", "Title", "Best level", "Use cases"].map(function (h) { return el("th", { text: h }); }))), body);
+            (ctx && ctx.assess ? ["Control", "Title", "Best level", "Use cases", "Assessment"] : ["Control", "Title", "Best level", "Use cases"]).map(function (h) { return el("th", { text: h }); }))), body);
     }
 
-    function renderCatalogueBody(target, data) {
+    function assessCell(row, ctx) {
+        var td = el("td", {});
+        if (ASSESSED.indexOf(row.kind) < 0 || row.withdrawn) { return td; }
+        function fill() {
+            ucm.clear(td);
+            td.appendChild(assessBadge(ctx.assess.assessments[row.id]));
+            td.appendChild(document.createTextNode(" "));
+            td.appendChild(el("button", { "class": "btn", type: "button", text: ctx.assess.assessments[row.id] ? "Edit" : "Assess",
+                "aria-label": "Assess " + row.id, onclick: function () { ctx.open(row); } }));
+            if (row.weight !== undefined) { td.appendChild(el("span", { "class": "ucm-sub", text: " " + row.weight + " pt" })); }
+        }
+        ctx.cells[row.id] = fill;
+        fill();
+        return td;
+    }
+
+    function renderCatalogueBody(target, data, assess) {
         ucm.clear(target);
+        var ctx = null;
+        var summaryBox = el("div", {});
+        var editorBox = el("div", {});
+        var planBox = el("div", {});
+        var snapBox = el("div", {});
         var t = data.totals;
         var cat = data.catalogue;
         var clauseBox = el("div", {});
@@ -397,6 +685,18 @@ function ucmViewMain($, ucm) {
                 el("div", { "class": "ucm-card-value", text: String(c[1]) }), el("div", { "class": "ucm-card-label", text: c[0] })));
         });
         target.appendChild(cards);
+        if (assess) {
+            ctx = { assess: assess, cells: {}, open: function (row) {
+                openEditor(editorBox, row, data, assess, function (id) {
+                    if (ctx.cells[id]) { ctx.cells[id](); }
+                    assessSummary(summaryBox, assess);
+                });
+                if (editorBox.scrollIntoView) { editorBox.scrollIntoView(); }
+            } };
+            assessSummary(summaryBox, assess);
+            target.appendChild(summaryBox);
+            target.appendChild(editorBox);
+        }
         target.appendChild(el("div", { "class": "ucm-sub", text: cat.name + " (" + cat.version_label + ")." +
             (t.withdrawn ? " " + t.withdrawn + " withdrawn controls are not counted." : "") +
             " Mapped means the catalogue provider mapped at least one use case to the control; it says nothing about how well the control is met." }));
@@ -419,7 +719,7 @@ function ucmViewMain($, ucm) {
             function fill() {
                 if (filled) { return; }
                 filled = true;
-                inner.appendChild(rows.length ? catalogueTable(rows, depths, data, clauseBox)
+                inner.appendChild(rows.length ? catalogueTable(rows, depths, data, clauseBox, ctx)
                     : el("div", { "class": "ucm-sub", text: "Nothing to show here with the current filters." }));
             }
             var below = g.top.below;
@@ -448,6 +748,12 @@ function ucmViewMain($, ucm) {
                 el("div", { "class": "ucm-sub", text: "Use cases map these clauses, but no control here has that identifier: usually another version of the standard, or a spelling this catalogue does not use. They are not counted above." }),
                 el("table", { "class": "ucm-table" }, el("thead", {}, el("tr", {},
                     ["Clause as mapped", "Best level", "Use cases"].map(function (h) { return el("th", { text: h }); }))), body)));
+        }
+        if (assess) {
+            target.appendChild(planBox);
+            renderPoam(planBox, data, assess);
+            target.appendChild(snapBox);
+            renderSnapshots(snapBox, data);
         }
         target.appendChild(el("div", { "class": "ucm-sub ucm-attribution" }, cat.attribution + " ",
             cat.source ? el("span", { "class": "ucm-mono", text: cat.source }) : null, cat.modified ? " (content modified " + cat.modified.slice(0, 10) + ")" : ""));
@@ -481,8 +787,11 @@ function ucmViewMain($, ucm) {
                 onchange: function (e) { state.catw = e.target.checked ? "1" : ""; reload(); } }), " Show withdrawn")));
         target.appendChild(bodyBox);
         ucm.get("frameworks/catalogue", query({ framework_id: state.cat, version: state.catv })).done(function (data) {
-            bodyBox.className = "";
-            renderCatalogueBody(bodyBox, data);
+            if (!canAssess) { bodyBox.className = ""; renderCatalogueBody(bodyBox, data, null); return; }
+            ucm.get("assessment", { framework_id: data.catalogue.framework_id, version: data.catalogue.version }).done(function (assess) {
+                bodyBox.className = "";
+                renderCatalogueBody(bodyBox, data, assess);
+            }).fail(function () { bodyBox.className = ""; renderCatalogueBody(bodyBox, data, null); });
         }).fail(failBox(bodyBox, "Could not load the catalogue."));
     }
 
@@ -562,7 +871,10 @@ function ucmViewMain($, ucm) {
                     state.hours, function (v) { state.hours = v; load(); }));
             }
             renderFrameworks(frameworksBox, data);
-            renderCatalogues(cataloguesBox, allDefs);
+            ucm.rawGet("services/authentication/current-context").done(function (ctxData) {
+                var caps = (((ctxData.entry || [])[0] || {}).content || {}).capabilities || [];
+                canAssess = caps.indexOf("ucm_assess") >= 0;
+            }).always(function () { renderCatalogues(cataloguesBox, allDefs); });
         }).fail(failBox(toolbar, "Could not load frameworks."));
         ucm.get("frameworks/matrix", query({ framework_id: state.framework_id, version: state.version }))
             .done(function (m) { matrixBox.className = ""; renderMatrix(matrixBox, m); })

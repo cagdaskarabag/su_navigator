@@ -2127,3 +2127,132 @@ class LiveControlCatalogueTest(unittest.TestCase):
         self.assertEqual(status, 200, body)
         status, body = api(self.admin, "GET", "frameworks/catalogue", {"framework_id": self.FW})
         self.assertEqual(body["catalogue"]["version_label"], "Edition nine")
+
+
+@unittest.skipUnless(LIVE, "set UCM_LIVE_SPLUNK=1 to run against a real Splunk instance")
+class LiveAssessmentTest(unittest.TestCase):
+    """D-077: assessments, POA&M and snapshots on the real KV Store, behind the ucm_assess capability."""
+
+    USER = "ucm_test_assessor_" + uuid.uuid4().hex[:6]
+    VIEWER = "ucm_test_viewer_" + uuid.uuid4().hex[:6]
+    PW = "T3st!" + uuid.uuid4().hex
+
+    @classmethod
+    def setUpClass(cls):
+        cls.admin = transport()
+        cls.kv = KVStore(cls.admin)
+        cls.created = {C.ASSESSMENTS: [], C.POAM: [], C.SNAPSHOTS: []}
+        for name, role in ((cls.USER, "ucm_compliance_assessor"), (cls.VIEWER, "ucm_viewer")):
+            status, body = cls.admin.request("POST", "/services/authentication/users",
+                                             form={"name": name, "password": cls.PW, "roles": role})
+            assert status in (200, 201), (status, body[:300])
+        cls.assessor = transport(cls.USER, cls.PW)
+        cls.viewer = transport(cls.VIEWER, cls.PW)
+
+    @classmethod
+    def tearDownClass(cls):
+        from splunk_ucm.frameworks.assessment import assessment_key
+        for fw, control in getattr(cls, "assessed", []):
+            cls.kv.delete(C.ASSESSMENTS, assessment_key(fw, control))
+        for collection, keys in cls.created.items():
+            for key in keys:
+                cls.kv.delete(collection, key)
+        for name in (cls.USER, cls.VIEWER):
+            cls.admin.request("DELETE", "/services/authentication/users/" + name)
+
+    assessed = []
+
+    def objective_control(self):
+        status, cat = api(self.admin, "GET", "frameworks/catalogue", {"framework_id": "nist-800-171"})
+        self.assertEqual(status, 200, cat)
+        return next(r for r in cat["controls"] if r.get("objective_count"))
+
+    def test_capability_and_roles_are_installed(self):
+        status, content = self.admin.request("GET", "/services/authorization/roles/ucm_compliance_assessor", {"output_mode": "json"})
+        self.assertEqual(status, 200)
+        self.assertIn("ucm_assess", json.loads(content)["entry"][0]["content"]["capabilities"])
+        for t in (self.viewer,):
+            for path in ("assessment", "poam", "assessment/snapshots"):
+                self.assertEqual(api(t, "GET", path, {"framework_id": "cmmc-l2"})[0], 403, path)
+            self.assertEqual(api(t, "POST", "assessment", body={"framework_id": "cmmc-l2", "control_id": "AC.L2-3.1.1"})[0], 403)
+        self.assertEqual(api(self.assessor, "GET", "assessment", {"framework_id": "cmmc-l2"})[0], 200)
+
+    def test_cmmc_score_starts_at_the_methodology_floor_and_rises(self):
+        status, body = api(self.assessor, "GET", "assessment", {"framework_id": "cmmc-l2"})
+        self.assertEqual(status, 200, body)
+        score = body["score"]
+        self.assertEqual((score["start"], score["points_lost"] + score["score"]), (110, 110), score)
+        before = score["score"]
+        status, out = api(self.assessor, "POST", "assessment", body={"framework_id": "cmmc-l2", "control_id": "AC.L2-3.1.1",
+                                                                  "status": "implemented", "note": "Live test: verified"})
+        self.assertEqual(status, 200, out)
+        LiveAssessmentTest.assessed.append(("cmmc-l2", "AC.L2-3.1.1"))
+        self.assertGreater(out["score"]["score"], before)
+        self.assertEqual(out["assessment"]["assessed_by"], self.USER)
+        status, out = api(self.assessor, "POST", "assessment/clear", body={"framework_id": "cmmc-l2", "control_id": "AC.L2-3.1.1", "note": "Live test: done"})
+        self.assertEqual(status, 200, out)
+        self.assertEqual(out["score"]["score"], before)
+
+    def test_objective_results_round_trip_with_dotted_ids_and_derive_the_status(self):
+        row = self.objective_control()
+        status, res = api(self.assessor, "GET", "assessment/control", {"framework_id": "nist-800-171", "control_id": row["id"]})
+        self.assertEqual(status, 200, res)
+        ids = [o["id"] for o in res["control"]["objectives"]]
+        self.assertGreater(len(ids), 0)
+        self.assertTrue(any("." in i for i in ids), ids)
+        LiveAssessmentTest.assessed.append(("nist-800-171", row["id"]))
+        status, out = api(self.assessor, "POST", "assessment", body={
+            "framework_id": "nist-800-171", "control_id": row["id"], "note": "Live test: all met",
+            "objectives": {i: {"result": "met", "note": ""} for i in ids}})
+        self.assertEqual(status, 200, out)
+        self.assertEqual((out["assessment"]["status"], out["assessment"]["complete"]), ("implemented", True))
+        status, out = api(self.assessor, "POST", "assessment", body={
+            "framework_id": "nist-800-171", "control_id": row["id"], "note": "Live test: one fails",
+            "objectives": {ids[0]: {"result": "not_met", "note": ""}}})
+        self.assertEqual((out["assessment"]["status"], out["assessment"]["complete"]), ("partially_implemented", True), out)
+        self.assertEqual([h["status"] for h in out["assessment"]["history"]], ["implemented"])
+        status, stored = api(self.assessor, "GET", "assessment/control", {"framework_id": "nist-800-171", "control_id": row["id"]})
+        self.assertEqual(stored["assessment"]["objectives"][ids[0]]["result"], "not_met")
+        self.assertEqual(stored["assessment"]["first_assessed_by"], self.USER)
+        status, out = api(self.assessor, "POST", "assessment", body={
+            "framework_id": "nist-800-171", "control_id": row["id"], "note": "ok", "objectives": {ids[0]: {"result": "not_applicable", "note": ""}}})
+        self.assertEqual(status, 400, out)
+
+    def test_poam_lifecycle_and_overdue(self):
+        status, out = api(self.assessor, "POST", "poam", body={
+            "framework_id": "cmmc-l2", "control_id": "AC.L2-3.1.2", "title": "Live plan", "weakness": "Live test weakness", "owner": "bob",
+            "due": "2020-01-01", "milestones": [{"text": "First step", "due": "2019-12-01"}]})
+        self.assertEqual(status, 200, out)
+        item = out["item"]
+        self.created[C.POAM].append(item["id"])
+        self.assertTrue(item["overdue"])
+        status, listing = api(self.assessor, "GET", "poam", {"framework_id": "cmmc-l2", "overdue": "1"})
+        self.assertIn(item["id"], [i["id"] for i in listing["items"]])
+        self.assertEqual(api(self.assessor, "POST", "poam/update", body={"id": item["id"], "due": "2031-01-01"})[0], 400)
+        status, out = api(self.assessor, "POST", "poam/update", body={"id": item["id"], "due": "2031-01-01", "note": "Vendor delay"})
+        self.assertEqual((status, out["item"]["overdue"]), (200, False), out)
+        self.assertEqual(api(self.assessor, "POST", "poam/close", body={"id": item["id"], "resolution": "risk_accepted", "note": "short"})[0], 400)
+        status, out = api(self.assessor, "POST", "poam/close", body={"id": item["id"], "resolution": "closed", "note": "Done and tested"})
+        self.assertEqual((status, out["item"]["state"]), (200, "closed"), out)
+        status, out = api(self.assessor, "POST", "poam/reopen", body={"id": item["id"], "note": "Regression found"})
+        self.assertEqual((status, out["item"]["state"]), (200, "open"), out)
+        self.assertEqual([h["action"] for h in out["item"]["history"]], ["created", "updated", "closed", "reopened"])
+
+    def test_snapshot_is_stored_hashed_and_verifiable(self):
+        status, out = api(self.assessor, "POST", "assessment/snapshot", body={"framework_id": "cmmc-l2", "label": "Live snapshot"})
+        self.assertEqual(status, 200, out)
+        snap = out["snapshot"]
+        self.created[C.SNAPSHOTS].append(snap["id"])
+        status, got = api(self.assessor, "GET", "assessment/snapshot", {"id": snap["id"]})
+        self.assertEqual(status, 200, got)
+        self.assertTrue(got["integrity"]["ok"], got["integrity"])
+        self.assertEqual(hashlib.sha256(got["content"].encode("utf-8")).hexdigest(), snap["sha256"])
+        content = json.loads(got["content"])
+        self.assertEqual((content["format"], content["created_by"], content["label"]), ("ucm.assessment.snapshot/1", self.USER, "Live snapshot"))
+        status, listing = api(self.assessor, "GET", "assessment/snapshots", {"framework_id": "cmmc-l2"})
+        self.assertIn(snap["id"], [s["id"] for s in listing["items"]])
+
+    def test_audit_chain_is_intact_after_all_assessment_writes(self):
+        status, out = api(self.admin, "GET", "audit/verify")
+        self.assertEqual(status, 200, out)
+        self.assertTrue(out["ok"], out)

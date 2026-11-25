@@ -2256,3 +2256,47 @@ as drift.
   catalogue for a regulation whose clauses have no public identifiers.
 * Evidence: `tests/unit/test_control_catalogues.py` (22), `tests/js/test_catalogue_controls.js`; on the lab
   (`LiveControlCatalogueTest`). Real upstream mappings sampled (`nist-800-53` `AU-2`, `nist-csf` `DE.CM-04`) match.
+
+
+## D-077 Assessed state, assessment objectives, POA&M and evidence snapshots (Sprint 20)
+
+*0.10.0 (Sprint 20).*
+
+* **Context.** Until 0.9.9 the app said which controls use cases map to (D-076), never whether a control is met.
+  "Mapped" is the content provider's statement; an assessment is a person's.
+* **Decision, who may assess.** A new capability `ucm_assess` and a role `ucm_compliance_assessor` (imports
+  `ucm_viewer`). `ucm_admin`, `admin` and `sc_admin` have it. Reading assessments, plan items and snapshots needs it too,
+  because they contain the organisation's own findings. Everything is written server side with the system token after the
+  capability check, and every write is audited.
+* **Decision, an assessment is a statement with provenance.** One document per (framework, control) in `uc_assessments`
+  with `status` (`implemented`, `partially_implemented`, `planned`, `not_implemented`, `not_applicable`), a mandatory note
+  (5 characters, 10 for not applicable), who and when, who assessed first, the catalogue version it was made against, and
+  the last 20 changes. After a catalogue upgrade an assessment is flagged *older catalogue version* instead of being
+  dropped or silently carried over. Removing one needs a reason and keeps the audit row.
+* **Decision, objectives.** SP 800-171 Rev. 3 now carries its 422 assessment objectives (`objectives` on a control, from
+  the same NIST OSCAL file). For such a requirement the person records `met`, `not_met` or `not_applicable` per objective
+  (not applicable needs 10 characters); the status is derived: every result not met gives not implemented, a mix of met
+  and not met gives partially implemented, all met or not applicable (at least one met) gives implemented, all not
+  applicable gives not applicable. While some objectives have no result the status is at most partially implemented and the
+  requirement is flagged *incomplete*; an objective set back to *not assessed* is removed. The point is that a partly
+  assessed requirement is never shown as met. Objective results are stored as a list, because the KV Store refuses a field name that contains a dot (found
+  with the in-memory test store and fixed before the first live run).
+* **Decision, CMMC Level 2 score.** `cmmc-l2` (110 requirements of 800-171 Rev. 2) is bundled with the point values and
+  the partial-credit rules of the DoD assessment methodology v1.2.1 (start 110, floor -203, sum of values 313, cross-checked
+  against the methodology's own lists by `tools/cmmc_catalogue_builder.py`). Not assessed counts as not implemented, so the
+  score only rises as work is recorded; *best possible* assumes every unassessed requirement will pass. Planned still
+  deducts. Only 3.5.3 and 3.13.11 give partial credit. 3.12.4 (system security plan) has value 0 and is a precondition:
+  while it is not implemented the page says the assessment cannot be completed. The values come from a Web Archive copy
+  of the methodology (the DoD site refused the build machine); the file records the URL and SHA-256.
+* **Decision, POA&M.** `uc_poam` items per control: title, weakness, owner, due date (YYYY-MM-DD), up to 20 milestones,
+  state `open`, `in_progress`, `closed`, `risk_accepted`. Closing needs a note, accepting a risk 10 characters. Changing a
+  due date needs a note. A closed item is reopened, not edited. Overdue is computed from the date, never stored. A plan
+  item does not change the control's status and does not reduce the CMMC deduction.
+* **Decision, snapshots.** `uc_assessment_snapshots` holds an immutable canonical JSON of the assessment, the coverage of
+  each relevant control and the plan items, with its SHA-256. Reading re-computes the hash and reports a mismatch. The app
+  has no way to change or delete a snapshot (200 per framework, 6 MB each). Like the audit chain this is evidence, not
+  prevention: someone who can write the KV Store directly can still replace a snapshot together with its hash, so record the
+  hash outside Splunk.
+* Not built: CMMC conditional status and POA&M eligibility rules (32 CFR 170); assessment objectives for 800-53 and CMMC;
+  signing snapshots; deleting snapshots; control text or assessment procedures.
+* Evidence: `tests/unit/test_assessment.py` (42), `tests/js/test_assessment_ui.js` (10), `LiveAssessmentTest` on the lab.

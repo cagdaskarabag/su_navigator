@@ -17,5 +17,8 @@ DASHBOARDS = "uc_dashboards"
 FIELD_PROFILE = "uc_field_profile"
 EVENT_CHECK = "uc_event_check"
 EXTERNAL_MATCHES = "uc_external_matches"
+ASSESSMENTS = "uc_assessments"
+POAM = "uc_poam"
+SNAPSHOTS = "uc_assessment_snapshots"
 
 DOC_SCHEMA = 1
