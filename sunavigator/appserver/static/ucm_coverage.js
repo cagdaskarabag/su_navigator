@@ -32,7 +32,7 @@ function ucmViewMain($, ucm) {
         operational: "Techniques with an enabled saved search whose last run in the chosen window finished with status success. " +
             "This says the search ran without error. It is not a statement about data: a search that sees no events also succeeds."
     };
-    var HEALTH_KIND = { operational: "ok", no_runs: "warn", unhealthy: "error", disabled: "info", unknown: "neutral" };
+    var HEALTH_KIND = { operational: "ok", no_runs: "warn", unhealthy: "error", failing_dispatch: "error", disabled: "info", unknown: "neutral" };
 
     function select(options, value, onchange, emptyLabel) {
         var s = el("select", { "class": "ucm-input", onchange: function () { onchange(s.value); } },
@@ -310,8 +310,10 @@ function ucmViewMain($, ucm) {
                 body.appendChild(el("tr", {},
                     el("td", { "class": "ucm-title" }, el("a", { href: "ucm_usecase?id=" + encodeURIComponent(i.content_id), text: i.title || i.content_id }),
                         el("div", { "class": "ucm-sub ucm-mono", text: i.saved_search || "" })),
-                    el("td", {}, ucm.badge(i.health.replace("_", " "), HEALTH_KIND[i.health] || "neutral")),
-                    el("td", { text: i.runs + " (" + i.succeeded + " ok, " + i.skipped + " skipped, " + i.other + " other)" }),
+                    el("td", {}, ucm.badge(i.health === "failing_dispatch" ? "failing at dispatch" : i.health.replace("_", " "), HEALTH_KIND[i.health] || "neutral"),
+                        (i.advisories || []).map(function (f) { return el("div", { "class": "ucm-sub", title: f.code, text: f.message }); })),
+                    el("td", { text: i.runs + " (" + i.succeeded + " ok, " + i.skipped + " skipped, " + i.other + " other" +
+                        (i.dispatch_errors ? ", " + i.dispatch_errors + " failed at dispatch" : "") + ")" }),
                     el("td", { text: String(i.runs_with_results) }),
                     el("td", { text: i.last_run ? new Date(i.last_run * 1000).toISOString().replace("T", " ").substring(0, 19) + " UTC, " + (i.last_status || "") : "" })));
             });

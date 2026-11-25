@@ -1932,3 +1932,40 @@ as drift.
   searched; `config.py` defaults for the deployment time range equal `ucm.conf` (`-20m@m`, `-5m@m`).
 * No route, collection or dependency was added; no refusal was relaxed. Python 3.9 compatible,
   stdlib only. The build number is 14.
+
+## D-069 Operational health: dispatch failures, health and schedule advisories, cron jitter
+
+*0.9.3 (Sprint 14 of the 2026-11 roadmap; research findings F-05, F-18).*
+* Context: run status (D-031) counted scheduler lines with a `status`. On Splunk 10.2.9 a scheduled
+  search that Splunk refuses before it runs writes an `ERROR` line in `sourcetype=scheduler` with
+  only `savedsearch_id="<owner>;<app>;<name>"` and `message` (no `savedsearch_name`, no `status`).
+  Measured on the lab with two probes owned by `ucm_scheduler`: `| makeresults | collect ...`
+  ("Error in 'collect' command: You have insufficient privileges") and a missing lookup ("Could not
+  construct lookup"), one line per minute each, nothing else. Both were shown as "no runs". A
+  search Splunk's parser rejects (`nosuchcommand`) cannot be saved at all (400), so it never gets
+  this far.
+* **Decision, health.** `HEALTH_SPL` reads both forms (`savedsearch_name="SUN - *"` in the app, or
+  `savedsearch_id="*;sunavigator;SUN - *"`), names the row from either, and counts lines without a
+  status as `dispatch_errors` with `last_error` and `last_error_time`; it also returns the last skip
+  reason and the p90 and maximum run time. `classify` returns the new status `failing_dispatch`
+  when the latest dispatch error is newer than the latest run (or there are errors and no run).
+  Coverage's *operational* level keeps requiring `operational`, so a failing search is no longer
+  counted there. Advisories are findings with a code, severity, message and evidence
+  (`spl/findings.py`, shared with the schedule advice): H001 dispatch errors, H002 skipped ≥ 20%
+  of runs, H003 p90 run time above the cron interval, H004 maximum run time above it. They never
+  change a status. Evidence: `LiveDispatchHealthTest` (missing lookup, read through `HEALTH_SPL`
+  as `failing_dispatch` with H001), unit tests in `test_frameworks.py`; the lab's one healthy
+  deployed search still reads `operational` with no advisory.
+* **Decision, schedule advice.** Saving a draft stores `schedule_advisories` on the revision
+  (`deployment/schedule.py`): S001 every-minute cron, S002 window shorter than the interval (gaps),
+  S003 window longer than the interval without suppression (double alerts), S004 `latest=now`
+  (late events), S005 interval not derivable. The interval is computed only for minute/hour step
+  and list forms; anything else is S005, not a guess. Advice is informational and does not block
+  submit or approval.
+* **Decision, cron jitter.** `[deployment] cron_jitter = true` (default): a draft that does not set
+  `cron` and whose default is `*/N * * * *` gets `o-59/N * * * *`, with `o = sha256(use case key) mod
+  N`, so the offset is stable per use case and searches spread over the interval. An explicit cron
+  is never changed; existing revisions are not rewritten. Drift checks compare against the stored
+  revision, so jittered searches do not report drift.
+* Not done: health for searches deployed outside SUNavigator, and alerting on a health change
+  (both need a product decision on notification channels).

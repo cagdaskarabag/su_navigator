@@ -252,7 +252,7 @@ Downgrades are not supported (D-033).
 | `GET ucm/frameworks/evidence` | read | Deterministic evidence pack (`framework`, optional `clause`, `format=json\|csv`): `content`, `sha256`, `filename`, `meta`. |
 | `POST ucm/frameworks/import` | `ucm_manage_content` | Import a `ucm.framework/1` definition (JSON body). |
 | `POST ucm/frameworks/activate` | `ucm_manage_content` | Choose the active version (`framework_id`, `version`). |
-| `GET ucm/operations` | read (scheduler logs need `_internal`) | Run status of deployed searches (`hours` = 1, 4, 24, 72 or 168). |
+| `GET ucm/operations` | read (scheduler logs need `_internal`) | Run status of deployed searches (`hours` = 1, 4, 24, 72 or 168): `health` (`operational`, `no_runs`, `unhealthy`, `failing_dispatch`, `disabled`, `unknown`), run counts, `dispatch_errors`, `last_error`, `last_skip_reason`, `p90_run_time`, `max_run_time`, `cadence_seconds` and `advisories` (H001–H004, D-069). |
 | `GET ucm/dashboards` | read | Templates and generated views. |
 | `POST ucm/dashboards/preview` | read | Render a template without saving. |
 | `POST ucm/dashboards/{create,delete}` | `ucm_deploy` | Write or remove a generated view in this app. |

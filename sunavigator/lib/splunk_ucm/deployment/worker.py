@@ -28,6 +28,7 @@ def settings_from_config(config: AppConfig) -> DeploymentSettings:
         latest=config.get("deployment", "default_latest", "-5m@m") or "-5m@m",
         schedule_window=config.get("deployment", "default_schedule_window", "auto") or "auto",
         scheduled_owner=config.get("deployment", "scheduled_owner", "").strip(),
+        cron_jitter=config.get_bool("deployment", "cron_jitter", True),
         alert_mode=config.get("deployment", "default_alert_mode", "track") or "track",
         max_revisions=config.get_int("deployment", "max_revisions", 20, 2, 100),
         verify_interval_minutes=config.get_int("deployment", "verify_interval_minutes", 60, 0, 10080),

@@ -41,7 +41,7 @@ DEFAULTS: Dict[str, Dict[str, str]] = {
     "deployment": {
         "require_approval": "true", "allow_self_approval": "false", "block_enable_states": "blocked",
         "default_cron": "*/15 * * * *", "default_earliest": "-20m@m", "default_latest": "-5m@m",
-        "default_alert_mode": "track", "max_revisions": "20", "verify_interval_minutes": "60",
+        "default_alert_mode": "track", "max_revisions": "20", "verify_interval_minutes": "60", "cron_jitter": "true",
     },
     "retention": {"audit_days": "365", "job_history": "50", "interval_hours": "24"},
 }

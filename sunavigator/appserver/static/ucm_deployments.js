@@ -23,10 +23,12 @@ function ucmViewMain($, ucm) {
     var LIVE_KIND = { enabled: "ok", disabled: "info", missing: "error", unmanaged: "error", absent: "neutral" };
     var STATE_KIND = { draft: "neutral", pending_approval: "warn", approved: "info", rejected: "high",
         deployed: "ok", failed: "error", retired: "neutral" };
-    var HEALTH_KIND = { operational: "ok", no_runs: "warn", unhealthy: "error", disabled: "info", unknown: "neutral" };
-    var HEALTH_LABEL = { operational: "ran without error" };
+    var HEALTH_KIND = { operational: "ok", no_runs: "warn", unhealthy: "error", failing_dispatch: "error", disabled: "info", unknown: "neutral" };
+    var HEALTH_LABEL = { operational: "ran without error", failing_dispatch: "failing at dispatch" };
     var HEALTH_HELP = { operational: "The last scheduled run finished with status success. This is not a statement about data: " +
-        "a search that sees no events also reports success." };
+        "a search that sees no events also reports success.",
+        failing_dispatch: "The scheduler tried to start the search and Splunk refused it before it ran (for example an unknown " +
+        "command, a missing capability or an index the account cannot search). It never ran, so it never reports a status." };
 
     function card(label, value, active, onclick) {
         return el("div", { "class": "ucm-card ucm-card-link" + (active ? " ucm-card-active" : ""), onclick: onclick },
@@ -130,6 +132,9 @@ function ucmViewMain($, ucm) {
                     var b = ucm.badge((HEALTH_LABEL[i.health] || i.health.replace("_", " ")) + (i.runs ? " (" + i.runs + ")" : ""), HEALTH_KIND[i.health] || "neutral");
                     if (HEALTH_HELP[i.health]) { b.setAttribute("title", HEALTH_HELP[i.health]); }
                     cell.appendChild(b);
+                    (i.advisories || []).forEach(function (f) {
+                        cell.appendChild(el("div", { "class": "ucm-sub", title: f.code, text: f.message }));
+                    });
                 }
             });
         }).fail(function () {

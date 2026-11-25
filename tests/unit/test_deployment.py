@@ -131,6 +131,25 @@ class SchedulingTest(unittest.TestCase):
                          ("-20m@m", "auto", "0"))
         self.assertEqual(doc["live"]["drift"], [])
 
+    def test_default_cron_is_jittered_and_advisories_are_stored(self):
+        from splunk_ucm.deployment.schedule import jittered_cron
+        svc, store, saved = service(cron_jitter=True)
+        rev = svc.save_draft("alice", UC, {})["revisions"][-1]
+        self.assertEqual(rev["cron"], jittered_cron("*/15 * * * *", "fenre_UC-9.1.1"))
+        self.assertEqual(rev["schedule_advisories"], [])
+        rev = svc.save_draft("alice", UC, {"cron": "*/15 * * * *", "latest": "now", "earliest": "-1h"})["revisions"][-1]
+        self.assertEqual(rev["cron"], "*/15 * * * *")
+        self.assertEqual([f["code"] for f in rev["schedule_advisories"]], ["S003", "S004"])
+        svc.submit("alice", UC)
+        svc.approve("bob", UC)
+        doc = svc.deploy("bob", UC)
+        self.assertEqual(saved.items[doc["saved_search"]["name"]]["cron_schedule"], "*/15 * * * *")
+        self.assertEqual(doc["live"]["drift"], [])
+
+    def test_jitter_is_off_unless_configured(self):
+        svc, _, _ = service()
+        self.assertEqual(svc.save_draft("alice", UC, {})["revisions"][-1]["cron"], "*/15 * * * *")
+
     def test_suppression_and_window_are_written_and_checked(self):
         svc, store, saved = service()
         svc.save_draft("alice", UC, {"schedule_window": "10", "suppress_period": "1h",
