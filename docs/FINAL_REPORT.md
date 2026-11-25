@@ -39,12 +39,12 @@ has the instructions. The same table is in `docs/IMPLEMENTATION_PLAN.md` (WP9).
 
 | Item | Why | Where it stands |
 |---|---|---|
-| CMMC conditional status and POA&M eligibility (32 CFR 170) | It is a legal-weight certification claim. The app records coverage and assessments, not certification, and the regulation text was not verified from an authoritative source (the DoD site refused the build machine). It was not implemented from memory. | Not planned unless the owner asks and supplies a verified source |
-| Assessment objectives for SP 800-53 and CMMC | The pinned NIST OSCAL content carries objectives only for SP 800-171 Rev. 3. The 800-53A and 800-171A Rev. 2 objectives exist as PDF and spreadsheet; transcribing them by hand risks errors in compliance data. | Not planned |
-| Signing snapshots | Needs a decision on key custody and rotation; Splunk has no key store for it. The SHA-256 of each snapshot, recorded outside Splunk, covers part of the need. | Not planned |
-| Deleting snapshots | Left out on purpose, so evidence cannot be removed from the app. Retention would need an export-then-delete design. | Not planned |
-| CIM field reference, field presence, acceleration freshness | Needs a lab with `Splunk_SA_CIM` and a populated, accelerated model; the lab has neither. | Issue #31 |
-| Re-run of the 94 control-test fixtures with add-ons | The fixtures name add-ons the lab does not have (see section 5). | Issue #23 |
+| CMMC conditional status and POA&M eligibility (32 CFR 170) | It is a legal-weight certification claim. The app records coverage and assessments, not certification, and the regulation text was not verified from an authoritative source (the DoD site refused the build machine). It was not implemented from memory. | Left as is; not planned (D-079) |
+| Assessment objectives for SP 800-53 and CMMC | The pinned NIST OSCAL content carries objectives only for SP 800-171 Rev. 3. The 800-53A and 800-171A Rev. 2 objectives exist as PDF and spreadsheet; transcribing them by hand risks errors in compliance data. | Left as is; not planned (D-079) |
+| Signing snapshots | Needs a decision on key custody and rotation; Splunk has no key store for it. The SHA-256 of each snapshot, recorded outside Splunk, covers part of the need. | Left as is; not planned (D-079) |
+| Deleting snapshots | Left out on purpose, so evidence cannot be removed from the app. Retention would need an export-then-delete design. | Left as is; not planned (D-079) |
+| CIM field reference, field presence, acceleration freshness | Needs a lab with `Splunk_SA_CIM` and a populated, accelerated model; the lab has neither. | Issue #31, unscheduled backlog |
+| Re-run of the 94 control-test fixtures with add-ons | The fixtures name add-ons the lab does not have (see section 5). | Skipped (D-079); issue #23 to be closed as not planned |
 | Splunk Cloud, SHC with a deployer, ES 8 | No lab, and none will be provided (D-078). | Dropped; issues #2, #3, #4, #18, #27 |
 
 ## 4. GitHub issues
@@ -53,7 +53,7 @@ Closed and verified closed as completed: #5, #6, #7, #8, #9, #10, #11, #12, #13,
 notes are in `docs/ISSUES_PENDING.md` (the integration that wrote this code can read issues and create them, but
 cannot comment on, edit or close them).
 
-To close as not planned (D-078): #2, #3, #4, #18, #27.
+To close as not planned: #2, #3, #4, #18, #27 (D-078) and #23 (D-079).
 
 Open and kept:
 
@@ -66,14 +66,13 @@ Open and kept:
 | #20 | Fenre findings F-01 to F-11 | Owner decision: documented in `docs/upstream/FENRE_FINDINGS.md`, not sent upstream |
 | #21 | Control tests: `source=` searches | Owner decision |
 | #22 | Control tests: empty `timechart` buckets passing | Backlog |
-| #23 | 94-fixture re-run with add-ons | Needs add-ons on the lab (section 5) |
 | #24 | Counts bounded by `max_rows_per_query` | Backlog |
 | #25 | Reindex as a background job | Backlog |
 | #26 | Facet values containing a comma | Owner decision |
 | #29 | Extend the SPL lint only with rules shown wrong on a real Splunk | Backlog |
-| #31 | CIM field reference and field-level checks (remainder of #13) | Needs `Splunk_SA_CIM` on the lab |
+| #31 | CIM field reference and field-level checks (remainder of #13) | Unscheduled; needs `Splunk_SA_CIM` on a lab |
 
-## 5. What the lab needs for #23 and #31
+## 5. What the lab would need for #31 (and #23, which is skipped)
 
 The lab has only the ES Content Update app. The add-ons are free Splunkbase downloads; they must not be added to
 this repository. Of the 94 fixtures, 61 use `citrix:*` sourcetypes, 10 use `WinEventLog`, 3 `uberAgent:*` and 2
@@ -88,7 +87,7 @@ this repository. Of the 94 fixtures, 61 use `citrix:*` sourcetypes, 10 use `WinE
 | 3 | `Splunk_TA_aws`, `Splunk_TA_paloalto` | `aws:cloudtrail`, `pan:threat` fixtures |
 | 4 | The Citrix add-ons for the `citrix:*` sourcetypes | 61 fixtures; names to be confirmed per fixture |
 
-Step 1 and 2 are enough to start #31. The rest of #23 is optional.
+Steps 1 and 2 would be enough to start #31. #23 is skipped (D-079); steps 3 and 4 only matter for it.
 
 ## 6. Platforms not validated
 

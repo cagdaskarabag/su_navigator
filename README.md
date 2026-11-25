@@ -249,7 +249,7 @@ If you run SUNavigator on one of these, treat it as untested and check the resul
 | 🔒 **[Security & RBAC Model](docs/SECURITY.md)** | Detailed trust boundaries, Splunk capability definitions, and credential handling. |
 | 🧾 **[Final report](docs/FINAL_REPORT.md)** | What was delivered in 0.9.2 to 0.10.0, what was not done and why, what the lab validated, and what is open. |
 | 🗂️ **[Pending issues](docs/ISSUES_PENDING.md)** | Which GitHub issues the code resolves (with ready closing comments), which stay open, and drafts of new issues. |
-| 📜 **[Architecture Decision Records (ADRs)](docs/DECISIONS.md)** | Recorded technical decisions and trade-offs (D-001 through D-078). |
+| 📜 **[Architecture Decision Records (ADRs)](docs/DECISIONS.md)** | Recorded technical decisions and trade-offs (D-001 through D-079). |
 | 📋 **[Implementation Plan](docs/IMPLEMENTATION_PLAN.md)** | Work package breakdown (WP0–WP9), what is deferred or dropped and why, and validation test matrices. |
 
 ---
