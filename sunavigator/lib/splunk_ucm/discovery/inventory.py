@@ -111,6 +111,25 @@ class SplunkInventory:
                     out[-1]["definition"] = str(content.get("definition") or "")[:1000]
         return out
 
+    def list_saved_searches(self, limit: int = 20000) -> List[Dict[str, Any]]:
+        """Saved searches the account can read, for matching only: the caller hashes ``search`` and drops it."""
+        out: List[Dict[str, Any]] = []
+        for entry in self._get("/servicesNS/-/-/saved/searches", "saved search listing")[:limit]:
+            name = str(entry.get("name") or "")
+            if not name:
+                continue
+            content = _content(entry)
+            acl = entry.get("acl") if isinstance(entry.get("acl"), dict) else {}
+            out.append({
+                "name": name, "app": str(acl.get("app") or content.get("eai:appName") or ""),
+                "owner": str(acl.get("owner") or ""), "sharing": str(acl.get("sharing") or ""),
+                "enabled": not _truthy(content.get("disabled")),
+                "scheduled": _truthy(content.get("is_scheduled")),
+                "search": str(content.get("search") or ""),
+                "annotations": str(content.get("action.correlationsearch.annotations") or "")[:20000],
+            })
+        return out
+
     def list_datamodels(self) -> List[Dict[str, Any]]:
         out = []
         for entry in self._get("/services/data/models", "data model listing"):
@@ -134,6 +153,10 @@ class SplunkInventory:
                 if _is_accelerated(acceleration) else "",
             })
         return out
+
+
+def _truthy(value: Any) -> bool:
+    return value in (True, 1, "1", "true", "True", "TRUE")
 
 
 def _int(value: Any) -> int:

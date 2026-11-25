@@ -51,6 +51,8 @@ MIGRATIONS: List[Tuple[str, Callable[[DocumentStore], bool], Callable[[DocumentS
     # Facet counts for providers, waves, stories and data sources (D-066). Stores the facets document
     # only; no catalogue summary is written, so the new filters stay empty until Reindex runs.
     ("0004_catalog_facets_v3", lambda s: facets_outdated(s) and s.count(C.CATALOG) > 0, _store_facets),
+    # Data maturity counts (D-074). Like 0004: the facets only; the filter fills after Reindex.
+    ("0005_catalog_facets_v4", lambda s: facets_outdated(s) and s.count(C.CATALOG) > 0, _store_facets),
 ]
 
 

@@ -18,6 +18,7 @@ function ucmViewMain($, ucm) {
     var PAGE = 25;
     var state = { kind: "pair", status: "active", q: "", index: "", stale_hours: "", sort: "count", offset: 0 };
     var pollTimer = null;
+    var extState = "proposed";
 
     function ageLabel(seconds) {
         if (seconds === null || seconds === undefined) { return "unknown"; }
@@ -223,6 +224,79 @@ function ucmViewMain($, ucm) {
         return box;
     }
 
+    var BASIS = { spl_hash: ["same search text", "ok"], title_mitre: ["same title and technique", "info"],
+        title: ["same title only", "warn"] };
+
+    function renderExternal(data) {
+        var box = el("div", { "class": "ucm-card", id: "ucm-ext" },
+            el("h3", { text: "Detections already running here" }),
+            el("div", { "class": "ucm-sub", text: "Searches in other apps that look like catalogue use cases. Only names are kept; the search text is hashed and never stored. " +
+                "Accepting a match marks the use case as enabled elsewhere in coverage. It does not count as deployed by SUNavigator." }));
+        var counts = data.counts || {};
+        box.appendChild(el("div", { "class": "ucm-toolbar" },
+            el("div", { "class": "ucm-field" }, el("label", { text: "Show" }),
+                el("select", { id: "ext-state" }, ["proposed", "accepted", "rejected"].map(function (s) {
+                    return el("option", { value: s, text: s + " (" + (counts[s] || 0) + ")", selected: extState === s ? "selected" : null });
+                })))));
+        if (!data.items.length) {
+            box.appendChild(ucm.stateBox("empty", "Nothing here.", extState === "proposed"
+                ? "Run discovery to look for matches, or there are none to review." : "No " + extState + " matches."));
+            return box;
+        }
+        var head = el("tr", {});
+        ["Search", "App", "State", "Matches catalogue use case", ""].forEach(function (h) { head.appendChild(el("th", { text: h })); });
+        var body = el("tbody", {});
+        data.items.forEach(function (m) {
+            var cands = (m.candidates || []).map(function (c) {
+                var b = BASIS[c.basis] || [c.basis, "neutral"];
+                var line = el("div", {}, el("a", { href: "ucm_usecase?id=" + encodeURIComponent(c.content_key), text: c.title || c.content_id }),
+                    " ", ucm.badge(b[0], b[1]));
+                if (m.state !== "accepted") {
+                    line.appendChild(el("button", { "class": "btn btn-link ext-accept", type: "button", text: "Accept",
+                        onclick: function () { decide(m, "accept", c.content_key); } }));
+                } else if (m.content_key === c.content_key) {
+                    line.appendChild(ucm.badge("accepted", "ok"));
+                }
+                return line;
+            });
+            var actions = [];
+            if (m.state === "proposed") {
+                actions.push(el("button", { "class": "btn ext-reject", type: "button", text: "Reject",
+                    onclick: function () { decide(m, "reject"); } }));
+            } else {
+                actions.push(el("button", { "class": "btn ext-reset", type: "button", text: "Reset",
+                    onclick: function () { decide(m, "reset"); } }));
+            }
+            body.appendChild(el("tr", {},
+                el("td", {}, m.name, m.previous_state ? el("div", { "class": "ucm-sub", text: "Search text changed since you " + m.previous_state + " it." }) : null),
+                el("td", { "class": "ucm-mono", text: m.app }),
+                el("td", {}, ucm.badge(m.enabled ? "enabled" : "disabled", m.enabled ? "ok" : "neutral"),
+                    m.status === "missing" ? ucm.badge("no longer found", "warn") : null),
+                el("td", {}, cands),
+                el("td", {}, actions)));
+        });
+        box.appendChild(el("table", { "class": "ucm-table" }, el("thead", {}, head), body));
+        if (data.has_more) { box.appendChild(el("div", { "class": "ucm-sub", text: "First " + data.items.length + " shown." })); }
+        return box;
+    }
+
+    function decide(m, decision, contentKey) {
+        ucm.post("external", { id: m._key, decision: decision, content_key: contentKey || "" }).done(loadExternal)
+            .fail(function (err) { ucm.notify(err.message); });
+    }
+
+    function loadExternal() {
+        ucm.get("external", { state: extState, count: 50 }).done(function (data) {
+            var node = document.getElementById("ucm-ext-wrap");
+            if (!node) { return; }
+            ucm.clear(node).appendChild(renderExternal(data));
+            $("#ext-state").off("change").on("change", function () { extState = $("#ext-state").val(); loadExternal(); });
+        }).fail(function () {
+            var node = document.getElementById("ucm-ext-wrap");
+            if (node) { ucm.clear(node); }
+        });
+    }
+
     function toolbar() {
         return el("div", { "class": "ucm-toolbar" },
             el("div", { "class": "ucm-field" }, el("label", { text: "Search" }),
@@ -298,6 +372,7 @@ function ucmViewMain($, ucm) {
                 loadTable();
                 loadCoverage();
                 loadMappings();
+                loadExternal();
             }
         });
     }
@@ -346,13 +421,15 @@ function ucmViewMain($, ucm) {
             el("div", { id: "ucm-health-wrap" }),
             toolbar(),
             el("div", { id: "ucm-table-wrap" }, el("div", { "class": "ucm-loading", text: "Loading sources…" })),
-            el("div", { id: "ucm-map-wrap" })));
+            el("div", { id: "ucm-map-wrap" }),
+            el("div", { id: "ucm-ext-wrap" })));
         bindToolbar();
         poll();
         loadCoverage();
         loadHealth();
         loadTable();
         loadMappings();
+        loadExternal();
     }
 
     loadAll();

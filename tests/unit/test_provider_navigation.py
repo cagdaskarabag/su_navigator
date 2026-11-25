@@ -78,9 +78,9 @@ class SummaryFieldsTest(unittest.TestCase):
         cls.store = two_provider_store()
         cls.docs = catalog_docs(cls.store)
 
-    def test_summary_version_is_six_and_stored(self):
-        self.assertEqual(SUMMARY_VERSION, 6)
-        self.assertTrue(all(d["summary_version"] == 6 for d in self.docs.values()))
+    def test_summary_version_is_seven_and_stored(self):
+        self.assertEqual(SUMMARY_VERSION, 7)
+        self.assertTrue(all(d["summary_version"] == 7 for d in self.docs.values()))
 
     def test_escu_summary_carries_stories_and_data_sources_from_the_record(self):
         d = self.docs["escu_UC-11111111-2222-4333-8444-555555555503"]
@@ -194,9 +194,9 @@ class FacetCountsTest(unittest.TestCase):
     def total(self, **kw):
         return self.svc.search(CatalogFilter(count=1, **kw))["total"]
 
-    def test_stored_facets_document_is_version_three(self):
+    def test_stored_facets_document_is_current(self):
         self.assertEqual(self.store.get(C.SYNC_STATE, FACETS_KEY)["facets_version"], FACETS_VERSION)
-        self.assertEqual(FACETS_VERSION, 3)
+        self.assertEqual(FACETS_VERSION, 4)
 
     def test_provider_counts_equal_the_filter_totals(self):
         self.assertEqual(set(self.facets["providers"]), {"fenre", "escu"})
@@ -221,9 +221,9 @@ class FacetCountsTest(unittest.TestCase):
             self.assertEqual(count, self.total(data_sources=[source]), source)
 
     def test_lists_are_ordered_by_count_then_name(self):
-        rows = [{"analytic_stories": ["b", "a"], "provider_status": "active", "summary_version": 6},
-                {"analytic_stories": ["a", "c"], "provider_status": "active", "summary_version": 6},
-                {"analytic_stories": ["z"], "provider_status": "withdrawn", "summary_version": 6}]
+        rows = [{"analytic_stories": ["b", "a"], "provider_status": "active", "summary_version": 7},
+                {"analytic_stories": ["a", "c"], "provider_status": "active", "summary_version": 7},
+                {"analytic_stories": ["z"], "provider_status": "withdrawn", "summary_version": 7}]
         out = compute_facets(rows)["analytic_stories"]
         self.assertEqual([(s["id"], s["count"]) for s in out], [("a", 2), ("b", 1), ("c", 1)])
 
@@ -395,7 +395,7 @@ class OldSummaryTest(unittest.TestCase):
         self.assertEqual(json.dumps(catalog_docs(store), sort_keys=True), snapshot)
 
     def test_a_document_without_a_summary_version_counts_as_old(self):
-        rows = [{"provider_status": "active"}, {"provider_status": "active", "summary_version": 6}]
+        rows = [{"provider_status": "active"}, {"provider_status": "active", "summary_version": 7}]
         self.assertEqual(compute_facets(rows)["summary"]["outdated"], 1)
 
 
@@ -417,14 +417,14 @@ class UpgradeFrom089Test(unittest.TestCase):
         store = self.installed_089()
         before = json.dumps(catalog_docs(store), sort_keys=True)
         runner = MigrationRunner(store, lambda: "2026-11-25T09:00:00Z")
-        self.assertEqual(runner.pending(), ["0004_catalog_facets_v3"])
+        self.assertEqual(runner.pending(), ["0004_catalog_facets_v3", "0005_catalog_facets_v4"])
         self.assertTrue(runner.outdated())
         results = runner.run()
-        self.assertEqual([r["id"] for r in results], ["0004_catalog_facets_v3"])
+        self.assertEqual([r["id"] for r in results], ["0004_catalog_facets_v3", "0005_catalog_facets_v4"])
         self.assertEqual(json.dumps(catalog_docs(store), sort_keys=True), before)
         self.assertTrue(all(d["summary_version"] == 5 for d in catalog_docs(store).values()))
         facets = store.get(C.SYNC_STATE, FACETS_KEY)
-        self.assertEqual(facets["facets_version"], 3)
+        self.assertEqual(facets["facets_version"], 4)
         self.assertEqual(facets["summary"]["outdated"], facets["active"])
         state = store.get(C.SYNC_STATE, STATE_KEY)
         self.assertEqual((state["app_version"], state["previous_app_version"]), (__version__, "0.8.9"))
@@ -539,7 +539,7 @@ class SummaryProjectionTest(unittest.TestCase):
         uc = StoredNormalizer(CategoryRepository(store)).normalize(content.get_content("escu_UC-11111111-2222-4333-8444-555555555501"))
         summary = catalog_summary(uc)
         self.assertEqual((summary["summary_version"], summary["wave"], summary["analytic_stories"], summary["data_sources"]),
-                         (6, "", ["Windows Defender Tampering"], ["Sysmon EventID 13"]))
+                         (7, "", ["Windows Defender Tampering"], ["Sysmon EventID 13"]))
 
 
 if __name__ == "__main__":

@@ -20,9 +20,10 @@ def sort_key_for(record_id: str) -> str:
 
 
 # Bump when catalog_summary gains or changes fields. Reindex re-derives older summaries from the
-# stored raw records (no network). 6 adds wave, analytic_stories and data_sources (D-066); that
+# stored raw records (no network). 6 adds wave, analytic_stories and data_sources (D-066); 7 adds data_maturity
+# (D-074). That
 # bump is not applied by an automatic migration, see maintenance/migrations.py.
-SUMMARY_VERSION = 6
+SUMMARY_VERSION = 7
 MAX_FACET_ITEMS = 30
 MAX_FACET_ITEM_CHARS = 200
 # Description text kept in search_text; KV regex search scans this field.
@@ -33,6 +34,31 @@ def _facet_values(values) -> list:
     """Facet values travel comma separated in a request, so a comma inside a name becomes a space."""
     cleaned = (" ".join(v.replace(",", " ").split()) for v in values if isinstance(v, str))
     return dedupe(truncate(v, MAX_FACET_ITEM_CHARS) for v in cleaned if v)[:MAX_FACET_ITEMS]
+
+
+# SUN's own ordering of how deep a use case goes into the data (D-074); not Splunk's levels and not a score.
+DATA_MATURITY = ("raw", "normalized", "enriched", "correlated")
+CORRELATED_SOURCETYPES = 3
+
+
+def data_maturity(uc: UseCase) -> str:
+    """The deepest of: reads events (raw), needs a CIM data model (normalized), needs a lookup (enriched),
+    needs Enterprise Security or reads three or more sourcetypes (correlated). Empty when it reads no data."""
+    types = {r.type for r in uc.requirements if r.level != "informational"}
+    sourcetypes = {r.value for r in uc.requirements if r.type == "sourcetype"}
+    for variant in uc.spl_variants:
+        sourcetypes.update(variant.sourcetypes)
+    if not (types & {"sourcetype", "index", "cim_model"}):
+        return ""
+    es = "es_required" in (uc.quality_flags or []) or any("enterprise security" in (p or "").lower()
+                                                           for p in list(uc.premium_apps) + list(uc.products))
+    if es or len(sourcetypes) >= CORRELATED_SOURCETYPES:
+        return "correlated"
+    if "lookup" in types:
+        return "enriched"
+    if "cim_model" in types:
+        return "normalized"
+    return "raw"
 
 
 def catalog_summary(uc: UseCase) -> Dict[str, Any]:
@@ -78,6 +104,7 @@ def catalog_summary(uc: UseCase) -> Dict[str, Any]:
         "monitoring_types": uc.monitoring_types,
         "pillar": uc.pillar,
         "wave": uc.wave,
+        "data_maturity": data_maturity(uc),
         "analytic_stories": _facet_values(uc.analytic_stories),
         "data_sources": _facet_values(uc.data_sources),
         "products": uc.products,

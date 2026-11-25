@@ -121,6 +121,99 @@ function ucmViewMain($, ucm) {
                 "search returns nothing, so check the definition against a test search before relying on it." }));
     }
 
+    var HINTS = {
+        sourcetype: {
+            not_found: "No index returned this sourcetype in the discovery window. Check that the source is sending and its add-on is installed, then run discovery again.",
+            no_longer_seen: "It was seen before but not in the last discovery. Check that the source is still sending.",
+            stale: "Events exist but are old. Check the forwarder, the input and any time stamp problem.",
+            sourcetype_not_seen: "The sourcetype was not seen, so nothing more can be checked. Check the data source first."
+        },
+        index: {
+            not_found: "The index is not defined on this instance. Create it, or map this requirement to the index your data uses.",
+            index_unavailable: "The scheduled account cannot read this index. Give the ucm_scheduler role access to it.",
+            index_empty: "The index exists but holds no events in the discovery window. Check ingestion into it."
+        },
+        cim_model: {
+            model_missing: "The data model is not installed. Install the Splunk Common Information Model add-on.",
+            model_empty: "The model is installed but holds no events. Check that the data's add-on tags events for this model and that the model's index list covers your indexes.",
+            not_accelerated: "The model is not accelerated. Enable acceleration in the model's settings if the search needs it."
+        },
+        field: {
+            sampled_absent: "The field was not found in sampled events. Check the add-on's field extractions and the sourcetype.",
+            not_sampled: "Run validation on this use case to sample the field."
+        },
+        event_condition: {
+            event_not_seen: "None of this event type was seen. Normal for a rare event; otherwise check the add-on's input settings."
+        },
+        macro: { app_scoped: "The macro is shared only inside its app. Share it with all apps so the scheduled search can read it." },
+        addon: { not_installed: "Install this add-on from Splunkbase, or map the requirement to the add-on you use.",
+            version_below_minimum: "Upgrade the add-on to the version the content needs." },
+        "*": {
+            not_found: "Not found by discovery. Check the name, then run discovery again.",
+            not_checked: "Not checked yet. Run discovery.",
+            not_parsed: "Not parsed yet. Run validation on this use case.",
+            parse_error: "Splunk could not parse the search. Fix the SPL or the missing macro or lookup it names.",
+            internal_not_scanned: "Internal indexes are not scanned by default. Include them in discovery if you need this checked."
+        }
+    };
+    var SEARCH_NAME = /^[A-Za-z0-9_][A-Za-z0-9_.:\-\/*]{0,199}$/;
+    var SEARCH_INDEX = /^[A-Za-z0-9_*][A-Za-z0-9_\-*]{0,99}$/;
+    var SEARCH_FIELD = /^[A-Za-z_][\w.\-]{0,99}$/;
+    var SEARCH_VALUE = /^[A-Za-z0-9_.:\-\/ ]{1,100}$/;
+
+    /* A bounded search the viewer can run to look at the data behind a requirement. Built from checked pieces only. */
+    function requirementSearch(r, res) {
+        var v = r.value || "";
+        var seen = (res && res.observed && res.observed[0]) || {};
+        var attrs = r.attributes || {};
+        if (r.type === "sourcetype" && SEARCH_NAME.test(v)) {
+            return { label: "Open in Search: which indexes hold it", spl: '| tstats count where index=* sourcetype="' + v + '" by index, sourcetype' };
+        }
+        if (r.type === "index" && SEARCH_INDEX.test(v)) {
+            return { label: "Open in Search: what the index holds", spl: '| tstats count where index="' + v + '" by sourcetype' };
+        }
+        if (r.type === "cim_model" && SEARCH_NAME.test(v)) {
+            return { label: "Open in Search: events in the model", spl: "| tstats summariesonly=false count from datamodel=" + v + " by sourcetype" };
+        }
+        if (r.type === "lookup" && SEARCH_NAME.test(v)) {
+            return { label: "Open in Search: look at the lookup", spl: "| inputlookup " + v + " | head 20" };
+        }
+        if (r.type === "macro" && /^[A-Za-z0-9_]+(\(\d+\))?$/.test(v)) {
+            return { label: "Open in Search: where the macro is defined",
+                spl: '| rest splunk_server=local /servicesNS/-/-/configs/conf-macros count=0 | search title="' + v +
+                    '" | table title definition eai:acl.app eai:acl.sharing' };
+        }
+        if (r.type === "event_condition" && SEARCH_NAME.test(attrs.sourcetype || "") && SEARCH_FIELD.test(attrs.field || "") &&
+                SEARCH_VALUE.test(attrs.value || "") && SEARCH_INDEX.test(seen.index || "")) {
+            return { label: "Open in Search: events of this type",
+                spl: '| search index=' + seen.index + ' sourcetype="' + attrs.sourcetype + '" "' + attrs.value + '" ' + attrs.field + '="' +
+                    attrs.value + '" earliest=-30d | head 20' };
+        }
+        if (r.type === "field" && SEARCH_FIELD.test(v) && SEARCH_NAME.test(seen.sourcetype || "") && SEARCH_INDEX.test(seen.index || "")) {
+            return { label: "Open in Search: sample values of the field",
+                spl: "| search index=" + seen.index + ' sourcetype="' + seen.sourcetype + '" ' + v + "=* earliest=-24h | head 20 | table _time " + v };
+        }
+        return null;
+    }
+
+    function searchLink(found) {
+        var base = appViewUrl("search", "search");
+        if (!found || !base) { return null; }
+        var guard = ucm.searchGuard(found.spl, null, "", false);
+        if (!guard.ok) { return null; }
+        return el("a", { href: base + "?q=" + encodeURIComponent(found.spl) + "&earliest=-24h&latest=now", target: "_blank",
+            rel: "noopener noreferrer", text: found.label, title: "Opens Search in a new tab with a bounded search. SUNavigator does not run it; you do, with your own permissions." });
+    }
+
+    function resolutionHelp(r, res) {
+        if (!res || ["not_met", "partial", "unverified", "unknown"].indexOf(res.status) < 0) { return null; }
+        var hint = ((HINTS[r.type] || {})[res.code]) || HINTS["*"][res.code] || "";
+        var link = searchLink(requirementSearch(r, res));
+        if (!hint && !link) { return null; }
+        return el("div", { "class": "ucm-sub ucm-resolution" },
+            hint ? el("div", { text: "What to check: " + hint }) : null, link ? el("div", {}, link) : null);
+    }
+
     function requirementRow(r, res) {
         var evidence = res ? evidenceText(res) : (r.notes || "");
         return el("tr", {},
@@ -131,7 +224,7 @@ function ucmViewMain($, ucm) {
             el("td", { text: r.confidence }),
             el("td", { "title": r.type === "macro" ? MACRO_STATUS_HELP : null },
                 res ? ucm.statusBadge(res.status) : ucm.badge("not assessed", "neutral")),
-            el("td", { "class": "ucm-sub" }, evidence, populatedChip(res), macroHelp(r, res),
+            el("td", { "class": "ucm-sub" }, evidence, populatedChip(res), resolutionHelp(r, res), macroHelp(r, res),
                 res && res.observed && res.observed.length
                     ? el("details", { "class": "ucm-details" }, el("summary", { text: "Observed (" + res.observed.length + ")" }),
                         el("pre", { "class": "ucm-pre ucm-mono", text: res.observed.map(function (o) {
@@ -1250,6 +1343,24 @@ function ucmViewMain($, ucm) {
                 panel)));
     }
 
+    function externalBox(uc) {
+        var x = uc.external;
+        if (!x || (!x.accepted && !x.proposed)) { return null; }
+        var parts = [];
+        if (x.accepted) {
+            var names = (x.matches || []).map(function (m) { return m.name + " (" + m.app + (m.enabled ? "" : ", disabled") + ")"; });
+            parts.push(x.enabled
+                ? "Enabled elsewhere: " + x.enabled + " matched search" + (x.enabled === 1 ? "" : "es") + " in other apps " + (x.enabled === 1 ? "is" : "are") + " enabled." +
+                    (names.length ? " " + names.join("; ") + "." : "")
+                : "Matched to " + x.accepted + " search" + (x.accepted === 1 ? "" : "es") + " in other apps, none enabled." + (names.length ? " " + names.join("; ") + "." : ""));
+        }
+        if (x.proposed) {
+            parts.push(x.proposed + " search" + (x.proposed === 1 ? "" : "es") + " in other apps may implement this use case. Review them under Data Inventory, Detections already running here.");
+        }
+        return ucm.stateBox("info", "Detections outside SUNavigator", parts.join(" ") +
+            " These are not deployed by SUNavigator and do not change its coverage levels.");
+    }
+
     function render(uc) {
         var p = uc.provenance;
         provider = uc.provider_extras || {};
@@ -1261,12 +1372,16 @@ function ucmViewMain($, ucm) {
                 ucm.badge(uc.difficulty, "neutral"), ucm.chips(uc.domains), ucm.badge("review: " + uc.review_status, "info"),
                 ucm.qualityBadges(uc.quality_flags),
                 uc.provider_status === "withdrawn" ? ucm.badge("withdrawn upstream", "warn") : null),
-            el("div", { "class": "ucm-sub", text: [ucm.providerLabel(p.provider), uc.category_name, uc.subcategory].filter(Boolean).join(" › ") })));
+            el("div", { "class": "ucm-sub", text: [ucm.providerLabel(p.provider), uc.category_name, uc.subcategory].filter(Boolean).join(" › ") }),
+            el("div", { "class": "ucm-sub", text: [p.provider_version ? "Catalogue version " + p.provider_version : "",
+                p.imported_at ? "imported " + p.imported_at.replace("T", " ").replace("Z", " UTC") : ""].filter(Boolean).join(", ") })));
 
         root.appendChild(el("div", { "class": "ucm-actions ucm-jump" }, el("span", { "class": "ucm-sub", text: "Jump to:" }),
             jump("ucm-sec-requirements", "Requirements and readiness"), jump("ucm-sec-spl", "SPL and search"),
             jump("ucm-sec-selection", "Your selection"), jump("ucm-sec-deployment", "Plan deployment"), jump("ucm-sec-details", "Details")));
         root.appendChild(summaryStrip(uc));
+        var elsewhere = externalBox(uc);
+        if (elsewhere) { root.appendChild(elsewhere); }
 
         root.appendChild(section("Description", text(uc.description)));
         root.appendChild(section("Business value", text(uc.business_value)));

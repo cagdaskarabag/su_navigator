@@ -27,6 +27,11 @@ from ..util import dedupe
 LEVELS = ("catalogue", "ready", "deployed", "enabled", "operational")
 _RANK = {name: i for i, name in enumerate(LEVELS)}
 PAGE = 5000
+# Graded matching (D-074). A cell's grade is the best single use case: the level it has reached times how directly its
+# technique id matches the cell. The best, not the sum, so many weak detections never add up to a strong one.
+LEVEL_WEIGHT = {"catalogue": 0.0, "ready": 0.25, "deployed": 0.5, "enabled": 0.9, "operational": 1.0}
+MATCH_WEIGHT = {"direct": 1.0, "sub": 0.6, "parent": 0.4}
+MAX_GAPS = 300
 LEVEL_LABELS = {"catalogue": "In catalogue", "ready": "Data ready", "deployed": "Deployed", "enabled": "Enabled",
                 "operational": "Ran without error (not a statement about data)"}
 NAVIGATOR_COLORS = {"catalogue": "#dbe9f6", "ready": "#a8d5a2", "deployed": "#5fb760", "enabled": "#1e7b34",
@@ -59,9 +64,12 @@ class CoverageService:
     def __init__(self, store: DocumentStore):
         self.store = store
 
-    def use_case_levels(self, operational: Optional[Dict[str, str]] = None,
-                        domain: str = "") -> Dict[str, Dict[str, Any]]:
-        """content key → {level, mitre_ids, frameworks, controls, title, criticality, domains}."""
+    def use_case_levels(self, operational: Optional[Dict[str, str]] = None, domain: str = "",
+                        elsewhere: Optional[Dict[str, List[Dict[str, Any]]]] = None) -> Dict[str, Dict[str, Any]]:
+        """content key → {level, mitre_ids, frameworks, controls, title, criticality, domains, elsewhere}.
+
+        ``elsewhere`` (D-074) maps content keys to searches in other apps a person accepted as the same use case. It
+        only sets ``elsewhere`` (the number of those that are enabled); ``level`` stays what SUNavigator deployed."""
         query: Dict[str, Any] = {"provider_status": "active"}
         if domain:
             query = {"$and": [query, {"domains": domain}]}
@@ -72,7 +80,8 @@ class CoverageService:
             out[row["_key"]] = {"content_id": row.get("content_id"), "title": row.get("title", ""),
                                 "criticality": row.get("criticality", ""), "domains": row.get("domains") or [],
                                 "mitre_ids": row.get("mitre_ids") or [], "frameworks": row.get("frameworks") or [],
-                                "controls": row.get("framework_controls") or [], "level": "catalogue"}
+                                "controls": row.get("framework_controls") or [], "level": "catalogue",
+                                "elsewhere": sum(1 for m in (elsewhere or {}).get(row["_key"], []) if m.get("enabled"))}
         for row in _iter(self.store, C.READINESS, {"state": "ready"}, ["_key", "state"]):
             if row["_key"] in out:
                 out[row["_key"]]["level"] = "ready"
@@ -89,10 +98,55 @@ class CoverageService:
         return out
 
     @staticmethod
-    def _bump(entry: Dict[str, Any], level: str, key: str) -> None:
+    def _grade(cell: Dict[str, Any], level: str, basis: str) -> None:
+        value = LEVEL_WEIGHT[level] * MATCH_WEIGHT[basis]
+        if value > cell["grade"] or (value == cell["grade"] and value > 0 and basis == "direct"):
+            cell["grade"], cell["basis"] = value, basis
+
+    @staticmethod
+    def gaps(tactics: List[Dict[str, Any]]) -> Dict[str, Any]:
+        """Techniques that need attention, from the finished matrix: data ready but nothing deployed, content with
+        no data to run it on, and techniques with no content at all. Parents and sub-techniques, once each."""
+        seen: Dict[str, Dict[str, Any]] = {}
+
+        def visit(cell: Dict[str, Any], tactic: str) -> None:
+            entry = seen.setdefault(cell["id"], {"id": cell["id"], "name": cell["name"], "tactics": [],
+                                                 "level": cell["level"], "grade": cell["grade"],
+                                                 "catalogue": cell["counts"]["catalogue"],
+                                                 "ready": cell["counts"]["ready"],
+                                                 "elsewhere": cell.get("elsewhere", 0)})
+            if tactic not in entry["tactics"]:
+                entry["tactics"].append(tactic)
+
+        for tac in tactics:
+            for t in tac["techniques"]:
+                visit(t, tac["name"])
+                for s in t["subs"]:
+                    visit(s, tac["name"])
+        buckets: Dict[str, List[Dict[str, Any]]] = {"data_ready": [], "content_no_data": [], "no_content": []}
+        for entry in seen.values():
+            if entry["level"] == "ready":
+                buckets["data_ready"].append(entry)
+            elif entry["level"] == "catalogue":
+                buckets["content_no_data"].append(entry)
+            elif entry["level"] is None:
+                buckets["no_content"].append(entry)
+        buckets["data_ready"].sort(key=lambda e: (-e["ready"], e["id"]))
+        buckets["content_no_data"].sort(key=lambda e: (-e["catalogue"], e["id"]))
+        buckets["no_content"].sort(key=lambda e: e["id"])
+        out: Dict[str, Any] = {"counts": {k: len(v) for k, v in buckets.items()}, "truncated": False}
+        for name, rows in buckets.items():
+            out[name] = rows[:MAX_GAPS]
+            out["truncated"] = out["truncated"] or len(rows) > MAX_GAPS
+        return out
+
+    @staticmethod
+    def _bump(entry: Dict[str, Any], level: str, key: str, elsewhere: int = 0) -> None:
         if key in entry["_seen"]:
             return
         entry["_seen"].add(key)
+        if elsewhere:
+            entry["elsewhere"] = entry.get("elsewhere", 0) + 1
         entry["counts"]["catalogue"] += 1
         for name in LEVELS[1:]:
             if _RANK[level] >= _RANK[name]:
@@ -106,8 +160,13 @@ class CoverageService:
         revoked = definition.get("revoked") or {}
         deprecated = set(definition.get("deprecated") or [])
         cells: Dict[str, Dict[str, Any]] = {
-            tid: {"counts": _empty_counts(), "level": None, "_seen": set(), "direct": 0, "via_sub": 0}
+            tid: {"counts": _empty_counts(), "level": None, "_seen": set(), "direct": 0, "via_sub": 0,
+                  "grade": 0.0, "basis": ""}
             for tid in techniques}
+        children: Dict[str, List[str]] = {}
+        for t in definition["techniques"]:
+            if t.get("parent"):
+                children.setdefault(t["parent"], []).append(t["id"])
         remapped: Dict[Tuple[str, str], List[str]] = {}
         unresolved: Dict[Tuple[str, str], List[str]] = {}
         for key, uc in levels.items():
@@ -128,14 +187,18 @@ class CoverageService:
                     unresolved.setdefault((raw_id, reason), []).append(uc["content_id"])
                     continue
                 cell = cells[tid]
-                self._bump(cell, uc["level"], key)
+                self._bump(cell, uc["level"], key, uc.get("elsewhere", 0))
                 cell["direct"] += 1
+                self._grade(cell, uc["level"], "direct")
                 parent = techniques[tid].get("parent")
                 if parent and parent in cells:
-                    self._bump(cells[parent], uc["level"], key)
+                    self._bump(cells[parent], uc["level"], key, uc.get("elsewhere", 0))
                     cells[parent]["via_sub"] += 1
+                    self._grade(cells[parent], uc["level"], "sub")
+                for sub in children.get(tid, []):
+                    self._grade(cells[sub], uc["level"], "parent")
         tactics = []
-        totals = {"techniques": 0, "covered": _empty_counts()}
+        totals = {"techniques": 0, "covered": _empty_counts(), "grade_sum": 0.0, "elsewhere": 0}
         for tac in definition["tactics"]:
             parents = [t for t in definition["techniques"] if tac["id"] in t["tactics"] and not t.get("parent")]
             column = []
@@ -149,13 +212,18 @@ class CoverageService:
             if t.get("parent"):
                 continue
             totals["techniques"] += 1
+            totals["grade_sum"] += cells[tid]["grade"]
+            if cells[tid].get("elsewhere"):
+                totals["elsewhere"] += 1
             for name in LEVELS:
                 if cells[tid]["counts"][name]:
                     totals["covered"][name] += 1
+        totals["grade_avg"] = round(totals.pop("grade_sum") / totals["techniques"], 3) if totals["techniques"] else 0.0
         return {
             "framework_id": definition["framework_id"], "version": definition["version"],
             "name": definition["name"], "domain": domain, "attribution": definition.get("attribution", ""),
-            "tactics": tactics, "totals": totals,
+            "tactics": tactics, "totals": totals, "gaps": self.gaps(tactics),
+            "grading": {"level_weight": LEVEL_WEIGHT, "match_weight": MATCH_WEIGHT},
             "remapped": [{"from": a, "to": b, "use_cases": sorted(v)[:50], "count": len(v)}
                          for (a, b), v in sorted(remapped.items())],
             "unresolved": [{"id": a, "reason": r, "use_cases": sorted(v)[:50], "count": len(v)}
@@ -207,7 +275,8 @@ class CoverageService:
     @staticmethod
     def _cell(t: Dict[str, Any], cell: Dict[str, Any], subs: List[Dict[str, Any]]) -> Dict[str, Any]:
         return {"id": t["id"], "name": t["name"], "level": cell["level"], "counts": cell["counts"],
-                "direct": cell["direct"], "via_sub": cell["via_sub"], "subs": subs}
+                "direct": cell["direct"], "via_sub": cell["via_sub"], "grade": round(cell["grade"], 3),
+                "basis": cell["basis"], "elsewhere": cell.get("elsewhere", 0), "subs": subs}
 
     def technique_use_cases(self, definition: Dict[str, Any], technique_id: str,
                             levels: Dict[str, Dict[str, Any]], limit: int = 200) -> List[Dict[str, Any]]:

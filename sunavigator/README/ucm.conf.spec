@@ -98,6 +98,10 @@ event_max_checks = <integer 0-1000>
 * Event types checked per job, most used by the catalogue first. Default 100.
 event_timeout_seconds = <integer 5-300>
 * Timeout for each event check. Default 30.
+external_match = <boolean>
+* List saved searches in other apps and propose which catalogue use cases they already implement (D-074). Only names and a hash of the search text are stored; the search text is never kept. Default true.
+external_max_searches = <integer 100-100000>
+* Saved searches considered per job. Default 20000.
 event_budget_seconds = <integer 30-3600>
 * Total time one job may spend on event checks. Remaining checks are reported as skipped. Default 300.
 populated_check = <boolean>

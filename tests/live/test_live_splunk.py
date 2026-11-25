@@ -1843,6 +1843,69 @@ class LiveEventCheckTest(unittest.TestCase):
 
 
 @unittest.skipUnless(LIVE, "set UCM_LIVE_SPLUNK=1 to run against a real Splunk instance")
+class LiveExternalMatchTest(unittest.TestCase):
+    """D-074: a saved search in another app is found by the hash of its text, matched, accepted and counted."""
+
+    NAME = "SUN live external " + uuid.uuid4().hex[:6]
+    APP = "DA-ESS-ContentUpdate"
+    SAVED = "/servicesNS/nobody/DA-ESS-ContentUpdate/saved/searches"
+
+    @classmethod
+    def setUpClass(cls):
+        from urllib.parse import quote
+        cls.admin = transport()
+        cls.kv = KVStore(cls.admin)
+        rows = [r for r in cls.kv.query(C.CATALOG, {"provider": "escu", "provider_status": "active"}, limit=300)
+                if r.get("spl_hash") and r.get("mitre_ids")]
+        assert rows, "import the ESCU bundle first"
+        from splunk_ucm.catalog.quality import spl_hash
+        cls.row = None
+        for row in rows[:40]:
+            status, body = api(cls.admin, "GET", "usecase", {"id": row["content_id"]})
+            if status == 200 and body.get("spl") and "`" not in body["spl"]:
+                cls.row = row
+                break
+        assert cls.row, "no use case without macros to copy; the lab has no macro definitions"
+        assert spl_hash(body["spl"]) == cls.row["spl_hash"], "catalogue hash is not the hash of the displayed SPL"
+        status, _ = cls.admin.request("POST", cls.SAVED, form={"name": cls.NAME, "search": body["spl"], "disabled": "0"})
+        assert status in (200, 201), status
+        cls.quote = quote
+
+    @classmethod
+    def tearDownClass(cls):
+        from splunk_ucm.discovery.external import external_key
+        cls.admin.request("DELETE", cls.SAVED + "/" + cls.quote(cls.NAME, safe=""))
+        cls.kv.delete(C.EXTERNAL_MATCHES, external_key(cls.APP, cls.NAME))
+
+    def test_hash_match_is_proposed_accepted_and_counted_without_changing_levels(self):
+        from splunk_ucm.discovery.external import ExternalSettings, external_key, run_external
+        from splunk_ucm.discovery.inventory import SplunkInventory
+        summary = run_external(self.kv, SplunkInventory(self.admin), ExternalSettings(), "live")
+        self.assertTrue(summary["available"] and summary["listed"] >= 1 and summary["matched"] >= 1, summary)
+        key = external_key(self.APP, self.NAME)
+        doc = self.kv.get(C.EXTERNAL_MATCHES, key)
+        self.assertEqual(doc["state"], "proposed", doc)
+        self.assertTrue(doc["enabled"], doc)
+        self.assertIn(("spl_hash", self.row["_key"]), [(c["basis"], c["content_key"]) for c in doc["candidates"]])
+        self.assertNotIn("search", doc)
+        status, body = api(self.admin, "GET", "external", {"state": "proposed", "count": "200"})
+        self.assertEqual(status, 200, body)
+        self.assertIn(key, [i["_key"] for i in body["items"]])
+        status, body = api(self.admin, "POST", "external", body={"id": key, "decision": "accept",
+                                                                  "content_key": self.row["_key"]})
+        self.assertEqual((status, body["match"]["state"]), (200, "accepted"), body)
+        status, uc = api(self.admin, "GET", "usecase", {"id": self.row["content_id"]})
+        self.assertEqual(uc["external"]["enabled"], 1, uc["external"])
+        self.assertEqual([m["name"] for m in uc["external"]["matches"]], [self.NAME])
+        status, matrix = api(self.admin, "GET", "frameworks/matrix")
+        self.assertEqual(status, 200, matrix)
+        self.assertGreaterEqual(matrix["totals"]["elsewhere"], 1)
+        status, body = api(self.admin, "POST", "external", body={"id": key, "decision": "reset"})
+        self.assertEqual(body["match"]["state"], "proposed")
+        self.assertEqual(api(self.admin, "GET", "external", {"state": "bogus"})[0], 400)
+
+
+@unittest.skipUnless(LIVE, "set UCM_LIVE_SPLUNK=1 to run against a real Splunk instance")
 class LiveActionsTest(unittest.TestCase):
     """D-072: email and webhook actions are drafted, approved with an acknowledgment, written disabled and verified."""
 
