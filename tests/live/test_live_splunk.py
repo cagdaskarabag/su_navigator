@@ -728,7 +728,7 @@ class LiveDeploymentTest(unittest.TestCase):
         if body["deployment"]["live"]["status"] != "enabled":
             self.assertEqual(body["deployment"]["enable_request"]["by"], self.OPERATOR, body)
             status, body = self.act(self.operator, "enable", override_reason="live test override reason")
-            self.assertEqual((status, body["error"]["code"]), (409, "second_person_required"), body)
+            self.assertEqual((status, body["error"]["details"]["code"]), (409, "second_person_required"), body)
             status, body = self.act(self.admin, "enable", override_reason="live test override reason")
             self.assertEqual(status, 200, body)
         self.assertEqual(body["deployment"]["live"]["status"], "enabled")
@@ -1004,7 +1004,7 @@ class LiveProviderNavigationTest(unittest.TestCase):
     def test_facets_after_reindex_say_the_summaries_are_current(self):
         from splunk_ucm.catalog.summary import SUMMARY_VERSION
         facets = self.facets()
-        self.assertEqual(facets["summary"], {"version": SUMMARY_VERSION, "outdated": 0}, facets["summary"])
+        self.assertEqual(facets["summary"], {"version": SUMMARY_VERSION, "outdated": 0, "normalizer_outdated": 0}, facets["summary"])
         self.assertEqual(sum(facets["providers"].values()), facets["active"])
 
     def test_provider_facet_counts_equal_filter_totals(self):
@@ -1149,7 +1149,7 @@ class LiveMaintenanceTest(unittest.TestCase):
         # active summaries are older, and that number is the real count.
         facets = kv.get(C.SYNC_STATE, "catalog::facets") or {}
         stale = kv.count(C.CATALOG, {"$and": [{"provider_status": "active"}, {"summary_version": {"$lt": SUMMARY_VERSION}}]})
-        self.assertEqual(facets.get("summary"), {"version": SUMMARY_VERSION, "outdated": stale}, facets.get("summary"))
+        self.assertEqual(facets.get("summary"), {"version": SUMMARY_VERSION, "outdated": stale, "normalizer_outdated": 0}, facets.get("summary"))
 
 
 def oneshot(t, spl, earliest="-15m", latest="now"):
@@ -1285,7 +1285,7 @@ class LiveSchedulerVisibilityTest(unittest.TestCase):
         self.assertEqual(status, 200, body)
         self.assertEqual(body["deployment"]["revisions"][-1]["scheduler_access"]["status"], "not_met")
         status, body = self.act(self.admin, "approve", note="live test")
-        self.assertEqual((status, body["error"]["code"]), (409, "access_gap_reason_required"), body)
+        self.assertEqual((status, body["error"]["details"]["code"]), (409, "access_gap_reason_required"), body)
         status, body = self.act(self.admin, "approve", note="live test", access_reason="live test: role is being changed")
         self.assertEqual(status, 200, body)
         status, body = self.act(self.operator, "deploy")
@@ -1301,7 +1301,7 @@ class LiveSchedulerVisibilityTest(unittest.TestCase):
         self.assertEqual(body["deployment"]["live"]["status"], "disabled")
         self.assertEqual(body["deployment"]["enable_request"]["by"], self.OPERATOR, body)
         status, body = self.act(self.operator, "enable", override_reason="live test: accept blind run")
-        self.assertEqual((status, body["error"]["code"]), (409, "second_person_required"), body)
+        self.assertEqual((status, body["error"]["details"]["code"]), (409, "second_person_required"), body)
         status, body = self.act(self.admin, "enable", override_reason="live test: accept blind run")
         self.assertEqual(status, 200, body)
         self.assertEqual(body["deployment"]["live"]["status"], "enabled")
