@@ -181,6 +181,24 @@ verify_interval_minutes = <integer>
 cron_jitter = <boolean>
 * When a draft uses the default cron and it has the form */N * * * *, start the search at a minute offset derived from the use case (for example 7-59/15), so deployed searches do not all start at the same minute. An explicit cron is never changed. Default true. D-069.
 
+[actions]
+enabled = <boolean>
+* Master switch for email and webhook alert actions on deployed searches (D-072). Default true.
+* Nothing can be sent until the two lists below name permitted destinations.
+email_domains = <comma-separated domains>
+* Mail domains a recipient may belong to, for example example.com or *.example.com. Empty (default) means no
+* email action can be drafted, approved or deployed.
+webhook_hosts = <comma-separated hostnames>
+* Hosts a webhook URL may point to, for example hooks.example.com or *.example.com. Empty (default) means no
+* webhook action. Entries are matched against the URL's host name only.
+webhook_allow_http = <boolean>
+* Allow http:// webhook URLs. Default false: https only.
+max_recipients = <integer 1-50>
+* Recipients allowed on one email action. Default 10.
+require_suppression = <boolean>
+* Require 'Suppress repeats for' on any search with an action, so one condition does not send a message on
+* every run. Default true.
+
 [retention]
 audit_days = <integer 0-3650>
 * Audit records older than this are deleted by the background worker. 0 keeps them forever. Default 365.

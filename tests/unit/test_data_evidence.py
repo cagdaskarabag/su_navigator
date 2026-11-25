@@ -78,7 +78,7 @@ class DataEvidenceTest(unittest.TestCase):
 
 class StoredEvidenceTest(unittest.TestCase):
     def test_assessment_stores_data_state_and_summary_counts_it(self):
-        self.assertEqual(ENGINE_VERSION, "ucm.readiness/5")
+        self.assertEqual(ENGINE_VERSION, "ucm.readiness/6")
         store = discovered_store()
         ReadinessService(store, AuditService(store)).run(new_job("alice"))
         doc = store.get(C.READINESS, "fenre_UC-9.1.1")

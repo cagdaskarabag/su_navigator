@@ -1,5 +1,7 @@
 # Issues: what to close, what stays open, what to file
 
+*Update at 0.9.5 (D-072): #10 is decided (macro help, no Add Macro button), #13 is decided (an empty model is partial), #20 stays documented in this repository and is not sent upstream, and #28 is built (email and webhook actions). Close #10, #13 and #28 after review; keep #20 as the record of the findings.*
+
 Status at **0.9.1** (Sprint 12). This file exists because the automation that wrote the code
 can read GitHub issues but cannot comment on, edit, close or create them. Everything below is
 text to paste. Each statement was checked against the code and the decision records on the

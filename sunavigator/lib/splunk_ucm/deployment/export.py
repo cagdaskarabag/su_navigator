@@ -12,6 +12,7 @@ from typing import Any, Dict, List, Optional, Sequence, Tuple
 from .. import conf
 from ..errors import ConflictError
 from ..util import sha256_text
+from . import actions as action_rules
 from .savedsearch import APP_NAME
 from .spec import saved_search_name, settings_for, spl_hash
 
@@ -53,6 +54,8 @@ def _entry(doc: Dict[str, Any], rev: Dict[str, Any]) -> Tuple[str, Dict[str, Any
         "whitespace_normalized": search != rev["spl"],
         "stanza_sha256": sha256_text(conf.write_stanza(name, settings)),
     }
+    if rev.get("actions"):
+        manifest["actions"] = action_rules.summary(rev["actions"])
     return name, manifest, settings
 
 
