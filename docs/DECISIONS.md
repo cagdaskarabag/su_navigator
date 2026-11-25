@@ -2318,3 +2318,16 @@ as drift.
 * **Revisit.** A dropped item is reopened only if a lab for it becomes available. Until then the validation matrix
   shows "not validated" in those columns.
 * **Not changed.** No code, schema, route or permission changed. The build number stays 22.
+
+## D-079 Delivery scope: the Sprint 20 limits stay, the 94-fixture re-run is skipped
+
+*0.10.0 (documentation; owner decision, 2026-11-25).*
+
+* **Decision.** 0.10.0 is delivered as built. The four limits listed under D-077 stay as they are and are not
+  planned: CMMC conditional status and POA&M eligibility (32 CFR 170), assessment objectives for SP 800-53 and
+  CMMC, signing snapshots, and deleting snapshots. The re-run of the 94 control-test fixtures with add-ons
+  (issue #23) is skipped.
+* **Consequences.** Issue #23 is to be closed as not planned. The campaign results in
+  `docs/upstream/CONTROL_TEST_CAMPAIGN.md` stay as the record of the run without add-ons. Issue #31 (CIM field
+  reference and field-level checks) stays open as an unscheduled backlog item; it needs `Splunk_SA_CIM` on a lab.
+* **Not changed.** No code, schema, route or permission changed. The build number stays 22.

@@ -192,18 +192,18 @@ build ran 77 tests OK, 2 skipped):
 | 0.9.8 | Audit hash chain with verification, withdraw approval, optional second-person enable, override expiry, outcome tracking | D-075 |
 | 0.9.9 | Control catalogues (`ucm.framework/2`): NIST SP 800-53 Rev. 5.2.0, SP 800-171 Rev. 3, CSF 2.0; unmapped controls visible | D-076 |
 | 0.10.0 | Assessed state per control, assessment objectives (SP 800-171 Rev. 3), CMMC Level 2 score, POA&M, immutable evidence snapshots | D-077 |
-| 0.10.0 (docs) | Support statement; platforms without a lab dropped | D-078 |
+| 0.10.0 (docs) | Support statement; platforms without a lab dropped; Sprint 20 limits left as is; 94-fixture re-run skipped | D-078, D-079 |
 
 Not built in WP9, with the reason (details in `docs/FINAL_REPORT.md`):
 
 | Item | Why not | Tracking |
 |---|---|---|
-| CMMC conditional status and POA&M eligibility rules (32 CFR 170) | a legal-weight certification claim; the regulation text was not verified from an authoritative source; the app records coverage and assessments, not certification | none |
-| Assessment objectives for SP 800-53 and CMMC | no machine-readable, verifiable source in the pinned NIST OSCAL content | none |
-| Signing snapshots | needs a key custody and rotation decision | none |
-| Deleting snapshots | omitted on purpose so evidence cannot be removed from the app | none |
-| CIM field reference, field presence, acceleration freshness | needs a lab with `Splunk_SA_CIM` and a populated, accelerated model | #31 |
-| Re-run of the 94 control-test fixtures with add-ons | needs the add-ons the fixtures name on the lab | #23 |
+| CMMC conditional status and POA&M eligibility rules (32 CFR 170) | a legal-weight certification claim; the regulation text was not verified from an authoritative source; the app records coverage and assessments, not certification | none; left as is (D-079) |
+| Assessment objectives for SP 800-53 and CMMC | no machine-readable, verifiable source in the pinned NIST OSCAL content | none; left as is (D-079) |
+| Signing snapshots | needs a key custody and rotation decision | none; left as is (D-079) |
+| Deleting snapshots | omitted on purpose so evidence cannot be removed from the app | none; left as is (D-079) |
+| CIM field reference, field presence, acceleration freshness | needs a lab with `Splunk_SA_CIM` and a populated, accelerated model; unscheduled | #31 |
+| Re-run of the 94 control-test fixtures with add-ons | needs the add-ons the fixtures name on the lab; skipped (D-079) | #23, to be closed |
 
 ## Validation status (keep current)
 
