@@ -1,0 +1,15 @@
+SUNavigator
+Copyright 2026 the SUNavigator contributors (https://github.com/cagdaskarabag/su_navigator)
+
+Licensed under the Apache License, Version 2.0 (the "License"); you may not use this
+file except in compliance with the License. You may obtain a copy of the License at
+https://www.apache.org/licenses/LICENSE-2.0
+
+This product includes software and content from third parties, each under its own licence.
+See THIRD_PARTY_NOTICES.md for the full list and licence texts:
+
+  * Fenre Splunk Monitoring Use Cases (Copyright (c) 2026 Fredrik Lima Sudmann), MIT License.
+    Shipped in sunavigator/lib/splunk_ucm/content/fenre/ with its licence.
+  * Splunk ES Content Update and splunk/security_content (Copyright Splunk Inc.), Apache License 2.0.
+    SUNavigator reads ESCU packages supplied by the operator; bundles built from them keep
+    Splunk's notices.

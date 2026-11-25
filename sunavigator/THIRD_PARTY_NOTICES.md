@@ -1,6 +1,6 @@
 # Third-party notices
 
-SUNavigator is proprietary (see `LICENSE`). The material below is third-party and keeps its own licence.
+SUNavigator itself is licensed under the Apache License 2.0 (see `LICENSE` and `NOTICE`). The material below is third-party and keeps its own licence.
 
 ## 1. Fenre Splunk Monitoring Use Cases (MIT)
 
@@ -51,7 +51,7 @@ Copyright Splunk Inc., licensed under the Apache License, Version 2.0
 What SUNavigator contains: **no ESCU content**. The ESCU provider (`sunavigator/lib/splunk_ucm/content/escu/`) is
 SUNavigator code that reads an ESCU package the operator supplies; the test fixtures in `tests/fixtures/escu/` are
 written for SUNavigator (version `6.11.1-fixture`) and are not copies of ESCU files. Offline bundles built with
-`tools/ucm_cli.py build-escu-bundle` or `tools/escu_feed.py` contain ESCU detections and remain under the Apache
+`tools/ucm_cli.py build-escu-bundle` contain ESCU detections and remain under the Apache
 License 2.0; when you redistribute such a bundle, include that licence and keep Splunk's notices.
 
 ## 3. Other applications studied

@@ -25,7 +25,7 @@
     },
     "commonInformationModels": null,
     "license": {
-      "name": "Proprietary (all rights reserved); third-party parts under their own licences",
+      "name": "Apache-2.0; third-party parts under their own licences",
       "text": "LICENSE",
       "uri": null
     },

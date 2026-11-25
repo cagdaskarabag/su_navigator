@@ -64,6 +64,20 @@ class LicenceFilesTest(unittest.TestCase):
                          read("tests", "fixtures", "fenre", "LICENSE"))
         self.assertIn("Fredrik Lima Sudmann", read("THIRD_PARTY_NOTICES.md"))
 
+    def test_repository_licence_is_apache_2_with_notice(self):
+        licence = read("LICENSE")
+        self.assertIn("Apache License", licence)
+        self.assertIn("Version 2.0, January 2004", licence)
+        self.assertNotIn("all rights reserved", licence.lower())
+        self.assertIn("Copyright 2026", read("NOTICE"))
+        self.assertEqual(read("sunavigator", "NOTICE"), read("NOTICE"))
+
+    def test_manifest_names_the_licence(self):
+        import json
+        manifest = json.loads(read("sunavigator", "app.manifest"))
+        self.assertIn("Apache-2.0", manifest["info"]["license"]["name"])
+        self.assertEqual(manifest["info"]["license"]["text"], "LICENSE")
+
     def test_readme_credits_both_content_sources(self):
         text = read("README.md")
         self.assertIn("MIT", text)
