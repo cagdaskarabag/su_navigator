@@ -1,12 +1,12 @@
 # SUNavigator (Splunk Use Case Navigator)
 
-[![Version](https://img.shields.io/badge/version-0.9.x-blue.svg)](docs/OPERATOR_GUIDE.md#what-changed-in-09x)
-[![Splunk Compatibility](https://img.shields.io/badge/splunk-Enterprise%2010.x%20%7C%20Cloud%3A%20not%20validated-orange.svg)](docs/OPERATOR_GUIDE.md#2-requirements)
+[![Version](https://img.shields.io/badge/version-0.10.x-blue.svg)](docs/OPERATOR_GUIDE.md#what-changed-in-09x-and-010)
+[![Splunk Compatibility](https://img.shields.io/badge/splunk-Enterprise%2010.x%20%7C%20Cloud%2C%20SHC%2C%20ES%3A%20not%20validated-orange.svg)](docs/OPERATOR_GUIDE.md#2-requirements)
 [![Python Support](https://img.shields.io/badge/python-3.9%20%7C%203.13-brightgreen.svg)](docs/DECISIONS.md#d-005-stdlib-only-python-compatible-with-39313)
-[![Tests](https://img.shields.io/badge/unit%20tests-1024%20passed-success.svg)](tests/)
+[![Tests](https://img.shields.io/badge/unit%20tests-1026%20passed-success.svg)](tests/)
 [![AppInspect](https://img.shields.io/badge/Splunk%20AppInspect-Clean-brightgreen.svg)](docs/DECISIONS.md#d-019-packaging-constraints-from-appinspect)
 
-**SUNavigator** is a native Splunk application for Splunk Enterprise (Splunk Cloud: the package passes AppInspect, but runtime on a Cloud stack is not validated yet) that bridges the gap between external security detection catalogues and live production environments. It empowers SOC and detection engineering teams to **discover**, **assess**, **backlog**, **validate**, and **safely deploy** monitoring use cases with built-in four-eyes governance.
+**SUNavigator** is a native Splunk application for Splunk Enterprise (the package passes AppInspect, but nothing runs on Splunk Cloud, on a search head cluster with a deployer, or with Splunk Enterprise Security installed; see [Support statement](#support-statement)) that bridges the gap between external security detection catalogues and live production environments. It empowers SOC and detection engineering teams to **discover**, **assess**, **backlog**, **validate**, and **safely deploy** monitoring use cases with built-in four-eyes governance.
 
 Content is ingested from pluggable detection providers, with out-of-the-box support for the [Fenre monitoring use-case catalogue](https://github.com/fenre/splunk-monitoring-use-cases).
 
@@ -30,6 +30,7 @@ Content is ingested from pluggable detection providers, with out-of-the-box supp
   - [First-Run Setup](#first-run-setup)
 - [Offline & Air-Gapped Deployments](#offline--air-gapped-deployments)
 - [Deployment Workflow & Governance](#deployment-workflow--governance)
+- [Support statement](#support-statement)
 - [Documentation Map](#documentation-map)
 - [Repository Layout](#repository-layout)
 - [Development & Testing](#development--testing)
@@ -222,6 +223,23 @@ SUNavigator implements a safe, four-eyes deployment state machine:
 
 ---
 
+## Support statement
+
+SUNavigator is built and validated on **Splunk Enterprise 10.2.9, single instance** (lab results in
+[Implementation Plan](docs/IMPLEMENTATION_PLAN.md#validation-status-keep-current)). Three platforms are **not
+validated and not planned**, because there is no lab environment for them (D-078):
+
+- **Splunk Cloud.** The package passes AppInspect with the `cloud` tag, but nothing has been run on a Cloud stack
+  and the vetting submission has not been made.
+- **A search head cluster with a deployer and indexer peers.** A local three-member cluster without a deployer
+  was tested earlier (D-055); the deployer, indexer peers and rolling restarts were not.
+- **Splunk Enterprise Security 8.** SUNavigator has no ES output mode (findings, notable events, risk), and
+  its hand-off to ES and ESCU was tested against mocked responses only. ESCU as a content source is supported.
+
+If you run SUNavigator on one of these, treat it as untested and check the results yourself.
+
+---
+
 ## Documentation Map
 
 | Guide | Description |
@@ -229,9 +247,10 @@ SUNavigator implements a safe, four-eyes deployment state machine:
 | 📖 **[Operator Guide](docs/OPERATOR_GUIDE.md)** | Comprehensive manual covering installation, configuration, role assignment, first-run sync, view-by-view usage, upgrading, and troubleshooting. |
 | 🏗️ **[Architecture Specification](docs/ARCHITECTURE.md)** | Technical reference for software components, KV Store collection schemas, and REST endpoints. |
 | 🔒 **[Security & RBAC Model](docs/SECURITY.md)** | Detailed trust boundaries, Splunk capability definitions, and credential handling. |
+| 🧾 **[Final report](docs/FINAL_REPORT.md)** | What was delivered in 0.9.2 to 0.10.0, what was not done and why, what the lab validated, and what is open. |
 | 🗂️ **[Pending issues](docs/ISSUES_PENDING.md)** | Which GitHub issues the code resolves (with ready closing comments), which stay open, and drafts of new issues. |
-| 📜 **[Architecture Decision Records (ADRs)](docs/DECISIONS.md)** | Recorded technical decisions and trade-offs (D-001 through D-067). |
-| 📋 **[Implementation Plan](docs/IMPLEMENTATION_PLAN.md)** | Work package breakdown (WP0–WP8), what is deferred and why, and validation test matrices. |
+| 📜 **[Architecture Decision Records (ADRs)](docs/DECISIONS.md)** | Recorded technical decisions and trade-offs (D-001 through D-078). |
+| 📋 **[Implementation Plan](docs/IMPLEMENTATION_PLAN.md)** | Work package breakdown (WP0–WP9), what is deferred or dropped and why, and validation test matrices. |
 
 ---
 
@@ -253,7 +272,7 @@ sun_navigator/
 │   └── appserver/static/         # Simple XML JS modules and styles
 ├── tools/                        # Development, packaging, and bundle CLI tools
 ├── tests/                        # Automated test suites
-│   ├── unit/                     # 1024 mocked unit tests (runs without Splunk)
+│   ├── unit/                     # 1026 mocked unit tests (runs without Splunk)
 │   ├── js/                       # Node tests of the browser modules (run by the unit suite when Node is present)
 │   ├── fixtures/readiness/       # Readiness regression corpus and its baseline
 │   └── live/                     # Integration tests against live Splunk instances

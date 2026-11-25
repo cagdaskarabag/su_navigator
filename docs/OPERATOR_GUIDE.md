@@ -6,7 +6,8 @@ selects, validates and deploys monitoring use cases in Splunk.
 This is the install, usage and troubleshooting guide for **SUNavigator
 0.10.0**. It is written for a single Splunk Enterprise instance
 (search head + indexer on one host), including a local macOS install. Search
-head clusters and Splunk Cloud are **not** validated in this version.
+head clusters with a deployer, Splunk Cloud and Splunk Enterprise Security are **not** validated and not planned
+(no lab; D-078).
 
 Related documents (design, not how-to):
 
@@ -265,7 +266,7 @@ populated value; until then they read "populated: unverified (predates the check
 - **Not validated:** everything that depends on ES being installed (the ES wording, the link,
   the warning with ES) was tested only with mocked app lists; the lab has ESCU and no ES.
   The Content Management link is built from the app id and its path varies by ES version
-  (issue #4).
+  (not planned; D-078).
 - **Housekeeping.** The live macro-probe test removes its lookup. Reindex is still
   synchronous (issue draft in `docs/ISSUES_PENDING.md`). The build number is 13.
 
@@ -632,9 +633,9 @@ an administrator has listed permitted destinations in `[actions]` and the approv
 them (0.9.5, D-072); the default alert mode only writes to Splunk's Triggered Alerts.
 
 **Not in 0.10.0:** PDF export of coverage, a bundled regulation-control
-catalogue, SHC validation with a deployer and indexer peers (issue #2), Splunk Cloud
-vetting submission (issue #3), and any Enterprise Security output mode (issue #4; 0.9.1 only
-reads ES and ESCU state and hands off, §5.2b).
+catalogue, SHC validation with a deployer and indexer peers, Splunk Cloud
+vetting submission, and any Enterprise Security output mode (all three dropped for lack of a lab, D-078;
+0.9.1 only reads ES and ESCU state and hands off, §5.2b).
 
 ---
 
@@ -1057,7 +1058,7 @@ scheduled saved searches (§6.6). What 0.9.1 adds is a **read**:
 the real shipped state, schedule and actions, the stanza-not-found case, and the viewer's
 view. **Everything with ES installed was tested only with mocked responses and is
 unvalidated** (no ES lab): the ES version strings, the ES wording, the link, the warning with
-ES. Please report differences on issue #4.
+ES. No ES validation is planned (D-078).
 
 ### 5.3 Scheduled sync
 
@@ -1952,7 +1953,7 @@ tail -50 "$SPLUNK_HOME/var/log/splunk/sunavigator.log"
 ```
 
 On a search head cluster only the captain runs jobs (validated on a local
-three-member cluster, D-055; deployer and indexer peers are issue #2). On a single
+three-member cluster, D-055; deployer and indexer peers are not validated and not planned, D-078). On a single
 instance `standalone = 1` is expected.
 
 ### 9.4 Provider could not be reached
@@ -2184,16 +2185,18 @@ by design.
 
 - Search head clustering was validated on a local three-member cluster without a
   deployer and without indexer peers (D-055). Deployer, peers and rolling restarts
-  are untested: issue #2. Earlier builds ran captain-only jobs on every member (fixed, D-055); upgrade if you run an SHC.
-- Splunk Cloud is unvalidated (managed `limits.conf`, no file access, vetting): issue #3.
+  are untested, and no further validation is planned: there is no lab (D-078, issue #2 dropped). Earlier builds ran
+  captain-only jobs on every member (fixed, D-055); upgrade if you run an SHC.
+- Splunk Cloud is unvalidated (managed `limits.conf`, no file access, vetting) and not planned: no lab
+  (D-078, issue #3 dropped).
 - Splunk Enterprise Security 8 output (findings or risk instead of Triggered Alerts)
-  is not implemented; it needs an ES lab: issue #4. ESCU is supported as a content source
+  is not implemented and not planned (D-078, issues #4 and #27 dropped). ESCU is supported as a content source
   (§5.2a). Since 0.9.1 the app reads whether ES and ESCU are installed and the state of ESCU's
   shipped search, and hands off to ES Content Management (§5.2b). **Everything with ES
   installed is unvalidated**: it was tested with mocked responses only. SUN deploys ESCU
   detections as plain scheduled searches, never as ES correlation searches, and a SUN copy
   can run next to an enabled ESCU or ES copy (the Deployment panel warns). Validating the
-  ES-present behaviour is #27.
+  ES-present behaviour is not planned (D-078).
 
 **Counts and bounds**
 
@@ -2232,7 +2235,7 @@ by design.
   cannot see inside macros, data models, tags, event types, `index=*`, `map`,
   `savedsearch` or `loadjob`; those are reported as not verified, never as met. A role
   change does not mark stored assessments stale: press **Assess**. Reading roles on an
-  SHC or on Splunk Cloud has not been validated (#17 and #18).
+  SHC or on Splunk Cloud has not been validated and is not planned (D-078; #17 is open, #18 dropped).
 - Discovery scans internal indexes only with `[discovery] include_internal = true`
   (§6.4); until then requirements on internal indexes stay `unverified` (#19).
 - Recommended next (D-060) is an ordering heuristic with starting weights that are
@@ -2282,7 +2285,7 @@ by design.
   the SPL lint now flags it). A pass on a `timechart` or on `coalesce` defaults is weak.
   Test-index events are not removed by the app. Tracking: issues #5 and #6 are resolved by
   the 0.8.8 campaign; what is left is #20 (upstream report), #21 (`source=` searches), #22 (weak passes) and #23 (re-run
-  with add-ons). Email and webhook actions are built in 0.9.5 (D-072; issue #28 can be closed after review).
+  with add-ons). Email and webhook actions are built in 0.9.5 (D-072; issue #28 is closed).
 
 **Access control**
 

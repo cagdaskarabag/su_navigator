@@ -4,6 +4,8 @@
 *Update at 0.9.6 (D-073): the optional security_content enrichment of the ESCU bundle, the event-level data check and the deprecated-upstream flag are built (Sprint 16). Also fixed: the field profile search was refused by the app's own search guard in 0.9.4 and 0.9.5 and never stored rates; run discovery once after upgrading.*
 *Update at 0.9.7 (D-074): graded coverage with gap lists, the data maturity facet, catalogue navigation and the matching of detections that already run in other apps (findings F-13 and F-14) are built (Sprint 17). Sprint 18 (0.9.8, D-075) is built: audit hash chain with verification, withdraw approval, optional second-person enable, expiring overrides, outcomes, pipeline counts and revision compare. Sprint 19 (0.9.9, D-076) is built: `ucm.framework/2` control catalogues for NIST 800-53, 800-171 and CSF 2.0 with unmapped controls visible. Sprint 20 (0.10.0, D-077) is built: assessed state with provenance, objective-level results, POA&M, evidence snapshots and the CMMC Level 2 score.*
 
+*Update at 0.10.0 (2026-11-25, D-078): Sprints 13 to 20 are built and merged. Issues #5 to #14 and #28 are closed (completed). Issues #2, #3, #4, #18 and #27 are dropped for lack of a lab and are to be closed as not planned. The CIM field reference and the unbuilt part of #13 are filed as #31 (draft N-14). The full account is in `docs/FINAL_REPORT.md`. The automation that wrote the code can read and create issues but cannot comment on, edit, label or close them.*
+
 Status at **0.9.1** (Sprint 12). This file exists because the automation that wrote the code
 can read GitHub issues but cannot comment on, edit, close or create them. Everything below is
 text to paste. Each statement was checked against the code and the decision records on the
@@ -285,7 +287,7 @@ Comment to post on **#13** (status):
 
 ## 3. New issue drafts (filed)
 
-All thirteen drafts below were filed on 2026-11-24 (the bodies are the text of the issues):
+Drafts N-01 to N-13 were filed on 2026-11-24 (the bodies are the text of the issues):
 
 | Draft | Issue |
 |---|---|
@@ -302,6 +304,7 @@ All thirteen drafts below were filed on 2026-11-24 (the bodies are the text of t
 | N-11 | [#27](https://github.com/cagdaskarabag/su_navigator/issues/27) |
 | N-12 | [#28](https://github.com/cagdaskarabag/su_navigator/issues/28) |
 | N-13 | [#29](https://github.com/cagdaskarabag/su_navigator/issues/29) |
+| N-14 | [#31](https://github.com/cagdaskarabag/su_navigator/issues/31) (filed 2026-11-25; the body is the text of the issue) |
 
 
 Suggested labels use the repository's existing issue style (type and area in the table of each body). The
