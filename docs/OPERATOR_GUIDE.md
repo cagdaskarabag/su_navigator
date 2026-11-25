@@ -88,9 +88,8 @@ scheduler role changed).
 - **Paged lists return `next_offset`.** The catalogue, readiness and inventory lists cap a page
   at `[catalog] max_page_size` (100) and say so in `count`; `next_offset` is the offset of the next
   page (or `null`). A client that advanced by the requested size skipped rows.
-- **Licence and notices.** `LICENSE` (proprietary, all rights reserved) and
-  `THIRD_PARTY_NOTICES.md` (Fenre, MIT; ESCU, Apache License 2.0) are in the repository and the
-  package; Fenre's licence sits next to the schema the app ships.
+- **Licence.** SUNavigator is Apache License 2.0 (`LICENSE`, `NOTICE`; D-071). `THIRD_PARTY_NOTICES.md`
+  lists Fenre (MIT) and ESCU (Apache License 2.0). The files are in the repository and the package.
 - Smaller: the `spl_hash` field is declared and indexed (the twin lookup no longer scans); code
   defaults for the deployment time range match `ucm.conf` (`-20m@m` to `-5m@m`).
 

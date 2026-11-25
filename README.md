@@ -3,7 +3,7 @@
 [![Version](https://img.shields.io/badge/version-0.9.x-blue.svg)](docs/OPERATOR_GUIDE.md#what-changed-in-09x)
 [![Splunk Compatibility](https://img.shields.io/badge/splunk-Enterprise%2010.x%20%7C%20Cloud%3A%20not%20validated-orange.svg)](docs/OPERATOR_GUIDE.md#2-requirements)
 [![Python Support](https://img.shields.io/badge/python-3.9%20%7C%203.13-brightgreen.svg)](docs/DECISIONS.md#d-005-stdlib-only-python-compatible-with-39313)
-[![Tests](https://img.shields.io/badge/unit%20tests-811%20passed-success.svg)](tests/)
+[![Tests](https://img.shields.io/badge/unit%20tests-813%20passed-success.svg)](tests/)
 [![AppInspect](https://img.shields.io/badge/Splunk%20AppInspect-Clean-brightgreen.svg)](docs/DECISIONS.md#d-019-packaging-constraints-from-appinspect)
 
 **SUNavigator** is a native Splunk application for Splunk Enterprise (Splunk Cloud: the package passes AppInspect, but runtime on a Cloud stack is not validated yet) that bridges the gap between external security detection catalogues and live production environments. It empowers SOC and detection engineering teams to **discover**, **assess**, **backlog**, **validate**, and **safely deploy** monitoring use cases with built-in four-eyes governance.
@@ -245,7 +245,7 @@ sun_navigator/
 │   └── appserver/static/         # Simple XML JS modules and styles
 ├── tools/                        # Development, packaging, and bundle CLI tools
 ├── tests/                        # Automated test suites
-│   ├── unit/                     # 811 mocked unit tests (runs without Splunk)
+│   ├── unit/                     # 813 mocked unit tests (runs without Splunk)
 │   ├── js/                       # Node tests of the browser modules (run by the unit suite when Node is present)
 │   ├── fixtures/readiness/       # Readiness regression corpus and its baseline
 │   └── live/                     # Integration tests against live Splunk instances
@@ -309,7 +309,7 @@ SPLUNK_HOME=/opt/splunk ./tools/dev_deploy.sh --restart
 
 ## Licence and Third-Party Attributions
 
-SUNavigator is proprietary, all rights reserved ([LICENSE](LICENSE)). Third-party parts keep their own licences; [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) lists them with the licence texts.
+SUNavigator is licensed under the [Apache License 2.0](LICENSE) ([NOTICE](NOTICE)). You may use, modify, redistribute and sell it, including as part of a commercial product, provided you keep the licence and notices. Third-party parts keep their own licences; [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) lists them with the licence texts.
 
 - Detection content provided by the [Fenre Monitoring Use Cases project](https://github.com/fenre/splunk-monitoring-use-cases), Copyright (c) 2026 Fredrik Lima Sudmann, licensed under the MIT License. The app ships Fenre's use-case schema verbatim with that licence; the test fixtures are verbatim Fenre records.
 - Splunk ES Content Update (`DA-ESS-ContentUpdate`) and [splunk/security_content](https://github.com/splunk/security_content), Copyright Splunk Inc., licensed under the Apache License 2.0. SUNavigator ships no ESCU content; it reads the ESCU package an operator supplies, and bundles built from it stay under the Apache License 2.0.

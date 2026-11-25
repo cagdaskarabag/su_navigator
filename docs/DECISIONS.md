@@ -2017,3 +2017,23 @@ as drift.
 * Evidence: `tests/unit/test_data_evidence.py`, `test_freshness.py`, `test_environment_health.py`,
   `test_populated.py` (summary search); the lab check above. The field profile is the largest gap
   left in the data-evidence dimension.
+
+## D-071 Licence: Apache License 2.0 for SUNavigator's own code, content and documentation
+
+*0.9.4 (owner decision, 2026-11-25; supersedes the licence statements in D-068 and the Sprint 13 notes).*
+* Context: the repository was public with no licence, and the first proposal (a proprietary
+  "all rights reserved" licence) did not match the owner's aim: the app should be usable by everyone,
+  without limits, including building on it and selling it.
+* **Decision.** SUNavigator is released under the Apache License, Version 2.0 (`LICENSE`, the
+  unmodified licence text; `NOTICE`, the copyright and third-party attribution). Reasons: it allows
+  free use, modification, redistribution and commercial use without requiring derived works to be
+  open; it grants patents explicitly; and it is the licence of ESCU, so ESCU-derived bundles
+  (`tools/ucm_cli.py build-escu-bundle`) match the outer licence. MIT would also have been acceptable;
+  Apache-2.0 was chosen for the patent grant.
+* Unchanged: Fenre's use-case content stays under its MIT licence (`content/fenre/LICENSE`), and
+  `THIRD_PARTY_NOTICES.md` lists it. The copyright line in `NOTICE` names the contributors and the
+  repository, not an individual.
+* Consequence: anyone may fork, modify, sell or embed SUNavigator. They must keep the licence and the
+  `NOTICE` attribution, and state changes where the licence requires it (Apache-2.0 sections 4 and 5).
+  No warranty is given (section 7).
+* The repository visibility is public and stays public (owner decision, 2026-11-25).
