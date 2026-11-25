@@ -36,6 +36,7 @@ from ..util import safe_key, utc_now_iso
 from .controltest import ControlTestRunner, bundle_hash, expectations, validate_bundle
 from .savedsearch import SavedSearchClient
 from .export import build_bundle
+from .schedule import advisories as schedule_advisories, jittered_cron
 from .spec import drift, is_managed_by_us, normalize_spec, saved_search_name, settings_for, spl_hash
 
 DRAFT, PENDING, APPROVED, REJECTED, DEPLOYED, FAILED, RETIRED = (
@@ -54,8 +55,9 @@ class DeploymentSettings:
                  earliest: str = "-20m@m", latest: str = "-5m@m", alert_mode: str = "track",
                  max_revisions: int = 20, verify_interval_minutes: int = 60,
                  extra_safe_commands: Sequence[str] = (), schedule_window: str = "auto",
-                 scheduled_owner: str = ""):
+                 scheduled_owner: str = "", cron_jitter: bool = False):
         self.scheduled_owner = scheduled_owner
+        self.cron_jitter = cron_jitter
         self.extra_safe_commands = tuple(extra_safe_commands)
         self.schedule_window = schedule_window
         self.require_approval = require_approval
@@ -179,6 +181,8 @@ class DeploymentService:
     def save_draft(self, actor: str, content_id: str, body: Dict[str, Any]) -> Dict[str, Any]:
         uc = self._load(content_id)
         spec = normalize_spec(body, self.settings.defaults())
+        if self.settings.cron_jitter and not str(body.get("cron") or "").strip():
+            spec["cron"] = jittered_cron(spec["cron"], uc.key)
         spl = {"primary": uc.spl, "cim": uc.cim_spl, "custom": spec["custom_spl"]}[spec["spl_source"]]
         if not spl:
             raise ValidationError("this use case has no %s SPL; choose another source or a custom search"
@@ -206,6 +210,8 @@ class DeploymentService:
             "created_by": actor, "created_at": utc_now_iso(),
         }
         revision.update(check)
+        revision["schedule_advisories"] = schedule_advisories(spec["cron"], spec["earliest"], spec["latest"],
+                                                              spec["suppress_period"])
         parallel = self._parallel_copy(uc)
         if parallel:
             revision["parallel_copy"] = parallel

@@ -1,10 +1,10 @@
-# SUNavigator 0.9.2 — operator guide
+# SUNavigator 0.9.3 — operator guide
 
 **SUNavigator** (short for **Splunk use case navigator**) discovers, assesses,
 selects, validates and deploys monitoring use cases in Splunk.
 
 This is the install, usage and troubleshooting guide for **SUNavigator
-0.9.2**. It is written for a single Splunk Enterprise instance
+0.9.3**. It is written for a single Splunk Enterprise instance
 (search head + indexer on one host), including a local macOS install. Search
 head clusters and Splunk Cloud are **not** validated in this version.
 
@@ -22,6 +22,28 @@ Related documents (design, not how-to):
 ---
 
 ## What changed in 0.9.x
+
+### 0.9.3
+
+0.9.3 is an operational-health release (D-069). No collection, route or permission changes;
+upgrade as usual.
+
+- **Failing at dispatch.** A scheduled search that Splunk refuses before it runs (missing lookup,
+  missing capability, unknown macro) writes an error line without a status. Run status used to
+  show it as "no runs"; it is now **failing at dispatch** with the error quoted, on the
+  Deployments page and in Coverage. Coverage's *operational* level needs a successful last run and
+  no dispatch error after it.
+- **Health advisories H001 to H004** (dispatch errors, skip ratio, slow p90 and slowest run against
+  the cron interval), listed under the run status (§ Coverage, run status).
+- **Schedule advice S001 to S005** on the use-case page when a draft is saved: every-minute cron
+  (S001), a time window shorter than the interval, which leaves gaps (S002), a window longer than
+  the interval without alert suppression, which can alert twice on the same events (S003),
+  `latest=now`, which misses late events (S004), and a cron whose interval cannot be worked out
+  (S005). Advice never blocks submit or approval.
+- **Cron jitter.** A new draft that keeps the default cron `*/15 * * * *` gets a fixed minute
+  offset derived from the use case (for example `7-59/15 * * * *`), so deployed searches do not
+  all start in the same minute. Set `[deployment] cron_jitter = false` to keep the plain default.
+  An explicit cron and existing revisions are never changed.
 
 ### 0.9.2
 
@@ -448,7 +470,7 @@ commands (`delete`, `outputlookup`, `collect`, script, and similar). Deployed
 searches have **no email, webhook or script alert actions**; the default
 alert mode only writes to Splunk's Triggered Alerts.
 
-**Not in 0.9.2:** PDF export of coverage, a bundled regulation-control
+**Not in 0.9.3:** PDF export of coverage, a bundled regulation-control
 catalogue, SHC validation with a deployer and indexer peers (issue #2), Splunk Cloud
 vetting submission (issue #3), and any Enterprise Security output mode (issue #4; 0.9.1 only
 reads ES and ESCU state and hands off, §5.2b).
@@ -462,7 +484,7 @@ reads ES and ESCU state and hands off, §5.2b).
 | Splunk | Enterprise 10.x (validated on 10.2.9 in development; tested by operators on 10.4.3 Darwin arm64). Python 3.9 or 3.13 in Splunk. |
 | KV Store | Must reach `status: ready`. The app stores catalogue, inventory, readiness, selections, deployments and audit in KV collections. |
 | Role | First-time setup needs `admin` (or `sc_admin` on Cloud). |
-| Disk | The 0.9.2 package is a few megabytes. Category 9 of Fenre is about 120 records; the full Fenre corpus is tens of thousands of records. |
+| Disk | The 0.9.3 package is a few megabytes. Category 9 of Fenre is about 120 records; the full Fenre corpus is tens of thousands of records. |
 | Network | Optional. Remote sync needs HTTPS to `api.github.com` and `raw.githubusercontent.com`. Offline import needs none. |
 | Browser | Splunk Web. The app is a set of Simple XML views plus JavaScript under `/en-US/app/sunavigator/`. |
 
@@ -479,7 +501,7 @@ Placeholders used below:
 
 ```bash
 ./tools/package.sh
-# writes dist/sunavigator-0.9.2.tar.gz
+# writes dist/sunavigator-0.9.3.tar.gz
 ```
 
 The tarball has a single top-level folder `sunavigator/`
@@ -497,11 +519,11 @@ then fails in the UI with `500 Internal Server Error` even though splunkd is
 still unpacking. Use the CLI:
 
 ```bash
-$SPLUNK_HOME/bin/splunk install app /path/to/sunavigator-0.9.2.tar.gz \
+$SPLUNK_HOME/bin/splunk install app /path/to/sunavigator-0.9.3.tar.gz \
   -auth "$SPLUNK_USER:$SPLUNK_PASSWORD"
 # first install: omit -update
 # upgrade of an existing copy:
-$SPLUNK_HOME/bin/splunk install app /path/to/sunavigator-0.9.2.tar.gz \
+$SPLUNK_HOME/bin/splunk install app /path/to/sunavigator-0.9.3.tar.gz \
   -update 1 -auth "$SPLUNK_USER:$SPLUNK_PASSWORD"
 
 $SPLUNK_HOME/bin/splunk restart
@@ -1472,6 +1494,20 @@ Most non-admin roles cannot. The UI then reports run status **not
 available**, not “no runs”. Tick **Include run status** only if your role
 can search `_internal`.
 
+Run status values (0.9.3, D-069): **ran without error** (last run `success`), **no runs**
+(enabled, nothing logged in the window), **unhealthy** (runs logged, none succeeded),
+**failing at dispatch** (Splunk refused to start the search after its last run, for example a
+missing lookup or a command the account may not run; such a search never writes a run line, so
+it was shown as "no runs" before 0.9.3), **disabled** and **unknown**. Each deployed search can
+also carry advisories, which never change the status:
+
+| Code | Says |
+| --- | --- |
+| H001 | Splunk refused to start the search N times; the last error is quoted. |
+| H002 | 20% or more of the runs were skipped; the last skip reason is quoted. |
+| H003 | The 90th-percentile run time is longer than the interval between runs. |
+| H004 | The longest run was longer than the interval between runs. |
+
 Regulation controls have no bundled catalogue in 0.9.1; only controls that
 appear on imported use cases are listed.
 
@@ -1600,7 +1636,7 @@ app. Do the steps in this order:
    $SPLUNK_HOME/bin/splunk restart
    ```
 
-4. **Install SUNavigator 0.9.2** as in §3.2. The first install omits
+4. **Install SUNavigator 0.9.3** as in §3.2. The first install omits
    `-update`, because `sunavigator` is a new app ID.
 5. **Re-create the GitHub token** if you use one (§3.6). It must be stored in
    realm `sunavigator`. The 0.7.0 token in realm `splunk_use_case_manager` is
@@ -1979,7 +2015,7 @@ Full table: [ARCHITECTURE.md §6](ARCHITECTURE.md).
 
 ---
 
-## 12. Known limitations (0.9.2)
+## 12. Known limitations (0.9.3)
 
 Each item says where to read more and ends with its tracking: an issue number on GitHub, a draft
 (`N-nn`) in `docs/ISSUES_PENDING.md` that has not been filed yet, or "no issue" for a limit that is
@@ -2107,7 +2143,7 @@ by design.
 
 ## 13. Quick start checklist
 
-1. `splunk install app sunavigator-0.9.2.tar.gz` then `splunk restart`.
+1. `splunk install app sunavigator-0.9.3.tar.gz` then `splunk restart`.
 2. `splunk show kvstore-status` → `ready` (macOS: §9.2 if stuck on `starting`).
 3. Open **SUNavigator → Administration**; all platform pills green.
 4. **Check provider for categories** → tick **9** → **Synchronize**, **or**

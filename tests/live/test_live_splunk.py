@@ -1751,3 +1751,38 @@ class LivePopulatedTest(unittest.TestCase):
             self.assertEqual((doc["populated"], doc["populated_reason"]), ("unverified", "check_disabled"), doc)
         finally:
             set_conf_value(self.admin, "discovery", "populated_check", old or "true")
+
+
+class LiveDispatchHealthTest(unittest.TestCase):
+    """D-069: a scheduled search Splunk refuses before it runs is reported as failing at dispatch."""
+
+    NAME = "SUN - ucm_test_dispatch_" + uuid.uuid4().hex[:6]
+
+    @classmethod
+    def setUpClass(cls):
+        cls.admin = transport()
+        status, body = cls.admin.request("POST", "/servicesNS/nobody/sunavigator/saved/searches", form={
+            "name": cls.NAME, "search": "| makeresults | lookup ucm_test_no_such_lookup foo OUTPUT bar",
+            "cron_schedule": "* * * * *", "is_scheduled": "1",
+            "dispatch.earliest_time": "-1m", "dispatch.latest_time": "now"})
+        assert status in (200, 201), (status, body[:300])
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.admin.request("DELETE", "/servicesNS/nobody/sunavigator/saved/searches/" + cls.NAME.replace(" ", "%20"))
+
+    def test_missing_lookup_is_a_dispatch_failure(self):
+        from splunk_ucm.frameworks.operations import HEALTH_SPL, advisories, classify
+        spl = HEALTH_SPL + ' | search savedsearch_name="%s"' % self.NAME
+        rows = []
+        for _ in range(36):
+            rows = oneshot(self.admin, spl, earliest="-15m")
+            if rows and int(rows[0].get("dispatch_errors") or 0) > 0:
+                break
+            time.sleep(5)
+        self.assertTrue(rows, "no scheduler log line within 3 minutes")
+        row = rows[0]
+        self.assertEqual(row.get("runs"), "0", row)
+        self.assertIn("lookup", row.get("last_error", "").lower())
+        self.assertEqual(classify(True, row), "failing_dispatch")
+        self.assertEqual([f["code"] for f in advisories(row, "* * * * *")], ["H001"])

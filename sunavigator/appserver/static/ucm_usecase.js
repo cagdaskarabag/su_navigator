@@ -488,6 +488,11 @@ function ucmViewMain($, ucm) {
         var lintNote = ucm.lintBox(latest.lint, "Advisory: submitting is not blocked, and these do not change approval. " +
             "Dismiss hides a finding until the page is reloaded.");
         if (lintNote) { card.appendChild(lintNote); }
+        var schedule = latest.schedule_advisories || [];
+        if (schedule.length) {
+            card.appendChild(ucm.stateBox(schedule.some(function (f) { return f.severity === "warning"; }) ? "warn" : "info",
+                "Schedule advice (does not block)", schedule.map(function (f) { return f.code + ": " + f.message; }).join(" ")));
+        }
         var accessNote = ucm.accessBox(view.scheduler_access);
         if (accessNote) { card.appendChild(accessNote); }
         if (dep.last_error) { card.appendChild(ucm.stateBox("error", "Last error", dep.last_error)); }

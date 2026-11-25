@@ -196,6 +196,36 @@ class OperationsTest(unittest.TestCase):
         self.assertEqual(classify(True, {"runs": "3", "succeeded": "3", "last_status": "success"}), "operational")
         self.assertEqual(classify(True, {"runs": "3", "succeeded": "0", "last_status": "skipped"}), "unhealthy")
 
+    def test_dispatch_errors_after_the_last_run_mean_failing_dispatch(self):
+        ok = {"runs": "3", "succeeded": "3", "last_status": "success", "last_run": "100"}
+        self.assertEqual(classify(True, dict(ok, last_error_time="50", dispatch_errors="1")), "operational")
+        self.assertEqual(classify(True, dict(ok, last_error_time="150", dispatch_errors="1")), "failing_dispatch")
+        self.assertEqual(classify(True, {"runs": "0", "dispatch_errors": "4", "last_error_time": "90"}),
+                         "failing_dispatch")
+        self.assertEqual(classify(False, {"dispatch_errors": "4", "last_error_time": "90"}), "disabled")
+
+    def test_health_advisories(self):
+        from splunk_ucm.frameworks.operations import advisories
+        row = {"runs": "10", "skipped": "3", "last_skip_reason": "The maximum number of concurrent running jobs",
+               "dispatch_errors": "2", "last_error": "Error in 'collect' command: insufficient privileges",
+               "p90_run_time": "1200", "max_run_time": "1300"}
+        codes = {f["code"]: f for f in advisories(row, "*/15 * * * *")}
+        self.assertEqual(sorted(codes), ["H001", "H002", "H003"])
+        self.assertIn("collect", codes["H001"]["message"])
+        self.assertIn("30%", codes["H002"]["message"])
+        self.assertEqual(codes["H003"]["evidence"]["cadence_seconds"], 900)
+        slow_once = {"runs": "10", "skipped": "0", "p90_run_time": "100", "max_run_time": "1000"}
+        self.assertEqual([f["code"] for f in advisories(slow_once, "*/15 * * * *")], ["H004"])
+        self.assertEqual(advisories(slow_once, "0 9 * * 1-5"), [])
+        self.assertEqual(advisories({}, "*/15 * * * *"), [])
+
+    def test_health_spl_reads_dispatch_errors_by_savedsearch_id(self):
+        from splunk_ucm.frameworks.operations import HEALTH_SPL
+        self.assertIn('savedsearch_id="*;sunavigator;SUN - *"', HEALTH_SPL)
+        self.assertIn("count(status) as runs", HEALTH_SPL)
+        self.assertIn("perc90(run_time)", HEALTH_SPL)
+        self.assertTrue(HEALTH_SPL.rstrip().endswith("rename sun_name as savedsearch_name"))
+
     def test_health_joins_scheduler_rows(self):
         svc, store, _ = service()
         approved(svc)

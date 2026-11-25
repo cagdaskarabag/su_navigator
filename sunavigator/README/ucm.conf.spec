@@ -159,6 +159,8 @@ max_revisions = <integer 2-100>
 * Revisions kept per deployment. The deployed and previous deployed revisions are always kept. Default 20.
 verify_interval_minutes = <integer>
 * The worker compares deployed saved searches with their revision at this interval. 0 disables. Default 60.
+cron_jitter = <boolean>
+* When a draft uses the default cron and it has the form */N * * * *, start the search at a minute offset derived from the use case (for example 7-59/15), so deployed searches do not all start at the same minute. An explicit cron is never changed. Default true. D-069.
 
 [retention]
 audit_days = <integer 0-3650>
