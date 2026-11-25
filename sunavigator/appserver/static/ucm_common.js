@@ -489,6 +489,12 @@ define(["jquery", "splunk.util"], function ($, splunkUtil) {
         "dbxoutput", "runshellscript", "deletemodel", "dump", "crawl", "outputtelemetry"];
     var INDIRECT_COMMANDS = ["map", "savedsearch", "loadjob", "rest", "dbxquery", "dbxlookup", "dbxinputs"];
     var HIDDEN_SPL_COMMANDS = ["savedsearch", "loadjob", "dbxquery"];
+    var GENERATING_COMMANDS = ["tstats", "mstats", "inputlookup", "rest", "datamodel", "from", "makeresults",
+        "metadata", "metasearch", "dbinspect", "eventcount", "pivot", "search", "loadjob",
+        "savedsearch", "dbxquery", "inputcsv", "mcatalog", "walklex", "union", "multisearch"];
+    var LEADING_COMMANDS = SIDE_EFFECT_COMMANDS.concat(INDIRECT_COMMANDS);
+    var SUB_LEADING_COMMANDS = LEADING_COMMANDS.concat(GENERATING_COMMANDS);
+    var SUBPIPELINE_HOSTS = ["appendpipe"];
     var MAX_NESTING = 3;
     var FIT_INTO = /(?:^|[|\[])\s*fit\b[^|\]]*?\binto\b/i;
     var SAVEDSEARCH_DATASET = /(?:^|[^\w.:])savedsearch:/i;
@@ -519,7 +525,7 @@ define(["jquery", "splunk.util"], function ($, splunkUtil) {
                 top = starts[starts.length - 1];
                 segments.push([top[0], i, top[1]]);
                 starts[starts.length - 1] = [i, "cont"];
-                starts.push([i + 1, "level"]);
+                starts.push([i + 1, "sub"]);
             } else if (ch === "]" && starts.length > 1) {
                 top = starts.pop();
                 segments.push([top[0], i, top[1]]);
@@ -535,16 +541,42 @@ define(["jquery", "splunk.util"], function ($, splunkUtil) {
         return segments.filter(function (seg) { return masked.substring(seg[0], seg[1]).trim(); });
     }
 
+    /*
+     * The command a segment runs (analysis._segment_command): a leading command name in a bracket,
+     * an unprefixed search or a map string is the command Splunk runs, and appendpipe's bracket
+     * always starts with a command (D-068).
+     */
+    function segmentCommand(text, kind, host) {
+        if (kind === "cont") { return null; }
+        var word = /^\s*([A-Za-z_][A-Za-z0-9_]*)/.exec(text);
+        if (kind === "pipe") { return word ? word[1].toLowerCase() : null; }
+        if (!word || /^\s*(?:!=|[=<>])/.test(text.substring(word[0].length))) { return "search"; }
+        var name = word[1].toLowerCase();
+        if (kind === "sub" && (SUBPIPELINE_HOSTS.indexOf(host) >= 0 || SUB_LEADING_COMMANDS.indexOf(name) >= 0)) { return name; }
+        return LEADING_COMMANDS.indexOf(name) >= 0 ? name : "search";
+    }
+
+    /* [start, end, kind, command] per segment, as analysis.segment_commands returns them. */
+    function segmentCommands(masked) {
+        var segments = splitSegments(masked);
+        var byEnd = {};
+        segments.forEach(function (seg) { byEnd[seg[1]] = seg; });
+        return segments.map(function (seg) {
+            var host = "";
+            var holder = seg[2] === "sub" ? byEnd[seg[0] - 1] : null;
+            if (holder && holder[2] === "pipe") {
+                var hw = /^\s*([A-Za-z_][A-Za-z0-9_]*)/.exec(masked.substring(holder[0], seg[0] - 1));
+                host = hw ? hw[1].toLowerCase() : "";
+            }
+            return [seg[0], seg[1], seg[2], segmentCommand(masked.substring(seg[0], seg[1]), seg[2], host)];
+        });
+    }
+
     /* Commands in pipeline order, found the way analysis.analyze finds them. */
     function splCommands(spl) {
-        var masked = maskQuotes(spl || "");
         var commands = [];
-        splitSegments(masked).forEach(function (seg) {
-            var text = masked.substring(seg[0], seg[1]);
-            if (seg[2] === "cont") { return; }
-            if (seg[2] === "level") { commands.push("search"); return; }
-            var word = /^\s*([A-Za-z_][A-Za-z0-9_]*)/.exec(text);
-            if (word) { commands.push(word[1].toLowerCase()); }
+        segmentCommands(maskQuotes(spl || "")).forEach(function (seg) {
+            if (seg[3]) { commands.push(seg[3]); }
         });
         return commands;
     }
@@ -554,11 +586,9 @@ define(["jquery", "splunk.util"], function ($, splunkUtil) {
         var masked = maskQuotes(spl);
         var searches = [];
         var opaque = 0;
-        splitSegments(masked).forEach(function (seg) {
-            if (seg[2] !== "pipe") { return; }
+        segmentCommands(masked).forEach(function (seg) {
+            if (seg[3] !== "map") { return; }
             var maskedSeg = masked.substring(seg[0], seg[1]);
-            var word = /^\s*([A-Za-z_][A-Za-z0-9_]*)/.exec(maskedSeg);
-            if (!word || word[1].toLowerCase() !== "map") { return; }
             var found = [];
             var m;
             MAP_SEARCH.lastIndex = 0;

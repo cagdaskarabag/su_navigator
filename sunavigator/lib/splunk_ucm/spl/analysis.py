@@ -17,6 +17,10 @@ SIDE_EFFECT_COMMANDS = frozenset({
     "sendemail", "sendalert", "delete", "script", "run", "sendresults", "summaryindex",
     "dbxoutput", "runshellscript", "deletemodel", "dump", "crawl", "outputtelemetry",
 })
+# Commands that run SPL or reach data the search text does not show (policy, D-038).
+INDIRECT_COMMANDS = frozenset({
+    "map", "savedsearch", "loadjob", "rest", "dbxquery", "dbxlookup", "dbxinputs",
+})
 # Commands that can amplify cost or reach outside the search scope.
 HIGH_COST_COMMANDS = frozenset({"map", "join", "transaction", "rest", "dbxquery", "localize"})
 GENERATING_COMMANDS = frozenset({
@@ -122,9 +126,18 @@ def _value_at(spl: str, masked: str, start: int, end: int) -> str:
     return raw.replace('\\"', '"')
 
 
-# Segment kinds: a search clause at the start of the string or a subsearch,
-# a command following "|", or the continuation of a clause after "]".
-_LEVEL_START, _PIPE_START, _CONTINUATION = "level", "pipe", "cont"
+# Segment kinds: a clause at the start of the string, the first clause of a bracketed
+# subsearch, a command following "|", or the continuation of a clause after "]".
+_LEVEL_START, _SUB_START, _PIPE_START, _CONTINUATION = "level", "sub", "pipe", "cont"
+
+# Splunk runs a leading command name as a command, not as a search term: at the start of a
+# bracketed subsearch, of a search sent without "search"/"|" (REST, saved searches, map
+# strings), and always inside appendpipe's subpipeline (D-068). Measured on 10.2.9.
+_LEADING_COMMANDS = SIDE_EFFECT_COMMANDS | INDIRECT_COMMANDS
+_SUB_LEADING_COMMANDS = _LEADING_COMMANDS | GENERATING_COMMANDS
+_SUBPIPELINE_HOSTS = frozenset({"appendpipe"})
+_WORD = re.compile(r"\s*([A-Za-z_][A-Za-z0-9_]*)")
+_COMPARISON = re.compile(r"\s*(?:!=|[=<>])")
 
 
 def _split_pipeline(masked: str) -> Tuple[List[Tuple[int, int, str]], bool]:
@@ -142,7 +155,7 @@ def _split_pipeline(masked: str) -> Tuple[List[Tuple[int, int, str]], bool]:
             has_sub = True
             segments.append((starts[-1][0], i, starts[-1][1]))
             starts[-1] = (i, _CONTINUATION)
-            starts.append((i + 1, _LEVEL_START))
+            starts.append((i + 1, _SUB_START))
         elif ch == "]" and len(starts) > 1:
             s, kind = starts.pop()
             segments.append((s, i, kind))
@@ -152,6 +165,42 @@ def _split_pipeline(masked: str) -> Tuple[List[Tuple[int, int, str]], bool]:
             starts[-1] = (i + 1, _PIPE_START)
     segments.append((starts[-1][0], len(masked), starts[-1][1]))
     return [seg for seg in segments if masked[seg[0]:seg[1]].strip()], has_sub
+
+
+def _subsearch_hosts(masked: str, segments: List[Tuple[int, int, str]]) -> Dict[int, str]:
+    """Start offset of each subsearch segment -> the command that holds the bracket."""
+    by_end = {e: (s, kind) for s, e, kind in segments}
+    hosts: Dict[int, str] = {}
+    for s, _, kind in segments:
+        if kind != _SUB_START or (s - 1) not in by_end:
+            continue
+        host_start, host_kind = by_end[s - 1]
+        word = _WORD.match(masked[host_start:s - 1])
+        if host_kind == _PIPE_START and word:
+            hosts[s] = word.group(1).lower()
+    return hosts
+
+
+def _segment_command(seg_masked: str, kind: str, host: str = "") -> Optional[str]:
+    """The command a segment runs, or None for the continuation of a clause."""
+    if kind == _CONTINUATION:
+        return None
+    word = _WORD.match(seg_masked)
+    if kind == _PIPE_START:
+        return word.group(1).lower() if word else None
+    if not word or _COMPARISON.match(seg_masked, word.end()):
+        return "search"
+    name = word.group(1).lower()
+    if kind == _SUB_START and (host in _SUBPIPELINE_HOSTS or name in _SUB_LEADING_COMMANDS):
+        return name
+    return name if name in _LEADING_COMMANDS else "search"
+
+
+def segment_commands(masked: str) -> List[Tuple[int, int, str, Optional[str]]]:
+    """``(start, end, kind, command)`` for every segment of a quote-masked search."""
+    segments, _ = _split_pipeline(masked)
+    hosts = _subsearch_hosts(masked, segments)
+    return [(s, e, kind, _segment_command(masked[s:e], kind, hosts.get(s, ""))) for s, e, kind in segments]
 
 
 def _top_level_parts(text: str, start: int) -> List[Tuple[int, str]]:
@@ -254,6 +303,7 @@ def analyze(spl: str) -> SplAnalysis:
     result.macros = _uniq(result.macros)
 
     segments, result.has_subsearch = _split_pipeline(masked)
+    hosts = _subsearch_hosts(masked, segments)
     read_text: List[str] = []
     stripped = spl.lstrip()
     first_cmd: Optional[str] = None
@@ -262,13 +312,8 @@ def analyze(spl: str) -> SplAnalysis:
         if kind == _CONTINUATION:
             read_text.append(seg_masked)
             continue
-        word = re.match(r"\s*([A-Za-z_][A-Za-z0-9_]*)", seg_masked)
-        if kind == _LEVEL_START:
-            # A clause that starts the search or a subsearch is an (implicit) search.
-            cmd = "search"
-        elif word:
-            cmd = word.group(1).lower()
-        else:
+        cmd = _segment_command(seg_masked, kind, hosts.get(s, ""))
+        if cmd is None:
             continue
         if first_cmd is None:
             first_cmd = cmd

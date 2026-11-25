@@ -10,7 +10,7 @@ import subprocess
 import unittest
 
 import helpers  # noqa: F401  (sets sys.path)
-from splunk_ucm.spl.analysis import SIDE_EFFECT_COMMANDS, analyze
+from splunk_ucm.spl.analysis import GENERATING_COMMANDS, SIDE_EFFECT_COMMANDS, analyze
 from splunk_ucm.spl.policy import HIDDEN_SPL_COMMANDS, INDIRECT_COMMANDS, classify
 
 HERE = os.path.dirname(__file__)
@@ -46,6 +46,20 @@ EXTRA = [
     "index=a | mapper search=\"x | collect\"", 'index=a | map search="search index=b" | map search="search index=c | sendemail to=x"', "[| outputlookup z] index=a", "index=a [search index=b | delete]",
     "| tstats count where index=x by host | where count>1 | script python x", "index=a | run foo",
     "| makeresults | eval x=\"a`b\" | outputcsv y", "index=a\n|\n  outputlookup\n  z",
+] + [
+    # D-068: a side-effect command as the first command of a bracket, an unprefixed search or a map string.
+    "| makeresults | appendpipe [ collect index=x ]", "| makeresults | appendpipe [collect index=x]",
+    "| makeresults | appendpipe [ COLLECT index=x ]", "| makeresults | appendpipe [ outputlookup x.csv ]",
+    "| makeresults | append [ outputlookup x.csv ]", "| makeresults | appendcols [ collect index=x ]",
+    "| makeresults | union [ collect index=x ]", "| makeresults | join type=left a [ collect index=x ]",
+    "| makeresults | multisearch [ collect index=x ]", "| makeresults | append [ delete ]",
+    "| makeresults | appendpipe [ sendalert a ]", "| makeresults | appendpipe [ dump basefilename=x ]",
+    "| makeresults | appendpipe [ stats count ] | appendpipe [ collect index=x ]",
+    '| makeresults | map search="collect index=x"', '| makeresults | map search="outputlookup x.csv"',
+    '| makeresults | append [ map search="search a | collect index=x" ]', "collect index=x", "outputlookup x.csv",
+    "| makeresults | appendpipe [ customcmd a=1 ]", "| makeresults | append [ inputlookup x.csv ]",
+    "index=a [ search index=b | fields host ]", "index=a [ index=b | fields host ]", "index=a [ delete=1 ]",
+    "index=a | join host [ search index=b ]", "delete OR removed index=a", "| makeresults | appendpipe [ eval x=1 ]",
 ]
 
 
@@ -103,6 +117,9 @@ class GuardListsTest(unittest.TestCase):
 
     def test_hidden_list_equals_python(self):
         self.assertEqual(sorted(js_list("HIDDEN_SPL_COMMANDS")), sorted(HIDDEN_SPL_COMMANDS))
+
+    def test_generating_list_equals_python(self):
+        self.assertEqual(sorted(js_list("GENERATING_COMMANDS")), sorted(GENERATING_COMMANDS))
 
     def test_hidden_is_a_subset_of_indirect(self):
         self.assertTrue(HIDDEN_SPL_COMMANDS <= INDIRECT_COMMANDS)

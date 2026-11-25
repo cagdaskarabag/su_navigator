@@ -1444,6 +1444,60 @@ class LiveScheduledRunTest(unittest.TestCase):
         self.assertIsNone(self.saved(name))
 
 
+@unittest.skipUnless(LIVE, "set UCM_LIVE_SPLUNK=1 to run against a real Splunk instance")
+class LiveSchedulerRoleTest(unittest.TestCase):
+    """D-068: an account with only ``ucm_scheduler`` searches, but cannot write or send data."""
+
+    USER = "ucm_test_sched_" + uuid.uuid4().hex[:6]
+    PW = "T3st!" + uuid.uuid4().hex
+
+    @classmethod
+    def setUpClass(cls):
+        cls.admin = transport()
+        status, body = cls.admin.request("POST", "/services/authentication/users",
+                                         form={"name": cls.USER, "password": cls.PW, "roles": "ucm_scheduler"})
+        assert status in (200, 201), (status, body[:300])
+        cls.user = transport(cls.USER, cls.PW)
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.admin.request("DELETE", "/services/authentication/users/" + cls.USER)
+
+    def run_as_scheduler(self, spl):
+        status, content = self.user.request("POST", "/services/search/jobs",
+                                            form={"search": spl, "exec_mode": "oneshot", "output_mode": "json",
+                                                  "earliest_time": "-5m", "latest_time": "now"}, timeout=120)
+        doc = json.loads(content or b"{}")
+        return status, doc.get("results", []), " ".join(m.get("text", "") for m in doc.get("messages", []))
+
+    def test_role_imports_nothing_and_holds_no_write_capability(self):
+        status, content = self.admin.request("GET", "/services/authorization/roles/ucm_scheduler",
+                                             {"output_mode": "json"})
+        self.assertEqual(status, 200)
+        role = json.loads(content)["entry"][0]["content"]
+        self.assertEqual(role.get("imported_roles") or [], [])
+        status, content = self.user.request("GET", "/services/authentication/current-context",
+                                            {"output_mode": "json"})
+        caps = json.loads(content)["entry"][0]["content"]["capabilities"]
+        for capability in ("run_collect", "run_mcollect", "output_file", "run_dump", "run_sendalert"):
+            self.assertNotIn(capability, caps)
+        self.assertIn("schedule_search", caps)
+
+    def test_side_effect_commands_are_refused_by_splunk(self):
+        for spl in ("| makeresults count=2 | appendpipe [ collect index=main sourcetype=ucm_test_probe ]",
+                    "| makeresults count=2 | outputlookup ucm_test_probe.csv",
+                    "| makeresults count=1 | sendalert ucm_test_probe"):
+            with self.subTest(spl=spl):
+                _, results, messages = self.run_as_scheduler(spl)
+                self.assertEqual(results, [])
+                self.assertRegex(messages.lower(), "insufficient privileges|capability")
+
+    def test_read_only_search_runs(self):
+        status, results, _ = self.run_as_scheduler('| makeresults count=2 | eval sun_probe="role"')
+        self.assertEqual(status, 200)
+        self.assertEqual(len(results), 2)
+
+
 def _app_state(t, app):
     status, content = t.request("GET", "/services/apps/local/" + app, {"output_mode": "json"})
     if status == 404:
