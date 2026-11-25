@@ -1515,7 +1515,9 @@ failed after a deploy error; retry deploy from approved/failed
 3. **Submit for approval**.
 4. A **different** user with `ucm_deploy` opens the same use case and
    clicks **Approve** (optional audit note) or **Reject**. The submitter
-   does not see Approve while `allow_self_approval = false`.
+   does not see Approve while `allow_self_approval = false`. If the scheduler role cannot read an index
+   the search uses, the dialog says so and Approve needs a reason (10 characters or more); it is recorded as
+   *approved with access gap* (0.11.0).
 5. **Deploy (disabled)** — creates or updates a saved search in this app,
    named `SUN - <record id> - <title>`, owned by `scheduled_owner`, **disabled**.
    The app reads it back and compares. Failure → `failed` plus `last_error`.
@@ -1786,6 +1788,9 @@ Common stanzas:
 | `[deployment] require_approval` | `true` | `false` skips four-eyes (submit auto-approves). |
 | `[deployment] allow_self_approval` | `false` | Submitter may click Approve. |
 | `[deployment] block_enable_states` | `blocked` | Readiness states that need an enable override. |
+| `[deployment] enable_second_person` | `false` | `true` makes every *Enable* a request that a second person confirms. |
+| `[deployment] override_second_person` | `true` | Enabling a search that a gate blocks (readiness or scheduler access) needs a second person. `false` for a one-person team (0.11.0, D-080). |
+| `[audit] refusals` | `true` | Write refused governance requests to the audit trail. Limits: `refusal_window_seconds` (300), `refusal_actor_per_hour` (20), `refusal_total_per_hour` (200). |
 | `[deployment] default_earliest` / `default_latest` | `-20m@m` / `-5m@m` | Time range proposed for new drafts. |
 | `[deployment] default_schedule_window` | `auto` | Schedule window proposed for new drafts (`auto` or 0–1440 minutes). |
 | `[catalog] kv_row_limit` | `50000` | Set to the same value as the platform's `max_rows_per_query` if you raised it, so totals and the warning follow it (issue #14). |
@@ -2076,6 +2081,10 @@ reads. The message says which index and which roles. Either give the account's r
 the index (§4, "Scheduler account and indexes") and enable again, or enter an override
 reason (≥ 10 characters) to enable a search you accept will run without that data.
 
+Since 0.11.0 an override needs a second person by default (`[deployment] override_second_person`): the first
+person's *Enable* becomes a request, a different person confirms it with a reason within 24 hours, and the
+same person gets `second_person_required`. Set the key to `false` if one person runs the app.
+
 ### 9.11 Coverage run status “not available”
 
 The role cannot search `index=_internal`. Use an admin account, grant
@@ -2284,6 +2293,8 @@ by design.
   `search` capability sees the button disabled; that case is covered by unit tests, not
   by a lab check (issue #15). Required mitigations of issue #11 are implemented (D-058, D-062); what
   remains is the accepted residual risk of no SUN audit.
+- Since 0.11.0 the browser guard refuses a command that is in none of its lists unless the server has validated the
+  search and cleared it; it is a convenience in front of Splunk's role checks, not a boundary (D-080).
 - The SPL guard reads the first word of a bracket as a command only when it is a known
   side-effect, indirect or generating command (and always inside `appendpipe [ ... ]`). An
   add-on command written first in an `append`, `join` or `union` subsearch is read as a search
@@ -2292,6 +2303,10 @@ by design.
 
 **Deployments**
 
+- Refused governance requests are audited under limits (§7, D-080). A refused attempt is evidence of an
+  attempt only; once a limit is reached, further refusals in that hour are not recorded individually.
+- The POA&M eligibility note for CMMC Level 2 (32 CFR 170.21) is information. The app has no conditional
+  status, no 180-day clock and no closeout record (D-079, D-080). No issue: by design.
 - Default four-eyes blocks a single `admin` from approving their own draft (§4). No issue: by design.
 - `admin`, `sc_admin` and `ucm_admin` can edit deployed searches in Settings; the
   app reports drift and does not repair it (§4, D-051). The scheduler account must

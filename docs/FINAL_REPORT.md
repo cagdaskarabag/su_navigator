@@ -14,8 +14,8 @@ recorded in `docs/IMPLEMENTATION_PLAN.md`.*
 | Release tag | `v0.11.0` (`v0.10.0` before it; earlier tags stop at `v0.7.3`, and `0.8.0` to `0.9.9` were not tagged) |
 | Licence | Apache License 2.0 for SUNavigator's own code, content and documentation (D-071); third-party notices in `THIRD_PARTY_NOTICES.md` |
 
-The README version badge showed `0.9.x` after the release because it was a hand-written static badge that no
-test looked at. It now reads `0.10.x`, and `tests/unit/test_release_consistency.py` fails when the badge and
+The README version badge showed `0.9.x` after the 0.10.0 release because it was a hand-written static badge that no
+test looked at. It now follows the app version (`0.11.x`), and `tests/unit/test_release_consistency.py` fails when the badge and
 `app.conf` disagree on major and minor version.
 
 ## 2. What was delivered
@@ -36,6 +36,16 @@ has the instructions. The same table is in `docs/IMPLEMENTATION_PLAN.md` (WP9).
 | 0.10.0 | Assessed state, assessment objectives, CMMC Level 2 score, POA&M, evidence snapshots | D-077 |
 | 0.11.0 | Stabilisation: fail-closed browser guard, access gap and override second look, audited refusals, POA&M eligibility note, upgrade notice | D-080 |
 
+## 2a. Sprint 21 in short (0.11.0, D-080)
+
+An independent review of 0.10.0 raised seven points. Six were fixed and one is a hand-over: the browser guard fails
+closed (parity test with the server lists), the scheduler access gap is shown at submit and approval, overriding a gate
+needs a second person by default, refused governance requests are audited under rate limits, POA&M items carry an
+informational 32 CFR 170.21 note, and an upgrade notice and the `all_assessed`/`can_pass` score fields were added. The
+review's remark about Fenre's SPL is a report for the owner to send (`docs/upstream/for-fenre-owner/`), not a filing.
+The live suite found one defect in the new code (refusal rows hid the specific reason of a conflict, so two different
+refusals were treated as one); it is fixed and tested. A human review of the security paths before 1.0 is the owner's.
+
 ## 3. What was not done, and why
 
 | Item | Why | Where it stands |
@@ -45,8 +55,8 @@ has the instructions. The same table is in `docs/IMPLEMENTATION_PLAN.md` (WP9).
 | Signing snapshots | Needs a decision on key custody and rotation; Splunk has no key store for it. The SHA-256 of each snapshot, recorded outside Splunk, covers part of the need. | Left as is; not planned (D-079) |
 | Deleting snapshots | Left out on purpose, so evidence cannot be removed from the app. Retention would need an export-then-delete design. | Left as is; not planned (D-079) |
 | CIM field reference, field presence, acceleration freshness | Needs a lab with `Splunk_SA_CIM` and a populated, accelerated model; the lab has neither. | Issue #31, unscheduled backlog |
-| Re-run of the 94 control-test fixtures with add-ons | The fixtures name add-ons the lab does not have (see section 5). | Skipped (D-079); issue #23 to be closed as not planned |
-| Splunk Cloud, SHC with a deployer, ES 8 | No lab, and none will be provided (D-078). | Dropped; issues #2, #3, #4, #18, #27 |
+| Re-run of the 94 control-test fixtures with add-ons | The fixtures name add-ons the lab does not have (see section 5). | Skipped (D-079); issue #23 is still to be closed as not planned |
+| Splunk Cloud, SHC with a deployer, ES 8 | No lab, and none will be provided (D-078). | Dropped; issues #2, #3, #4, #18, #27 (closed) |
 
 ## 4. GitHub issues
 
@@ -54,17 +64,18 @@ Closed and verified closed as completed: #5, #6, #7, #8, #9, #10, #11, #12, #13,
 notes are in `docs/ISSUES_PENDING.md` (the integration that wrote this code can read issues and create them, but
 cannot comment on, edit or close them).
 
-To close as not planned: #2, #3, #4, #18, #27 (D-078) and #23 (D-079).
+Closed by the owner as not planned: #2, #3, #4, #18, #27 (D-078). Closed as invalid: #30 (a stray test issue created while probing the integration). #16 (tracking) is closed; #33 replaces it. Still to close as not planned: #23 (D-079).
 
 Open and kept:
 
 | Issue | What it is | Next step |
 |---|---|---|
 | #15 | Browser tests | Owner decision: Node logic tests exist, Splunk Web is checked by hand |
-| #16 | Tracking issue | Tick the closed items; point it here |
+| #32 | Human review of the security paths before 1.0 | Owner task, after the sprints |
+| #33 | Status and roadmap at 0.11.0 | Tracking; replaces #16 |
 | #17 | Mark readiness stale when scheduler roles change | Backlog |
 | #19 | Say whether an internal index has data without scanning it | Backlog |
-| #20 | Fenre findings F-01 to F-11 | Owner decision: documented in `docs/upstream/FENRE_FINDINGS.md`, not sent upstream |
+| #20 | Fenre findings F-01 to F-11 | Owner decision: not filed by the app (D-072); the report for the owner to send is in `docs/upstream/for-fenre-owner/`; close once it is handed over |
 | #21 | Control tests: `source=` searches | Owner decision |
 | #22 | Control tests: empty `timechart` buckets passing | Backlog |
 | #24 | Counts bounded by `max_rows_per_query` | Backlog |

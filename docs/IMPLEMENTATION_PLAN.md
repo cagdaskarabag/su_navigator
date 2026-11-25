@@ -199,12 +199,37 @@ Not built in WP9, with the reason (details in `docs/FINAL_REPORT.md`):
 
 | Item | Why not | Tracking |
 |---|---|---|
-| CMMC conditional status and POA&M eligibility rules (32 CFR 170) | a legal-weight certification claim; the regulation text was not verified from an authoritative source; the app records coverage and assessments, not certification | none; left as is (D-079) |
+| CMMC conditional status (32 CFR 170.21) | a legal-weight certification claim; the app records coverage and assessments, not certification. The eCFR text was read for 0.11.0 and an informational eligibility note on POA&M items was built (D-080); the status, the 180-day clock and the closeout record were not | none; left as is (D-079) |
 | Assessment objectives for SP 800-53 and CMMC | no machine-readable, verifiable source in the pinned NIST OSCAL content | none; left as is (D-079) |
 | Signing snapshots | needs a key custody and rotation decision | none; left as is (D-079) |
 | Deleting snapshots | omitted on purpose so evidence cannot be removed from the app | none; left as is (D-079) |
 | CIM field reference, field presence, acceleration freshness | needs a lab with `Splunk_SA_CIM` and a populated, accelerated model; unscheduled | #31 |
 | Re-run of the 94 control-test fixtures with add-ons | needs the add-ons the fixtures name on the lab; skipped (D-079) | #23, to be closed |
+
+## Roadmap (0.11.0)
+
+Delivered: WP0 to WP10 through 0.11.0. There is no further sprint scheduled.
+
+| Next | What | Who |
+|---|---|---|
+| Review before 1.0 | A human review of the security-relevant paths: the SPL guard (server and browser), the capability checks on every POST route, the audit chain and refusal rows, snapshot integrity, and the system-token reads. The review is the owner's, after the sprints (D-080). | owner |
+| Hand-over of Fenre findings | `docs/upstream/for-fenre-owner/` is ready to send; nothing is filed upstream (D-072) | owner |
+| Housekeeping on GitHub | Close #23 (not planned) and, once the Fenre report is handed over, #20. #2, #3, #4, #16, #18, #27 and #30 are already closed. #32 holds the review checklist and #33 the status. | owner |
+
+Unscheduled backlog, kept open and not promised: #15 browser tests, #17 stale readiness after a role change, #19
+internal-index data check, #21 and #22 control-test limits, #24 counts above the KV bound, #25 background Reindex, #26
+facet values with a comma, #29 further lint rules, #31 CIM field reference (needs `Splunk_SA_CIM` on a lab).
+
+Not planned: Splunk Cloud, search head cluster with a deployer, Enterprise Security 8 (D-078); CMMC conditional status,
+objectives for 800-53 and CMMC, snapshot signing and deletion, the 94-fixture re-run (D-079).
+
+## WP10 — Stabilisation after review (0.11.0) ✅
+
+Done (D-080). No feature was added: browser guard fails closed with a parity test; scheduler access shown at submit and
+approval (approval with a gap needs a reason); overriding a gate needs a second person by default; refused governance
+requests audited under rate limits; informational POA&M eligibility for CMMC Level 2; older-record notice and
+`all_assessed`/`can_pass`; Fenre findings export for the owner. Migration `0006_catalog_facets_v5`. Lab live suite:
+78 tests OK, 2 skipped.
 
 ## Validation status (keep current)
 
@@ -242,4 +267,8 @@ Not built in WP9, with the reason (details in `docs/FINAL_REPORT.md`):
 | Audit chain, lifecycle refinements (0.9.8) | ✅ | ✅ `LiveLifecycleRefinementsTest` | ⬜ | ⬜ |
 | Control catalogues (0.9.9) | ✅ builder and validation | ✅ `LiveControlCatalogueTest` | ⬜ | ⬜ |
 | Assessments, POA&M, snapshots (0.10.0) | ✅ 42 unit tests, 10 Node tests | ✅ `LiveAssessmentTest` (6 tests): record, derive status, POA&M, snapshot integrity, RBAC | ⬜ | ⬜ |
+| Browser guard fails closed, parity with the server lists (0.11.0) | ✅ `test_spl_guard_parity.py` (every command through both), Node tests | ✅ validation call used by the page on the lab | ⬜ | ⬜ |
+| Access gap at approval, override second person (0.11.0) | ✅ `test_sprint21.py`, `test_deployment.py` | ✅ `LiveSchedulerVisibilityTest`, `LiveDeploymentTest` (request, same-person refusal, confirmation by another user) | ⬜ | ⬜ |
+| Audited refusals with limits (0.11.0) | ✅ dedupe, per-user and total caps, reason codes, chain stays valid | ✅ `LiveAssessmentTest.test_refusals_are_audited_once_and_capped`, chain verified afterwards | ⬜ | ⬜ |
+| POA&M eligibility note, score fields, older-record notice (0.11.0) | ✅ `test_poam_rules.py` (17), `test_provider_navigation.py`, Node tests | ✅ `LiveAssessmentTest`, `LiveMaintenanceTest` (migration 0006) | ⬜ | ⬜ |
 | Packaging (0.11.0) | n/a | ✅ AppInspect `cloud` tag: 0 errors, 0 failures, 4 warnings | n/a | ⬜ vetting not planned |

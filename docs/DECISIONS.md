@@ -2381,6 +2381,7 @@ as drift.
   the control-test results as one document and one CSV (`docs/upstream/for-fenre-owner/`) that the owner can hand over.
 * **Not built, unchanged from D-079.** CMMC conditional status, objectives for 800-53 and CMMC, snapshot signing and
   deletion, and the 94-fixture re-run.
+* **Issues.** #32 (the owner's human review checklist) and #33 (status and roadmap, replaces #16) were filed; #30 was closed as invalid by the owner.
 * **Migration.** `0006_catalog_facets_v5` rebuilds the catalogue summary once. No collection or capability is added.
 * Evidence: `tests/unit/test_sprint21.py`, `tests/unit/test_poam_rules.py`, `tests/unit/test_spl_guard_parity.py`,
   `tests/js/test_usecase.js`, `test_admin.js`, `test_assessment_ui.js`, and the live suite on the lab.
