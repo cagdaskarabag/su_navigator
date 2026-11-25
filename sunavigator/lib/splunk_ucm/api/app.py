@@ -765,7 +765,7 @@ def _assessment_scope(ctx: Context, framework_id: Any, version: Any) -> Tuple[As
     definition = FrameworkRegistry(ctx.records()).get(framework_id, str(version or ""))
     if definition.get("kind") != "controls":
         raise ValidationError("this framework has no control catalogue")
-    return AssessmentService(ctx.store, ctx.audit), definition
+    return AssessmentService(ctx.records(), ctx.audit), definition
 
 
 def get_assessment(ctx: Context, req: Request) -> Response:
@@ -819,7 +819,7 @@ def _poam_action(action: str) -> Handler:
     def handler(ctx: Context, req: Request) -> Response:
         ctx.require(CAP_ASSESS)
         body = req.json()
-        svc = AssessmentService(ctx.store, ctx.audit)
+        svc = AssessmentService(ctx.records(), ctx.audit)
         item_id = str(body.get("id") or "")
         if action == "update":
             return Response(200, {"item": svc.poam_update(ctx.user, item_id, body)})
@@ -845,7 +845,7 @@ def get_assessment_snapshots(ctx: Context, req: Request) -> Response:
 
 def get_assessment_snapshot(ctx: Context, req: Request) -> Response:
     ctx.require(CAP_ASSESS)
-    return Response(200, AssessmentService(ctx.store, ctx.audit).snapshot_get(req.arg("id")))
+    return Response(200, AssessmentService(ctx.records(), ctx.audit).snapshot_get(req.arg("id")))
 
 
 def get_framework_matrix(ctx: Context, req: Request) -> Response:

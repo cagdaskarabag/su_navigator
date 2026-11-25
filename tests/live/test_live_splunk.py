@@ -2174,7 +2174,7 @@ class LiveAssessmentTest(unittest.TestCase):
         for t in (self.viewer,):
             for path in ("assessment", "poam", "assessment/snapshots"):
                 self.assertEqual(api(t, "GET", path, {"framework_id": "cmmc-l2"})[0], 403, path)
-            self.assertEqual(api(t, "POST", "assessment", body={"framework_id": "cmmc-l2", "control_id": "3.1.1"})[0], 403)
+            self.assertEqual(api(t, "POST", "assessment", body={"framework_id": "cmmc-l2", "control_id": "AC.L2-3.1.1"})[0], 403)
         self.assertEqual(api(self.assessor, "GET", "assessment", {"framework_id": "cmmc-l2"})[0], 200)
 
     def test_cmmc_score_starts_at_the_methodology_floor_and_rises(self):
@@ -2183,13 +2183,13 @@ class LiveAssessmentTest(unittest.TestCase):
         score = body["score"]
         self.assertEqual((score["start"], score["points_lost"] + score["score"]), (110, 110), score)
         before = score["score"]
-        status, out = api(self.assessor, "POST", "assessment", body={"framework_id": "cmmc-l2", "control_id": "3.1.1",
+        status, out = api(self.assessor, "POST", "assessment", body={"framework_id": "cmmc-l2", "control_id": "AC.L2-3.1.1",
                                                                   "status": "implemented", "note": "Live test: verified"})
         self.assertEqual(status, 200, out)
-        LiveAssessmentTest.assessed.append(("cmmc-l2", "3.1.1"))
+        LiveAssessmentTest.assessed.append(("cmmc-l2", "AC.L2-3.1.1"))
         self.assertGreater(out["score"]["score"], before)
         self.assertEqual(out["assessment"]["assessed_by"], self.USER)
-        status, out = api(self.assessor, "POST", "assessment/clear", body={"framework_id": "cmmc-l2", "control_id": "3.1.1", "note": "Live test: done"})
+        status, out = api(self.assessor, "POST", "assessment/clear", body={"framework_id": "cmmc-l2", "control_id": "AC.L2-3.1.1", "note": "Live test: done"})
         self.assertEqual(status, 200, out)
         self.assertEqual(out["score"]["score"], before)
 
@@ -2220,7 +2220,7 @@ class LiveAssessmentTest(unittest.TestCase):
 
     def test_poam_lifecycle_and_overdue(self):
         status, out = api(self.assessor, "POST", "poam", body={
-            "framework_id": "cmmc-l2", "control_id": "3.1.2", "title": "Live plan", "weakness": "Live test weakness", "owner": "bob",
+            "framework_id": "cmmc-l2", "control_id": "AC.L2-3.1.2", "title": "Live plan", "weakness": "Live test weakness", "owner": "bob",
             "due": "2020-01-01", "milestones": [{"text": "First step", "due": "2019-12-01"}]})
         self.assertEqual(status, 200, out)
         item = out["item"]
