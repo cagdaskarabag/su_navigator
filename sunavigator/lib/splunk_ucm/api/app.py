@@ -45,6 +45,7 @@ from ..frameworks.controls import catalogue_coverage
 from ..frameworks.registry import FrameworkRegistry
 from ..platform.search import SearchClient
 from ..readiness.principal import SchedulerAccess, read_principal
+from ..refusals import REFUSED_STATUSES, RefusalAudit, governed
 from ..readiness.query import ReadinessFilter, ReadinessQueryService
 from ..readiness.recommend import MAX_ITEMS as MAX_RECOMMENDATIONS, RecommendationService
 from ..readiness.service import ReadinessService, new_job as new_readiness_job
@@ -243,10 +244,28 @@ class Router:
         except UcmError as exc:
             if exc.http_status >= 500:
                 log.warning("request failed", extra={"path": path, "code": exc.code, "error": exc.message})
+            elif exc.http_status in REFUSED_STATUSES and governed(req.method, path):
+                _audit_refusal(ctx, req, path, exc)
             return Response(exc.http_status, {"error": exc.to_dict()})
         except Exception:
             log.exception("unhandled error", extra={"path": path})
             return Response(500, {"error": {"code": "internal_error", "message": "internal error"}})
+
+
+def _audit_refusal(ctx: Context, req: Request, path: str, exc: UcmError) -> None:
+    """Record a refused governance request in the audit trail, within the limits of D-080."""
+    try:
+        try:
+            body: Any = req.json()
+        except UcmError:
+            body = None
+        try:
+            refusals = RefusalAudit.from_config(ctx.audit, ctx.config)
+        except Exception:
+            refusals = RefusalAudit(ctx.audit)
+        refusals.record(ctx.user, req.method, path, exc, body)
+    except Exception:
+        log.exception("refusal audit failed", extra={"path": path})
 
 
 # -- handlers ---------------------------------------------------------------
@@ -628,6 +647,7 @@ def _deployment_view(ctx: Context, svc: DeploymentService, doc: Optional[Dict[st
             "settings": {"require_approval": svc.settings.require_approval,
                          "allow_self_approval": svc.settings.allow_self_approval,
                          "enable_second_person": svc.settings.enable_second_person,
+                         "override_second_person": svc.settings.override_second_person,
                          "enable_request_hours": svc.settings.enable_request_hours,
                          "override_days": svc.settings.override_days,
                          "override_expiry_action": svc.settings.override_expiry_action,
@@ -697,10 +717,15 @@ def _deployment_action(action: str) -> Handler:
             doc = svc.verify(ctx.user, use_case_id)
         elif action == "controltest":
             doc = svc.control_test(ctx.user, use_case_id)
-        elif action in ("submit", "approve"):
-            doc = getattr(svc, action)(ctx.user, use_case_id, note,
-                                       acknowledge_commands=body.get("acknowledge_commands") is True,
-                                       acknowledge_actions=body.get("acknowledge_actions") is True)
+        elif action == "approve":
+            doc = svc.approve(ctx.user, use_case_id, note,
+                              acknowledge_commands=body.get("acknowledge_commands") is True,
+                              acknowledge_actions=body.get("acknowledge_actions") is True,
+                              access_reason=str(body.get("access_reason") or "")[:500])
+        elif action == "submit":
+            doc = svc.submit(ctx.user, use_case_id, note,
+                             acknowledge_commands=body.get("acknowledge_commands") is True,
+                             acknowledge_actions=body.get("acknowledge_actions") is True)
         else:
             doc = getattr(svc, action)(ctx.user, use_case_id, note)
         return Response(200, _deployment_view(ctx, svc, doc))
@@ -806,7 +831,7 @@ def get_poam(ctx: Context, req: Request) -> Response:
     svc, definition = _assessment_scope(ctx, req.arg("framework_id"), req.arg("version"))
     return Response(200, svc.poam_list(definition["framework_id"], req.args("state"), req.arg("control_id"),
                                        req.arg("overdue") == "1", _int(req.arg("offset"), 0, "offset"),
-                                       _int(req.arg("count"), 100, "count")))
+                                       _int(req.arg("count"), 100, "count"), definition))
 
 
 def post_poam(ctx: Context, req: Request) -> Response:

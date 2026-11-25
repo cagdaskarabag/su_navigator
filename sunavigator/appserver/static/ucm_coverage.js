@@ -496,6 +496,14 @@ function ucmViewMain($, ucm) {
         }).fail(function (err) { ucm.clear(box).appendChild(ucm.stateBox("error", "Could not load the control.", err.message)); });
     }
 
+    /* Informational (32 CFR 170.21); it never blocks a plan item and is not a CMMC status determination. */
+    function eligibilityNote(eligibility) {
+        if (!eligibility || eligibility.eligible) { return null; }
+        return el("div", { "class": "ucm-sub" }, ucm.badge("may not count toward Conditional status", "warn"),
+            el("ul", {}, eligibility.reasons.map(function (r) { return el("li", { text: r }); })),
+            el("span", { text: eligibility.basis + ". " + eligibility.notice }));
+    }
+
     function poamDate(item) {
         return el("span", {}, item.due || "", item.overdue ? " " : "", item.overdue ? ucm.badge("overdue", "error") : null);
     }
@@ -545,6 +553,12 @@ function ucmViewMain($, ucm) {
             ucm.get("poam", { framework_id: fw, version: data.catalogue.version, state: stateSel.value }).done(function (res) {
                 listBox.className = "";
                 ucm.clear(listBox);
+                var prog = res.programme;
+                if (prog) {
+                    listBox.appendChild(ucm.stateBox(prog.meets_threshold ? "info" : "warn",
+                        "Score now " + prog.score + " of " + prog.requirements + " (" + prog.ratio.toFixed(2) + "); a plan of action for Conditional Level 2 status needs at least " + prog.threshold.toFixed(2),
+                        prog.basis + ". Closeout must be within 180 days of the status date. " + prog.notice));
+                }
                 if (!res.items.length) {
                     listBox.appendChild(ucm.stateBox("empty", "No plan items" + (stateSel.value ? " in this state" : " yet") + ".", ""));
                     return;
@@ -560,7 +574,8 @@ function ucmViewMain($, ucm) {
                             (item.milestones || []).length ? el("ul", {}, item.milestones.map(function (m) {
                                 return el("li", { "class": "ucm-sub", text: (m.due ? m.due + " " : "") + m.text });
                             })) : null,
-                            item.close_note ? el("div", { "class": "ucm-sub", text: "Closed by " + item.closed_by + " on " + when(item.closed_at) + ": " + item.close_note }) : null),
+                            item.close_note ? el("div", { "class": "ucm-sub", text: "Closed by " + item.closed_by + " on " + when(item.closed_at) + ": " + item.close_note }) : null,
+                            eligibilityNote(item.eligibility)),
                         el("td", { text: item.owner }),
                         el("td", {}, poamDate(item)),
                         el("td", {}, ucm.badge(POAM_LABEL[item.state] || item.state, item.state === "closed" ? "ok" : (item.overdue ? "error" : "info")),

@@ -725,6 +725,12 @@ class LiveDeploymentTest(unittest.TestCase):
                           live["alert.suppress.fields"]), ("7", True, "1h", "user,src"))
         status, body = self.act(self.operator, "enable", override_reason="live test override reason")
         self.assertEqual(status, 200, body)
+        if body["deployment"]["live"]["status"] != "enabled":
+            self.assertEqual(body["deployment"]["enable_request"]["by"], self.OPERATOR, body)
+            status, body = self.act(self.operator, "enable", override_reason="live test override reason")
+            self.assertEqual((status, body["error"]["details"]["code"]), (409, "second_person_required"), body)
+            status, body = self.act(self.admin, "enable", override_reason="live test override reason")
+            self.assertEqual(status, 200, body)
         self.assertEqual(body["deployment"]["live"]["status"], "enabled")
         self.assertFalse(self.saved(name)["disabled"])
         from urllib.parse import quote
@@ -998,7 +1004,7 @@ class LiveProviderNavigationTest(unittest.TestCase):
     def test_facets_after_reindex_say_the_summaries_are_current(self):
         from splunk_ucm.catalog.summary import SUMMARY_VERSION
         facets = self.facets()
-        self.assertEqual(facets["summary"], {"version": SUMMARY_VERSION, "outdated": 0}, facets["summary"])
+        self.assertEqual(facets["summary"], {"version": SUMMARY_VERSION, "outdated": 0, "normalizer_outdated": 0}, facets["summary"])
         self.assertEqual(sum(facets["providers"].values()), facets["active"])
 
     def test_provider_facet_counts_equal_filter_totals(self):
@@ -1143,7 +1149,7 @@ class LiveMaintenanceTest(unittest.TestCase):
         # active summaries are older, and that number is the real count.
         facets = kv.get(C.SYNC_STATE, "catalog::facets") or {}
         stale = kv.count(C.CATALOG, {"$and": [{"provider_status": "active"}, {"summary_version": {"$lt": SUMMARY_VERSION}}]})
-        self.assertEqual(facets.get("summary"), {"version": SUMMARY_VERSION, "outdated": stale}, facets.get("summary"))
+        self.assertEqual(facets.get("summary"), {"version": SUMMARY_VERSION, "outdated": stale, "normalizer_outdated": 0}, facets.get("summary"))
 
 
 def oneshot(t, spl, earliest="-15m", latest="now"):
@@ -1278,7 +1284,10 @@ class LiveSchedulerVisibilityTest(unittest.TestCase):
         status, body = self.act(self.operator, "submit")
         self.assertEqual(status, 200, body)
         self.assertEqual(body["deployment"]["revisions"][-1]["scheduler_access"]["status"], "not_met")
-        self.assertEqual(self.act(self.admin, "approve", note="live test")[0], 200)
+        status, body = self.act(self.admin, "approve", note="live test")
+        self.assertEqual((status, body["error"]["details"]["code"]), (409, "access_gap_reason_required"), body)
+        status, body = self.act(self.admin, "approve", note="live test", access_reason="live test: role is being changed")
+        self.assertEqual(status, 200, body)
         status, body = self.act(self.operator, "deploy")
         self.assertEqual(status, 200, body)
         self.assertEqual(body["deployment"]["live"]["drift"], [])
@@ -1289,13 +1298,29 @@ class LiveSchedulerVisibilityTest(unittest.TestCase):
         self.assertIn("override", json.dumps(body))
         status, body = self.act(self.operator, "enable", override_reason="live test: accept blind run")
         self.assertEqual(status, 200, body)
+        self.assertEqual(body["deployment"]["live"]["status"], "disabled")
+        self.assertEqual(body["deployment"]["enable_request"]["by"], self.OPERATOR, body)
+        status, body = self.act(self.operator, "enable", override_reason="live test: accept blind run")
+        self.assertEqual((status, body["error"]["details"]["code"]), (409, "second_person_required"), body)
+        status, body = self.act(self.admin, "enable", override_reason="live test: accept blind run")
+        self.assertEqual(status, 200, body)
         self.assertEqual(body["deployment"]["live"]["status"], "enabled")
         self.assertEqual(self.act(self.operator, "disable")[0], 200)
         _, audit = api(self.admin, "GET", "audit", {"prefix": "deployment.enable", "limit": "20"})
         mine = [e for e in audit["events"] if e["object_id"] == self.UC]
         self.assertTrue(mine, audit)
+        self.assertEqual(mine[0]["action"], "deployment.enable", mine[0])
         self.assertEqual(mine[0]["details"]["scheduler_access"], "not_met", mine[0])
         self.assertEqual(mine[0]["details"]["override_reason"], "live test: accept blind run")
+        self.assertEqual(mine[0]["details"]["requested_by"], self.OPERATOR, mine[0])
+        _, audit = api(self.admin, "GET", "audit", {"prefix": "deployment.approve", "limit": "20"})
+        approvals = [e for e in audit["events"] if e["object_id"] == self.UC]
+        self.assertTrue(any(e["details"].get("access_gap_reason") for e in approvals), approvals)
+        _, audit = api(self.admin, "GET", "audit", {"prefix": "refused.", "limit": "50"})
+        refused = [e for e in audit["events"] if e["object_id"] == self.UC and e["outcome"] == "refused"]
+        codes = {e["details"]["code"] for e in refused}
+        self.assertTrue({"access_gap_reason_required", "second_person_required"} <= codes, refused)
+        self.assertEqual(len([e for e in refused if e["details"]["code"] == "second_person_required"]), 1, refused)
 
         self.role(srchIndexesAllowed="_internal")
         status, summary = api(self.operator, "GET", "readiness/summary")
@@ -1417,6 +1442,10 @@ class LiveScheduledRunTest(unittest.TestCase):
         self.assertEqual(before["cron_schedule"], "* * * * *")
         status, body = self.act(self.approver, "enable", override_reason="live test: scheduled run evidence")
         self.assertEqual(status, 200, body)
+        if body["deployment"]["live"]["status"] != "enabled":
+            status, body = self.act(self.submitter, "enable", override_reason="live test: scheduled run evidence")
+            self.assertEqual(status, 200, body)
+        self.assertEqual(body["deployment"]["live"]["status"], "enabled")
         enabled_at = time.time()
         try:
             rows = []
@@ -2182,6 +2211,8 @@ class LiveAssessmentTest(unittest.TestCase):
         self.assertEqual(status, 200, body)
         score = body["score"]
         self.assertEqual((score["start"], score["points_lost"] + score["score"]), (110, 110), score)
+        self.assertEqual(score["all_assessed"], score["complete"])
+        self.assertIn("can_pass", score)
         before = score["score"]
         status, out = api(self.assessor, "POST", "assessment", body={"framework_id": "cmmc-l2", "control_id": "AC.L2-3.1.1",
                                                                   "status": "implemented", "note": "Live test: verified"})
@@ -2228,6 +2259,15 @@ class LiveAssessmentTest(unittest.TestCase):
         self.assertTrue(item["overdue"])
         status, listing = api(self.assessor, "GET", "poam", {"framework_id": "cmmc-l2", "overdue": "1"})
         self.assertIn(item["id"], [i["id"] for i in listing["items"]])
+        self.assertFalse(item["eligibility"]["eligible"], item["eligibility"])
+        self.assertEqual(item["eligibility"]["point_value"], 5)
+        self.assertIn("not a CMMC status", item["eligibility"]["notice"])
+        status, out = api(self.assessor, "POST", "poam", body={
+            "framework_id": "cmmc-l2", "control_id": "AC.L2-3.1.20", "title": "Excluded", "weakness": "Live test weakness",
+            "owner": "bob", "due": "2031-01-01"})
+        self.assertEqual(status, 200, out)
+        self.created[C.POAM].append(out["item"]["id"])
+        self.assertIn("excluded", " ".join(out["item"]["eligibility"]["reasons"]))
         self.assertEqual(api(self.assessor, "POST", "poam/update", body={"id": item["id"], "due": "2031-01-01"})[0], 400)
         status, out = api(self.assessor, "POST", "poam/update", body={"id": item["id"], "due": "2031-01-01", "note": "Vendor delay"})
         self.assertEqual((status, out["item"]["overdue"]), (200, False), out)
@@ -2237,6 +2277,28 @@ class LiveAssessmentTest(unittest.TestCase):
         status, out = api(self.assessor, "POST", "poam/reopen", body={"id": item["id"], "note": "Regression found"})
         self.assertEqual((status, out["item"]["state"]), (200, "open"), out)
         self.assertEqual([h["action"] for h in out["item"]["history"]], ["created", "updated", "closed", "reopened"])
+
+    def refused_rows(self, prefix="refused."):
+        _, audit = api(self.admin, "GET", "audit", {"prefix": prefix, "limit": "200"})
+        return [e for e in audit["events"] if e["actor"] == self.VIEWER]
+
+    def test_refusals_are_audited_once_and_capped(self):
+        body = {"framework_id": "cmmc-l2", "control_id": "AC.L2-3.1.1", "status": "implemented", "note": "Live test: no right"}
+        for _ in range(3):
+            self.assertEqual(api(self.viewer, "POST", "assessment", body=body)[0], 403)
+        rows = self.refused_rows()
+        self.assertEqual(len(rows), 1, rows)
+        self.assertEqual((rows[0]["outcome"], rows[0]["details"]["status"], rows[0]["object_id"]), ("refused", 403, "AC.L2-3.1.1"), rows[0])
+        self.assertNotIn("Live test: no right", json.dumps(rows[0]))
+        for n in range(30):
+            api(self.viewer, "POST", "poam", body={"framework_id": "cmmc-l2", "control_id": "AC.L2-3.1.%d" % (n + 100)})
+        rows = self.refused_rows()
+        limited = [r for r in rows if r["action"] == "refused.rate_limited"]
+        self.assertEqual(len(limited), 1, [r["action"] for r in rows])
+        self.assertEqual(len(rows), 21, len(rows))
+        self.assertEqual(limited[0]["details"]["scope"], "actor")
+        status, out = api(self.admin, "GET", "audit/verify")
+        self.assertTrue(out["ok"], out)
 
     def test_snapshot_is_stored_hashed_and_verifiable(self):
         status, out = api(self.assessor, "POST", "assessment/snapshot", body={"framework_id": "cmmc-l2", "label": "Live snapshot"})

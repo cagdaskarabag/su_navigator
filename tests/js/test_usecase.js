@@ -79,6 +79,31 @@ var tests = {
         uc.validation = { source_hash: "0".repeat(64), parse_ok: true, side_effects: [] };
         assert.strictEqual(button(open(uc), "Run search").disabled, true);
     },
+    "an add-on command that is not on the read-only list is refused (D-080)": function () {
+        var uc = fixture("fenre_plain");
+        uc.spl = 'index=os | head 1 | snowincident --account "prod" --short_description "x"';
+        var v = open(uc);
+        var b = button(v, "Run search");
+        assert.strictEqual(b.disabled, true);
+        assert.ok(/snowincident/.test(b.getAttribute("title")), b.getAttribute("title"));
+        assert.ok(/read-only list/.test(b.getAttribute("title")));
+        b.dispatch("click");
+        assert.strictEqual(FakeSearchManager.instances.length, 0);
+    },
+    "an unknown command stays refused when the stored parse lists it": function () {
+        var uc = fixture("fenre_plain");
+        uc.spl = "index=os | head 1 | snowincident --account prod";
+        uc.validation = { source_hash: uc.provenance.source_hash, parse_ok: true, side_effects: [], indirect_commands: [], unknown_commands: ["snowincident"] };
+        var b = button(open(uc), "Run search");
+        assert.strictEqual(b.disabled, true);
+        assert.ok(/extra_safe_commands/.test(b.getAttribute("title")), b.getAttribute("title"));
+    },
+    "a command the server cleared through extra_safe_commands is offered without a warning about it": function () {
+        var uc = fixture("fenre_plain");
+        uc.spl = "index=os | head 1 | mytrusted a=1";
+        uc.validation = { source_hash: uc.provenance.source_hash, parse_ok: true, side_effects: [], indirect_commands: [], unknown_commands: [] };
+        assert.strictEqual(button(open(uc), "Run search").disabled, false);
+    },
     "side-effect commands are refused and clicking does nothing": function () {
         var uc = fixture("fenre_plain");
         uc.spl = "index=main | stats count by host | outputlookup hosts.csv";

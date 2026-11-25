@@ -286,12 +286,26 @@ function ucmViewMain($, ucm) {
             var body = el("tbody", {});
             data.events.forEach(function (e) {
                 body.appendChild(el("tr", {}, el("td", { text: e.time_iso }), el("td", { text: e.actor }),
-                    el("td", { text: e.action }), el("td", { "class": "ucm-mono", text: e.object_id }), el("td", {}, statusBadge(e.outcome))));
+                    el("td", { text: e.action }), el("td", { "class": "ucm-mono", text: e.object_id }), el("td", {}, e.outcome === "refused" ? ucm.badge("refused", "warn") : statusBadge(e.outcome))));
             });
             ucm.clear(auditBox).appendChild(el("div", { "class": "ucm-section" }, el("h3", { text: "Content audit trail" }),
                 data.events.length ? el("table", { "class": "ucm-table" }, el("thead", {}, el("tr", {},
                     el("th", { text: "Time (UTC)" }), el("th", { text: "Actor" }), el("th", { text: "Action" }),
                     el("th", { text: "Object" }), el("th", { text: "Outcome" }))), body) : ucm.stateBox("empty", "No audit events yet."), auditIntegrity()));
+            ucm.get("audit", { limit: 15, prefix: "refused." }).done(function (refused) {
+                if (!refused.events.length) { return; }
+                var rows = el("tbody", {});
+                refused.events.forEach(function (e) {
+                    var d = e.details || {};
+                    rows.appendChild(el("tr", {}, el("td", { text: e.time_iso }), el("td", { text: e.actor }),
+                        el("td", { text: e.action.replace(/^refused\./, "") }), el("td", { "class": "ucm-mono", text: e.object_id }),
+                        el("td", { text: d.code || (d.scope ? "rate limited (" + d.scope + ")" : "") }),
+                        el("td", { "class": "ucm-sub", text: d.message || "" })));
+                });
+                auditBox.appendChild(el("div", { "class": "ucm-section" }, el("h3", { text: "Refused requests" }),
+                    el("div", { "class": "ucm-sub", text: "Governance requests that were refused. Repeats are written once per window and each user has an hourly limit ([audit] in ucm.conf)." }),
+                    el("table", { "class": "ucm-table" }, el("thead", {}, el("tr", {}, ["Time (UTC)", "User", "Route", "Object", "Code", "Message"].map(function (t) { return el("th", { text: t }); }))), rows)));
+            });
         }).fail(function () { ucm.clear(auditBox); });
     }
 

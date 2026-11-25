@@ -7,11 +7,12 @@ import os
 import re
 import shutil
 import subprocess
+import sys
 import unittest
 
 import helpers  # noqa: F401  (sets sys.path)
 from splunk_ucm.spl.analysis import GENERATING_COMMANDS, SIDE_EFFECT_COMMANDS, analyze
-from splunk_ucm.spl.policy import HIDDEN_SPL_COMMANDS, INDIRECT_COMMANDS, classify
+from splunk_ucm.spl.policy import HIDDEN_SPL_COMMANDS, INDIRECT_COMMANDS, READ_ONLY_COMMANDS, classify
 
 HERE = os.path.dirname(__file__)
 COMMON = os.path.join(HERE, "..", "..", "sunavigator", "appserver", "static", "ucm_common.js")
@@ -57,7 +58,9 @@ EXTRA = [
     "| makeresults | appendpipe [ stats count ] | appendpipe [ collect index=x ]",
     '| makeresults | map search="collect index=x"', '| makeresults | map search="outputlookup x.csv"',
     '| makeresults | append [ map search="search a | collect index=x" ]', "collect index=x", "outputlookup x.csv",
-    "| makeresults | appendpipe [ customcmd a=1 ]", "| makeresults | append [ inputlookup x.csv ]",
+    "| makeresults | appendpipe [ customcmd a=1 ]",
+    'index=os | head 1 | snowincident --account "prod" --short_description "x"', "index=a | snowevent --account p",
+    "index=a | apply my_model", "| makeresults | cyberchef recipe=x", "index=a | fit LinearRegression a from b into m1 | table a", "| makeresults | append [ inputlookup x.csv ]",
     "index=a [ search index=b | fields host ]", "index=a [ index=b | fields host ]", "index=a [ delete=1 ]",
     "index=a | join host [ search index=b ]", "delete OR removed index=a", "| makeresults | appendpipe [ eval x=1 ]",
 ]
@@ -121,6 +124,14 @@ class GuardListsTest(unittest.TestCase):
     def test_generating_list_equals_python(self):
         self.assertEqual(sorted(js_list("GENERATING_COMMANDS")), sorted(GENERATING_COMMANDS))
 
+    def test_read_only_list_equals_python(self):
+        self.assertEqual(sorted(js_list("READ_ONLY_COMMANDS")), sorted(READ_ONLY_COMMANDS))
+
+    def test_generated_block_is_current(self):
+        sys.path.insert(0, os.path.join(HERE, "..", "..", "tools"))
+        import sync_guard_lists
+        self.assertEqual(sync_guard_lists.main(check=True), 0, "run tools/sync_guard_lists.py")
+
     def test_hidden_is_a_subset_of_indirect(self):
         self.assertTrue(HIDDEN_SPL_COMMANDS <= INDIRECT_COMMANDS)
 
@@ -148,6 +159,7 @@ class GuardParityTest(unittest.TestCase):
                 self.assertEqual(got["indirect"], py.indirect)
                 self.assertEqual(got["nested"], py.nested)
                 self.assertEqual(got["hidden"], py.hidden)
+                self.assertEqual(got["unknown"], py.unknown)
                 self.assertEqual(got["macros"], bool(analyze(spl).macros))
 
 

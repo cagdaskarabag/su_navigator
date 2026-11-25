@@ -176,7 +176,7 @@ Deferred at 0.9.1, and what became of each by 0.10.0:
 | Background Reindex | Not built; not simple with the existing job mechanism | #25 open |
 | Browser tests | Node logic tests exist; Splunk Web is checked by hand | #15 open |
 
-## WP9 — Trust, evidence, lifecycle and assessments (0.9.2 to 0.10.0) ✅
+## WP9 — Trust, evidence, lifecycle and assessments (0.9.2 to 0.11.0) ✅
 
 Done, with the decision record (each sprint was validated on the lab before merging; the live suite of the last
 build ran 77 tests OK, 2 skipped):
@@ -192,6 +192,7 @@ build ran 77 tests OK, 2 skipped):
 | 0.9.8 | Audit hash chain with verification, withdraw approval, optional second-person enable, override expiry, outcome tracking | D-075 |
 | 0.9.9 | Control catalogues (`ucm.framework/2`): NIST SP 800-53 Rev. 5.2.0, SP 800-171 Rev. 3, CSF 2.0; unmapped controls visible | D-076 |
 | 0.10.0 | Assessed state per control, assessment objectives (SP 800-171 Rev. 3), CMMC Level 2 score, POA&M, immutable evidence snapshots | D-077 |
+| 0.11.0 | Stabilisation: fail-closed browser guard, scheduler access at submit and approval, override needs a second person, audited refusals with limits, informational POA&M eligibility, upgrade notice, Fenre findings export | D-080 |
 | 0.10.0 (docs) | Support statement; platforms without a lab dropped; Sprint 20 limits left as is; 94-fixture re-run skipped | D-078, D-079 |
 
 Not built in WP9, with the reason (details in `docs/FINAL_REPORT.md`):
@@ -234,11 +235,11 @@ Not built in WP9, with the reason (details in `docs/FINAL_REPORT.md`):
 | ES / ESCU hand-off (0.9.1) | ✅ mocked app lists and stanza states (ES present, ES disabled, 403, unreadable, non-admin, renamed stanza), name mapping, cache, draft record | ✅ ESCU 6.11.1 without ES: version, real stanza state, schedule, actions, not-found, viewer view | ⬜ | ⬜ |
 | ES installed (0.9.1) | ✅ mocked only | ⬜ no ES lab; not planned (D-078) | ⬜ | ⬜ |
 | CIM data model populated check (0.9.1) | ✅ yes, no, timeout, failure, cap, budget, setting off, invalid name | ✅ temporary models: yes, no, not referenced, setting off; the lab has no CIM add-on, so no real CIM model was checked | ⬜ | ⬜ |
-| Sprints 13 to 20 (0.9.2 to 0.10.0), all areas | ✅ 1026 unit tests, 11+ Node suites | ✅ full lab live suite: 77 tests OK, 2 skipped (Splunk 10.2.9) | ⬜ not planned | ⬜ not planned |
+| Sprints 13 to 21 (0.9.2 to 0.11.0), all areas | ✅ 1074 unit tests, 11+ Node suites | ✅ full lab live suite: 78 tests OK, 2 skipped (Splunk 10.2.9) | ⬜ not planned | ⬜ not planned |
 | Operational health, data evidence, freshness (0.9.3, 0.9.4) | ✅ | ✅ `LiveDispatchHealthTest`, `LiveFieldProfileTest` (profile search on `_internal`), `LivePopulatedTest` | ⬜ | ⬜ |
 | ESCU enrichment, event-level check (0.9.6) | ✅ | ✅ `LiveSecurityContentTest`, `LiveEventCheckTest` (ESCU 6.11.1 is the only add-on on the lab) | ⬜ | ⬜ |
 | Brownfield matching, graded coverage (0.9.7) | ✅ | ✅ `LiveExternalMatchTest` | ⬜ | ⬜ |
 | Audit chain, lifecycle refinements (0.9.8) | ✅ | ✅ `LiveLifecycleRefinementsTest` | ⬜ | ⬜ |
 | Control catalogues (0.9.9) | ✅ builder and validation | ✅ `LiveControlCatalogueTest` | ⬜ | ⬜ |
 | Assessments, POA&M, snapshots (0.10.0) | ✅ 42 unit tests, 10 Node tests | ✅ `LiveAssessmentTest` (6 tests): record, derive status, POA&M, snapshot integrity, RBAC | ⬜ | ⬜ |
-| Packaging (0.10.0) | n/a | ✅ AppInspect `cloud` tag: 0 errors, 0 failures, 4 warnings | n/a | ⬜ vetting not planned |
+| Packaging (0.11.0) | n/a | ✅ AppInspect `cloud` tag: 0 errors, 0 failures, 4 warnings | n/a | ⬜ vetting not planned |

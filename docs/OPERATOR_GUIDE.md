@@ -1,10 +1,10 @@
-# SUNavigator 0.10.0 — operator guide
+# SUNavigator 0.11.0 — operator guide
 
 **SUNavigator** (short for **Splunk use case navigator**) discovers, assesses,
 selects, validates and deploys monitoring use cases in Splunk.
 
 This is the install, usage and troubleshooting guide for **SUNavigator
-0.10.0**. It is written for a single Splunk Enterprise instance
+0.11.0**. It is written for a single Splunk Enterprise instance
 (search head + indexer on one host), including a local macOS install. Search
 head clusters with a deployer, Splunk Cloud and Splunk Enterprise Security are **not** validated and not planned
 (no lab; D-078).
@@ -22,7 +22,37 @@ Related documents (design, not how-to):
 
 ---
 
-## What changed in 0.9.x and 0.10
+## What changed in 0.9.x to 0.11
+
+### 0.11.0
+
+0.11.0 closes gaps found in a review of 0.10.0 (D-080). It adds no feature. The upgrade runs one migration
+(`0006_catalog_facets_v5`) that rebuilds the catalogue summary.
+
+- **Search guard.** The guard in the browser now refuses a command it does not know, unless the server has validated the
+  search and cleared it. If a search you expect to work is refused as "not on the read-only list", add the command to
+  `extra_safe_commands` under `[spl]` only after checking that it cannot write, delete or send.
+- **Approve with an access gap.** If the scheduler role cannot read an index the search uses, the request and the
+  approval dialog say so. Approving anyway needs a reason; it is recorded as *approved with access gap*.
+- **Overrides need a second person.** `[deployment] override_second_person = true` (default). Enabling a search that a
+  gate blocks is requested by one person and confirmed by another. Set it to `false` if one person runs the app.
+- **Refused requests are audited.** A refused governance request writes `refused.<route>` to the audit trail. Limits:
+  the same request inside `refusal_window_seconds` (300) is written once; `refusal_actor_per_hour` (20) per user,
+  `refusal_total_per_hour` (200) overall; the first request over a limit writes one `refused.rate_limited` row for the
+  hour. `[audit] refusals = false` turns it off. The latest rows are on Content administration, under *Refused requests*.
+  The verification of the chain does not treat them differently from other rows.
+- **POA&M eligibility note (CMMC Level 2).** A plan item now says whether its control is one of the six that 32 CFR
+  170.21(a)(2) keeps off a plan, is worth more than one point, or takes the score under 0.8 of 110, and shows the
+  180-day closeout rule. It is information; it blocks nothing and is not a CMMC status.
+- **Older records after an upgrade.** If the catalogue was imported by an older release, some records have no analytic
+  stories or data sources. Content administration and the catalogue page count them. Reindex cannot add them: import the
+  ESCU bundle again, or sync Fenre.
+- **Score fields.** The CMMC score response has `all_assessed` and `can_pass`; `complete` is kept as an alias of
+  `all_assessed`.
+- **For the Fenre maintainer.** `python3 tools/fenre_report.py --fenre <checkout> --output <dir>` writes the findings
+  about the Fenre content as one Markdown document and one CSV. A copy for Fenre `0e21f019` is in
+  `docs/upstream/for-fenre-owner/`. The app files nothing upstream.
+- **Still not built.** CMMC conditional status, objectives for 800-53 and CMMC, signed snapshots.
 
 ### 0.10.0
 
@@ -75,7 +105,8 @@ migration is needed.
 - **Withdraw approval.** On an approved revision that is not deployed yet, **Withdraw approval** (reason of 5 characters or
   more) sends it back for review.
 - **Request enable and confirm.** With `[deployment] enable_second_person = true`, *Enable* becomes **Request enable** and a
-  second person presses **Confirm enable (asked by ...)** within 24 hours (`enable_request_hours`). Default off.
+  second person presses **Confirm enable (asked by ...)** within 24 hours (`enable_request_hours`). Default off. Independently, `override_second_person` (default on, since 0.11.0) makes an
+  override of a blocked search need the same request and confirmation.
 - **Overrides expire.** An override to enable a blocked search lasts 14 days (`override_days`). Afterwards the use case
   shows a red box, and with `override_expiry_action = disable` the search is switched off by the worker.
 - **Outcome.** On a deployed use case, set *Needs tuning* or *Waiting on data* with a note. The Deployments page counts them
@@ -632,7 +663,7 @@ searches have **no script alert actions**. Email and webhook actions exist only 
 an administrator has listed permitted destinations in `[actions]` and the approver has acknowledged
 them (0.9.5, D-072); the default alert mode only writes to Splunk's Triggered Alerts.
 
-**Not in 0.10.0:** PDF export of coverage, a bundled regulation-control
+**Not in 0.11.0:** PDF export of coverage, a bundled regulation-control
 catalogue, SHC validation with a deployer and indexer peers, Splunk Cloud
 vetting submission, and any Enterprise Security output mode (all three dropped for lack of a lab, D-078;
 0.9.1 only reads ES and ESCU state and hands off, §5.2b).
@@ -646,7 +677,7 @@ vetting submission, and any Enterprise Security output mode (all three dropped f
 | Splunk | Enterprise 10.x (validated on 10.2.9 in development; tested by operators on 10.4.3 Darwin arm64). Python 3.9 or 3.13 in Splunk. |
 | KV Store | Must reach `status: ready`. The app stores catalogue, inventory, readiness, selections, deployments and audit in KV collections. |
 | Role | First-time setup needs `admin` (or `sc_admin` on Cloud). |
-| Disk | The 0.10.0 package is a few megabytes. Category 9 of Fenre is about 120 records; the full Fenre corpus is tens of thousands of records. |
+| Disk | The 0.11.0 package is a few megabytes. Category 9 of Fenre is about 120 records; the full Fenre corpus is tens of thousands of records. |
 | Network | Optional. Remote sync needs HTTPS to `api.github.com` and `raw.githubusercontent.com`. Offline import needs none. |
 | Browser | Splunk Web. The app is a set of Simple XML views plus JavaScript under `/en-US/app/sunavigator/`. |
 
@@ -663,7 +694,7 @@ Placeholders used below:
 
 ```bash
 ./tools/package.sh
-# writes dist/sunavigator-0.10.0.tar.gz
+# writes dist/sunavigator-0.11.0.tar.gz
 ```
 
 The tarball has a single top-level folder `sunavigator/`
@@ -681,11 +712,11 @@ then fails in the UI with `500 Internal Server Error` even though splunkd is
 still unpacking. Use the CLI:
 
 ```bash
-$SPLUNK_HOME/bin/splunk install app /path/to/sunavigator-0.10.0.tar.gz \
+$SPLUNK_HOME/bin/splunk install app /path/to/sunavigator-0.11.0.tar.gz \
   -auth "$SPLUNK_USER:$SPLUNK_PASSWORD"
 # first install: omit -update
 # upgrade of an existing copy:
-$SPLUNK_HOME/bin/splunk install app /path/to/sunavigator-0.10.0.tar.gz \
+$SPLUNK_HOME/bin/splunk install app /path/to/sunavigator-0.11.0.tar.gz \
   -update 1 -auth "$SPLUNK_USER:$SPLUNK_PASSWORD"
 
 $SPLUNK_HOME/bin/splunk restart
@@ -1798,7 +1829,7 @@ app. Do the steps in this order:
    $SPLUNK_HOME/bin/splunk restart
    ```
 
-4. **Install SUNavigator 0.10.0** as in §3.2. The first install omits
+4. **Install SUNavigator 0.11.0** as in §3.2. The first install omits
    `-update`, because `sunavigator` is a new app ID.
 5. **Re-create the GitHub token** if you use one (§3.6). It must be stored in
    realm `sunavigator`. The 0.7.0 token in realm `splunk_use_case_manager` is
@@ -2175,7 +2206,7 @@ Full table: [ARCHITECTURE.md §6](ARCHITECTURE.md).
 
 ---
 
-## 12. Known limitations (0.10.0)
+## 12. Known limitations (0.11.0)
 
 Each item says where to read more and ends with its tracking: an issue number on GitHub, a draft
 (`N-nn`) in `docs/ISSUES_PENDING.md` that has not been filed yet, or "no issue" for a limit that is
@@ -2305,7 +2336,7 @@ by design.
 
 ## 13. Quick start checklist
 
-1. `splunk install app sunavigator-0.10.0.tar.gz` then `splunk restart`.
+1. `splunk install app sunavigator-0.11.0.tar.gz` then `splunk restart`.
 2. `splunk show kvstore-status` → `ready` (macOS: §9.2 if stuck on `starting`).
 3. Open **SUNavigator → Administration**; all platform pills green.
 4. **Check provider for categories** → tick **9** → **Synchronize**, **or**

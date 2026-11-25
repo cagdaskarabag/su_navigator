@@ -34,9 +34,9 @@ class ReleaseConsistencyTest(unittest.TestCase):
         self.assertTrue(text.startswith("# SUNavigator %s " % self.version))
         self.assertIn("**SUNavigator\n%s**" % self.version, text)
         self.assertIn("## 12. Known limitations (%s)" % self.version, text)
-        packages = re.findall(r"sunavigator-(0\.(?:8|9|10)\.\d+|[1-9]\d*\.\d+\.\d+)\.tar\.gz", text)
+        packages = re.findall(r"sunavigator-(0\.(?:8|9|1\d)\.\d+|[1-9]\d*\.\d+\.\d+)\.tar\.gz", text)
         self.assertEqual(set(packages), {self.version})
-        first = re.search(r"^## What changed in \d+\.\d+\.x(?: and [\d.]+)?\n.*?^### (\d+\.\d+\.\d+)", text, re.MULTILINE | re.DOTALL)
+        first = re.search(r"^## What changed in \d+\.\d+\.x(?: (?:and|to) [\d.]+)?\n.*?^### (\d+\.\d+\.\d+)", text, re.MULTILINE | re.DOTALL)
         self.assertEqual(first.group(1), self.version)
 
     def test_readme_version_badge_matches_the_app_version(self):

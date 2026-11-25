@@ -564,6 +564,18 @@ function ucmViewMain($, ucm) {
             ucm.confirmAction("Retire this deployment?", "The saved search is deleted from Splunk.", "Retire",
                 acknowledgeThenSend, true);
             return;
+        } else if (action === "approve" && (dep.scheduler_access || {}).status === "not_met") {
+            ucm.askText("Approve a revision that cannot see its data?",
+                dep.scheduler_access.detail + " If you approve it, enabling will still need an audited override. " +
+                "Say why you approve it anyway; the reason is kept on the revision and in the audit trail.",
+                { label: "Reason", minLength: 10, maxLength: 500, multiline: true }, label,
+                function (reason) { body.note = reason; body.access_reason = reason; acknowledgeThenSend(); });
+            return;
+        } else if (action === "submit" && (dep.scheduler_access || {}).status === "not_met") {
+            ucm.confirmAction("The scheduler account cannot see this search's data",
+                dep.scheduler_access.detail + " You can submit it, but the approver will be told, and enabling will need an " +
+                "override reason. Consider fixing the account's index access first.", "Submit anyway", acknowledgeThenSend);
+            return;
         } else if (action === "approve" || action === "reject" || action === "rollback") {
             ucm.askText(label, "Optional note for the audit trail.", { label: "Note", maxLength: 500, multiline: true },
                 label, function (note) { body.note = note; acknowledgeThenSend(); });
