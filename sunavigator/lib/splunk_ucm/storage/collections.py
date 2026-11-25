@@ -14,5 +14,6 @@ DEPLOYMENTS = "uc_deployments"
 CONTROL_FIXTURES = "uc_control_fixtures"
 FRAMEWORKS = "uc_frameworks"
 DASHBOARDS = "uc_dashboards"
+FIELD_PROFILE = "uc_field_profile"
 
 DOC_SCHEMA = 1

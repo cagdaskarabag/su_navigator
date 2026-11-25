@@ -66,8 +66,18 @@ def _scan(uc: UseCase, snap: Optional[EnvironmentSnapshot]) -> Dict[str, Any]:
     return scan_spl(uc.spl)
 
 
+def _best_profile(rows: List[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+    if not rows:
+        return None
+    best = max(rows, key=lambda r: (float(r.get("fill_rate") or 0), -float(r.get("placeholder_rate") or 0)))
+    return {"sourcetype": best.get("sourcetype"), "index": best.get("index"),
+            "sample_size": best.get("sample_size"), "fill_rate": best.get("fill_rate"),
+            "placeholder_rate": best.get("placeholder_rate")}
+
+
 def assess_use_case(uc: UseCase, snap: EnvironmentSnapshot, settings: ReadinessSettings) -> Dict[str, Any]:
     results = []
+    sourcetypes = [r.value for r in uc.requirements if r.type == "sourcetype"]
     for req in _requirements(uc, snap, settings.scheduled_owner):
         r = dataclasses.asdict(req)
         ev = evaluate(r, snap, settings.evaluation, uc.content_id, uc.key)
@@ -77,6 +87,10 @@ def assess_use_case(uc: UseCase, snap: EnvironmentSnapshot, settings: ReadinessS
         }
         if req.attributes.get("any_of"):
             row["any_of"] = list(req.attributes["any_of"])
+        if req.type == "field" and not req.attributes.get("derived_in_spl"):
+            profile = _best_profile(snap.field_profiles(req.value, sourcetypes))
+            if profile:
+                row["profile"] = profile
         results.append(row)
     summary = score(results, settings.scoring)
     evidence = data_evidence(results)

@@ -42,7 +42,11 @@ recomputed automatically (engine `ucm.readiness/5`).
   `summariesonly=t` searches return nothing), CIM index macros with no index constraint, indexes
   without data, sources that stopped and future-dated sources, and sourcetypes no use case or
   mapping names. Each list shows 12 rows; the API returns up to 50.
-- Not in 0.9.4: the field-fill profile job and the search-link drilldown (see D-070).
+- Field profile (D-070): discovery measures how often each required field is filled and holds a
+  placeholder, over the last 24 hours per sourcetype. Readiness reads these rates; a sparse field is
+  listed as missing data. Set `[discovery] field_profile = false` to turn it off. The bounds are the
+  `profile_*` keys in `default/ucm.conf` (see `README/ucm.conf.spec`).
+- Not in 0.9.4: the search-link drilldown (see D-070).
 
 ### 0.9.3
 

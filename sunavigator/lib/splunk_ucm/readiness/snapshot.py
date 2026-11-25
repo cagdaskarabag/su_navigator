@@ -4,7 +4,7 @@ Loaded once per assessment job so evaluating thousands of use cases does not
 issue a KV Store query per requirement.
 """
 
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Sequence
 
 from .principal import PrincipalAccess
 
@@ -19,7 +19,8 @@ def _lower(value: Any) -> str:
 
 class EnvironmentSnapshot:
     def __init__(self, sources: List[Dict[str, Any]], mappings: List[Dict[str, Any]],
-                 discovery_state: Dict[str, Any], validations: Optional[List[Dict[str, Any]]] = None):
+                 discovery_state: Dict[str, Any], validations: Optional[List[Dict[str, Any]]] = None,
+                 profiles: Optional[List[Dict[str, Any]]] = None):
         self.discovery = discovery_state or {}
         self.principal: Optional[PrincipalAccess] = None
         self.validations: Dict[str, Dict[str, Any]] = {}
@@ -55,6 +56,9 @@ class EnvironmentSnapshot:
                 self.datamodels[_lower(doc.get("name"))] = doc
             elif kind in self.objects and active:
                 self.objects[kind].setdefault(_lower(doc.get("name")), []).append(doc)
+        self.profiles: Dict[str, List[Dict[str, Any]]] = {}
+        for p in profiles or []:
+            self.profiles.setdefault(_lower(p.get("field")), []).append(p)
         self.mapped: Dict[str, Dict[str, List[Dict[str, Any]]]] = {}
         for m in mappings:
             by_kind = self.mapped.setdefault(m.get("kind", ""), {})
@@ -67,7 +71,19 @@ class EnvironmentSnapshot:
         validations = store.query(C.VALIDATION, fields=[
             "_key", "content_id", "parse_ok", "parse_error", "side_effects", "review_commands", "commands",
             "field_samples", "sampled_at", "source_hash", "cim_parse_ok", "access_scan"])
-        return cls(sources, mappings, DiscoveryStateRepository(store).state(), validations)
+        profiles = store.query(C.FIELD_PROFILE, fields=["index", "sourcetype", "field", "sample_size", "fill_rate",
+                                                         "placeholder_rate"], limit=50000)
+        return cls(sources, mappings, DiscoveryStateRepository(store).state(), validations, profiles)
+
+    def field_profiles(self, field: str, sourcetypes: Sequence[str]) -> List[Dict[str, Any]]:
+        """Stored profiles of ``field`` in the sourcetypes the use case reads (all sourcetypes if it names none)."""
+        rows = self.profiles.get(_lower(field), [])
+        if sourcetypes:
+            wanted = {_lower(s) for s in sourcetypes}
+            narrowed = [r for r in rows if _lower(r.get("sourcetype")) in wanted]
+            if narrowed:
+                return narrowed
+        return rows
 
     @property
     def discovered(self) -> bool:

@@ -11,7 +11,7 @@ Per requirement (collapsed any-of members are skipped, informational ones too):
 * index: has events -> seen, empty / unavailable / undefined -> missing
 * cim_model: populated yes -> seen, populated no or model missing -> missing, otherwise unverified
 * field: sampled present -> seen, sampled absent -> missing, not sampled -> unverified;
-  ``field_profile`` evidence (D-072) adds the fill rate when a profile exists
+  ``field_profile`` evidence (D-070) adds the fill rate when a profile exists
 
 States: ``seen`` (nothing missing or stale, at least one seen), ``partial`` (some seen, some
 missing or stale), ``none`` (something missing, nothing seen), ``unverified`` (nothing decided
@@ -21,6 +21,11 @@ either way) and ``not_applicable`` (the use case names no data requirement).
 from typing import Any, Dict, List, Optional, Sequence
 
 from .evaluators import MET, NOT_MET, PARTIAL, UNKNOWN, UNVERIFIED
+
+# A field counts as seen when at least this share of sampled events fill it and no more than
+# this share hold a placeholder (D-070). Below either bound it is missing data, not unverified.
+MIN_FILL_RATE = 0.5
+MAX_PLACEHOLDER_RATE = 0.2
 
 DATA_SEEN, DATA_PARTIAL, DATA_NONE, DATA_UNVERIFIED, DATA_NOT_APPLICABLE = (
     "seen", "partial", "none", "unverified", "not_applicable")
@@ -46,6 +51,12 @@ def requirement_evidence(r: Dict[str, Any]) -> Optional[str]:
         if populated == "no":
             return MISSING
         return NOT_DECIDED
+    if kind == "field" and r.get("profile"):
+        profile = r["profile"]
+        if float(profile.get("fill_rate") or 0) < MIN_FILL_RATE or \
+                float(profile.get("placeholder_rate") or 0) > MAX_PLACEHOLDER_RATE:
+            return MISSING
+        return SEEN
     if kind == "sourcetype" and status == PARTIAL:
         return STALE
     if kind == "field" and status not in (MET, NOT_MET, UNVERIFIED, UNKNOWN):
@@ -68,6 +79,9 @@ def data_evidence(results: Sequence[Dict[str, Any]]) -> Dict[str, Any]:
         ref = {"type": r.get("type"), "value": r.get("value"), "code": r.get("code"), "level": r.get("level")}
         if r.get("any_of"):
             ref["value"] = "any of " + ", ".join(r["any_of"])
+        if r.get("profile"):
+            ref["fill_rate"] = r["profile"].get("fill_rate")
+            ref["placeholder_rate"] = r["profile"].get("placeholder_rate")
         if kind == SEEN:
             seen += 1
         elif kind == MISSING:
@@ -87,8 +101,10 @@ def data_evidence(results: Sequence[Dict[str, Any]]) -> Dict[str, Any]:
         state = DATA_SEEN
     else:
         state = DATA_UNVERIFIED
+    missing_fields = [m["value"] for m in missing if m["type"] == "field"]
     return {"state": state, "seen": seen, "unverified": unverified, "missing_count": len(missing),
-            "stale_count": len(stale), "missing": missing[:MAX_LISTED], "stale": stale[:MAX_LISTED]}
+            "stale_count": len(stale), "missing": missing[:MAX_LISTED], "stale": stale[:MAX_LISTED],
+            "missing_fields": missing_fields[:MAX_LISTED]}
 
 
 def summary_line(ev: Dict[str, Any]) -> str:

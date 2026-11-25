@@ -1786,3 +1786,19 @@ class LiveDispatchHealthTest(unittest.TestCase):
         self.assertIn("lookup", row.get("last_error", "").lower())
         self.assertEqual(classify(True, row), "failing_dispatch")
         self.assertEqual([f["code"] for f in advisories(row, "* * * * *")], ["H001"])
+
+
+class LiveFieldProfileTest(unittest.TestCase):
+    """D-070: the field-profile search runs on Splunk and returns rates, never values."""
+
+    def test_profile_search_counts_filled_and_placeholder_events(self):
+        from splunk_ucm.discovery.profile import profile_spl, parse_profile
+        spl = profile_spl("_internal", "splunkd", ["log_level", "component"], ["-", "N/A"], 500)
+        rows = oneshot(transport(), spl, earliest="-24h", latest="now")
+        self.assertEqual(len(rows), 1, rows)
+        profiled = parse_profile(rows[0], ["log_level", "component"])
+        self.assertTrue(profiled, rows)
+        for item in profiled:
+            self.assertGreater(item["sample_size"], 0)
+            self.assertTrue(0 <= item["fill_rate"] <= 1 and 0 <= item["placeholder_rate"] <= 1, item)
+        self.assertGreater(profiled[0]["fill_rate"], 0.5, profiled)
