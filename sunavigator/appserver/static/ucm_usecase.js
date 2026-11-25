@@ -16,6 +16,7 @@ function ucmViewMain($, ucm) {
     var el = ucm.el;
     var root = document.getElementById("ucm-usecase");
     var id = ucm.queryParams().id || "";
+    var provider = {};
 
     function section(title) {
         var body = Array.prototype.slice.call(arguments, 1);
@@ -100,18 +101,22 @@ function ucmViewMain($, ucm) {
         if (r.type !== "macro" || !res || res.status === "met") { return null; }
         var name = r.value;
         var arity = /\((\d+)\)\s*$/.exec(name || "");
+        var reference = (provider.macroDefinitions || {})[String(name || "").replace(/\(\d+\)\s*$/, "")];
         var steps = [
             "In Splunk Web open Settings, then Advanced search, then Search macros, and choose New Search Macro.",
             "Destination app: the app whose searches use the macro. SUNavigator deploys searches into its own app, so create it there or share it with all apps (last step).",
             "Name: exactly " + name + (arity ? " (the number in brackets is the argument count, and the Arguments field lists that many names)" : "") + ".",
-            "Definition: the SPL fragment the macro stands for, for example an index and sourcetype constraint such as index=wineventlog. " +
-                "The content provider does not supply it, so take it from the content's own documentation or your data owner.",
+            reference
+                ? "Definition: the provider's reference definition is shown below. It is a starting point; replace any index or sourcetype with the ones your data uses."
+                : "Definition: the SPL fragment the macro stands for, for example an index and sourcetype constraint such as index=wineventlog. " +
+                    "The content provider does not supply it, so take it from the content's own documentation or your data owner.",
             "Save, then in the macro's Permissions choose All apps if a search in another app uses it. App-only sharing shows here as partial.",
             "Run discovery again in Data Inventory so the requirement is re-checked."
         ];
         return el("details", { "class": "ucm-details" },
             el("summary", { text: "How to create this macro" }),
             el("ol", { "class": "ucm-sub" }, steps.map(function (s) { return el("li", { text: s }); })),
+            reference ? el("pre", { "class": "ucm-pre ucm-mono", text: reference }) : null,
             el("div", { "class": "ucm-sub", text: "A macro with an empty or wrong definition would make this requirement read as met while the " +
                 "search returns nothing, so check the definition against a test search before relying on it." }));
     }
@@ -1023,8 +1028,62 @@ function ucmViewMain($, ucm) {
         return el("pre", { "class": "ucm-pre ucm-mono", text: json.length > 4000 ? json.slice(0, 4000) + "…" : json });
     }
 
+    var GUIDED = ["status", "supportedTA", "dataSourceDetails", "drilldowns", "riskEntities", "tests", "macroDefinitions",
+        "howToImplement", "knownFalsePositives"];
+
+    function safeLink(url, label) {
+        return /^https:\/\//.test(url || "")
+            ? el("a", { href: url, target: "_blank", rel: "noopener noreferrer", text: label || url })
+            : el("span", { text: label || url || "" });
+    }
+
+    /* Provider guidance from the optional security_content enrichment (D-073): shown as supplied, never executed. */
+    function guidanceBox(uc) {
+        var x = uc.provider_extras || {};
+        var blocks = [];
+        if (x.status && x.status !== "production") {
+            blocks.push(ucm.stateBox(x.status === "deprecated" ? "warn" : "info", "Provider status: " + x.status + ".",
+                x.status === "deprecated" ? "The provider has marked this detection deprecated. Prefer its replacement." : "The provider has not yet promoted this detection to production."));
+        }
+        if ((x.supportedTA || []).length) {
+            blocks.push(el("div", {}, el("strong", { text: "Supported add-ons" }),
+                el("ul", {}, x.supportedTA.map(function (t) {
+                    return el("li", {}, safeLink(t.url, t.name), t.version ? el("span", { "class": "ucm-sub", text: " (tested with " + t.version + ")" }) : null);
+                })),
+                el("div", { "class": "ucm-sub", text: "Install the add-on that matches your data so field names and sourcetypes are as the detection expects." })));
+        }
+        if ((x.dataSourceDetails || []).length) {
+            blocks.push(el("div", {}, el("strong", { text: "Data sources" }),
+                el("ul", {}, x.dataSourceDetails.map(function (d) {
+                    var event = d.separator ? "  where " + d.separator + "=" + d.separatorValue : "";
+                    return el("li", {}, el("span", { text: d.name }),
+                        el("span", { "class": "ucm-mono ucm-sub", text: "  sourcetype=" + (d.sourcetype || "?") + event }));
+                }))));
+        }
+        if ((x.riskEntities || []).length) {
+            blocks.push(el("div", {}, el("strong", { text: "Risk entities" }), el("ul", {}, x.riskEntities.map(function (e) {
+                return el("li", {}, el("span", { "class": "ucm-mono", text: e.field }),
+                    el("span", { "class": "ucm-sub", text: " " + [e.type, e.score === null || e.score === undefined ? "" : "risk score " + e.score].filter(Boolean).join(", ") }));
+            }))));
+        }
+        if ((x.drilldowns || []).length) {
+            blocks.push(el("details", { "class": "ucm-details" }, el("summary", { text: "Drilldown searches (" + x.drilldowns.length + ")" }),
+                x.drilldowns.map(function (d) { return el("div", {}, el("div", { text: d.name }), el("pre", { "class": "ucm-pre ucm-mono", text: d.search })); })));
+        }
+        var attack = [];
+        (x.tests || []).forEach(function (t) { (t.attackData || []).forEach(function (a) { attack.push(a); }); });
+        if (attack.length) {
+            blocks.push(el("details", { "class": "ucm-details" }, el("summary", { text: "Test data references (" + attack.length + ")" }),
+                el("div", { "class": "ucm-sub", text: "Sample events the provider uses to test this detection. SUNavigator never downloads them; load them into a lab index yourself if you want to try the detection." }),
+                el("ul", {}, attack.map(function (a) {
+                    return el("li", {}, safeLink(a.url), el("span", { "class": "ucm-sub ucm-mono", text: a.sourcetype ? "  " + a.sourcetype : "" }));
+                }))));
+        }
+        return blocks.length ? section("Provider guidance", blocks) : null;
+    }
+
     function providerExtras(uc) {
-        var keys = Object.keys(uc.provider_extras || {}).filter(function (k) { return k.charAt(0) !== "$"; }).sort();
+        var keys = Object.keys(uc.provider_extras || {}).filter(function (k) { return k.charAt(0) !== "$" && GUIDED.indexOf(k) < 0; }).sort();
         if (!keys.length) { return null; }
         return el("details", { "class": "ucm-details" }, el("summary", { text: "Other provider fields (" + keys.length + ")" }),
             el("div", { "class": "ucm-sub", text: "Shown as supplied by the provider; not interpreted by the app." }),
@@ -1193,6 +1252,7 @@ function ucmViewMain($, ucm) {
 
     function render(uc) {
         var p = uc.provenance;
+        provider = uc.provider_extras || {};
         ucm.clear(root);
         root.appendChild(el("div", { "class": "ucm-header" },
             el("div", { "class": "ucm-sub" }, el("a", { href: "ucm_catalogue", text: "‹ Content Catalogue" })),
@@ -1219,6 +1279,8 @@ function ucmViewMain($, ucm) {
             el("details", { "class": "ucm-details" }, el("summary", { text: "Provider data-source description" }), text(uc.data_sources_text)),
             uc.required_fields.length ? el("div", {}, el("strong", { text: "Required fields: " }), ucm.chips(uc.required_fields)) : null,
             uc.datamodel_acceleration_text ? el("details", { "class": "ucm-details" }, el("summary", { text: "Data model acceleration notes" }), text(uc.datamodel_acceleration_text)) : null)));
+        var guidance = guidanceBox(uc);
+        if (guidance) { root.appendChild(guidance); }
         var handoff = handoffBox(uc);
         if (handoff) { root.appendChild(handoff); }
         var lineage = lineageBox(uc);

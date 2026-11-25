@@ -2096,3 +2096,42 @@ as drift.
 * Evidence: `tests/unit/test_actions.py`, `test_populated.py`, `tests/js/test_actions.js`, `test_handoff.js`; the
   lab check on Splunk 10.2.9 (`LiveActionsTest`: draft, refusal without acknowledgment, deploy disabled, the keys read
   back, drift on a changed recipient, removal in a later revision).
+
+## D-073 ESCU depth: enrichment from security_content, event-level data check (Sprint 16)
+
+*0.9.6 (Sprint 16).*
+
+* **Decision, the ESCU bundle may carry facts from `security_content` (answers findings on ESCU depth).**
+  * `tools/ucm_cli.py build-escu-bundle --security-content <checkout>` loads a pinned checkout offline (PyYAML is a
+    build-machine dependency only; the app never reads YAML) and merges, per detection id, additive fields into the record:
+    `status`, `dataSourceDetails`, `supportedTA`, `drilldowns`, `riskEntities`, `tests` (links only), `macroDefinitions`,
+    `howToImplement`, `knownFalsePositives`. Every field is length-bounded, links must be `https`, field and value names
+    are pattern-checked, and the input record is never modified. A detection without a match is left as it was.
+  * The checkout's commit id is appended to the bundle's `source_ref`. The normalizer is `escu-1.2.0`.
+  * Nothing is copied from proprietary Splunk apps. `security_content` is Apache-2.0 (THIRD_PARTY_NOTICES.md); SUNavigator
+    ships none of it, the bundle is built by the operator, and attack data is never downloaded.
+* **Decision, data sources become recommended requirements.** A named data source gives a *sourcetype* requirement
+  (confidence medium) and, when it has an event separator, an *event_condition* requirement (confidence low). A macro whose
+  definition is exactly `sourcetype=<name>` gives a sourcetype requirement. Recommended, not required: the SPL remains the
+  authority on what a search reads.
+* **Decision, event-level check (finding F-10).** Discovery checks each distinct (sourcetype, field, value) the active
+  catalogue names against the busiest index of the sourcetype: `search index=I sourcetype="S" "VALUE" FIELD="VALUE"
+  earliest=-Nd | head 100 | stats count`. The quoted term lets the index narrow events before the field is evaluated.
+  Bounds: `event_max_checks` 100, 30 s per search, 300 s in total, window `freshness_days` (7 if 0). Only the count
+  is stored (`uc_event_check`). A failed or empty search is counted as an error and stores nothing.
+* **Decision, never worse than partial.** Events seen: *met*. Sourcetype present, event type not seen: *partial*
+  (`event_not_seen`), because rare events are normal. Sourcetype absent: *unverified*. Not checked (off, beyond the limit):
+  *unverified*. Data evidence treats partial as missing, so the data state shows the gap and the recommendation names
+  the add-on's input settings to check.
+* **Decision, deprecated upstream.** A record whose upstream status is `deprecated` gets the quality flag
+  `deprecated_upstream` (hide-able like the others) and a warning on the page. Deprecated detections that ESCU's own
+  `.conf` marks are still left out of the bundle, as before.
+* **Fix, the field profile never ran (found while building the event check).** `SearchClient.oneshot` accepts only
+  generating searches (a leading `|`), and the profile search of 0.9.4 began with `search`, so each profiling search was
+  refused, counted as an error and stored nothing. Readiness fell back to the older sample rule, which is why nothing
+  looked wrong. Both searches now begin `| search`, and `LiveEventCheckTest` runs the profile and event passes through the
+  real search client. After upgrading, run discovery once to fill the field profile.
+* Not built: a download of test data or an automatic replay of it; an index-wide event search without a bound; reading
+  `security_content` in the app.
+* Evidence: `tests/unit/test_escu_enrich.py`, `test_event_checks.py`, `tests/js/test_guidance.js`; on the lab
+  (`LiveEventCheckTest`, an enriched ESCU 6.11.1 bundle imported and checked).

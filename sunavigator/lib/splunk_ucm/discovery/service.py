@@ -16,6 +16,7 @@ from .inventory import SplunkInventory
 from .keys import source_key
 from .mapping import MappingService
 from .populated import WINDOW, PopulatedSettings, check_models, summarize
+from .events import EventCheckSettings, run_event_checks
 from .profile import ProfileSettings, run_profile
 from .repositories import DiscoveryStateRepository, SourceRepository
 from .spl import chunk_indexes, tstats_future, tstats_searches, tstats_volume, validate_index_name, validate_time
@@ -38,6 +39,7 @@ class DiscoverySettings:
     job_timeout_seconds: int = 600
     freshness_days: int = 30
     profile: ProfileSettings = dataclasses.field(default_factory=ProfileSettings)
+    events: EventCheckSettings = dataclasses.field(default_factory=EventCheckSettings)
     populated: PopulatedSettings = dataclasses.field(default_factory=PopulatedSettings)
 
 
@@ -122,6 +124,7 @@ class DiscoveryService:
         pairs, truncated, search_errors, searched = self._tstats(event_indexes, earliest, latest)
         freshness = self._freshness(event_indexes, pairs, searched)
         profile = self._profile(job["job_id"])
+        event_checks = self._event_checks(job["job_id"])
         populated = check_models(self.search, models, self._referenced_models(), self.settings.populated)
         imported = utc_now_iso()
         now = self.now_epoch()
@@ -162,7 +165,7 @@ class DiscoveryService:
             "populated": summarize(populated, self.settings.populated.enabled),
             "missing": missing, "truncated": truncated, "auto_mappings": auto,
             "freshness": freshness,
-            "field_profile": profile,
+            "field_profile": profile, "event_checks": event_checks,
         }
         job["totals"] = totals
         job["results"] = {"eligible_indexes": event_indexes[:200]}
@@ -208,6 +211,15 @@ class DiscoveryService:
         except Exception as exc:
             log.warning("field profile failed", extra={"error": str(exc)[:200]})
             return {"enabled": self.settings.profile.enabled, "errors": 1, "sourcetypes": 0, "fields": 0}
+
+    def _event_checks(self, job_id: str) -> Dict[str, Any]:
+        try:
+            from ..storage.repositories import CategoryRepository
+            return run_event_checks(self.store, self.search, CategoryRepository(self.store), self.settings.events,
+                                    job_id, self.settings.freshness_days or 7)
+        except Exception as exc:
+            log.warning("event checks failed", extra={"error": str(exc)[:200]})
+            return {"enabled": self.settings.events.enabled, "errors": 1, "checked": 0}
 
     def _freshness(self, indexes: Sequence[str], pairs: List[Dict[str, Any]], searched: set) -> Dict[str, Any]:
         """Add 30-day volume and future-dated counts to ``pairs``; append pairs seen only before the window.

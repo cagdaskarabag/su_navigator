@@ -1,10 +1,10 @@
-# SUNavigator 0.9.5 — operator guide
+# SUNavigator 0.9.6 — operator guide
 
 **SUNavigator** (short for **Splunk use case navigator**) discovers, assesses,
 selects, validates and deploys monitoring use cases in Splunk.
 
 This is the install, usage and troubleshooting guide for **SUNavigator
-0.9.5**. It is written for a single Splunk Enterprise instance
+0.9.6**. It is written for a single Splunk Enterprise instance
 (search head + indexer on one host), including a local macOS install. Search
 head clusters and Splunk Cloud are **not** validated in this version.
 
@@ -22,6 +22,30 @@ Related documents (design, not how-to):
 ---
 
 ## What changed in 0.9.x
+
+### 0.9.6
+
+0.9.6 makes ESCU content more useful (D-073). Upgrade as usual; stored assessments are recomputed once.
+
+- **A richer ESCU bundle (optional).** `build-escu-bundle` accepts `--security-content <checkout>`, a pinned checkout of
+  <https://github.com/splunk/security_content> (needs PyYAML on the build machine only). The bundle then
+  carries, per detection: the data sources with their sourcetypes, the supported add-ons (name, Splunkbase link,
+  tested version), the event type each data source is told apart by (for example `eventName=DescribeImageScanFindings`),
+  drilldowns, risk entities, links to attack data, ESCU's reference macro definitions, "how to implement", known
+  false positives and the upstream status. Without the option the bundle is as before.
+- **The use-case page** gains *Provider guidance* (status, supported add-ons, data sources, risk entities,
+  drilldowns, test-data links) and a deprecation badge. Test data is never downloaded; the app shows the link only.
+  The macro help shows ESCU's reference definition as a starting point.
+- **Event-level data check.** Discovery now asks, for each event type the catalogue reads (most used first,
+  `event_max_checks`, default 100), whether events of that type exist in the busiest index of that sourcetype in the last
+  `freshness_days` (7 if 0). One bounded search each; only a count is stored. Readiness: seen is *met*; the sourcetype
+  present but the event type not seen is *partial* with the reason "normal for a rare event; otherwise check the add-on's
+  input settings"; the sourcetype absent is *unverified*. The requirement is *recommended*, so it lowers the score less than a
+  required one. Settings: `[discovery] event_check`, `event_max_checks`, `event_timeout_seconds`, `event_budget_seconds`.
+- **Fix: the field profile now runs.** In 0.9.4 and 0.9.5 the profiling search was refused by the app's own
+  search guard, so fill and placeholder rates were never stored and readiness used the older sample rule. Run discovery
+  once after upgrading.
+- Records imported before this release have none of these fields; re-import an enriched bundle to get them.
 
 ### 0.9.5
 
@@ -522,7 +546,7 @@ searches have **no script alert actions**. Email and webhook actions exist only 
 an administrator has listed permitted destinations in `[actions]` and the approver has acknowledged
 them (0.9.5, D-072); the default alert mode only writes to Splunk's Triggered Alerts.
 
-**Not in 0.9.5:** PDF export of coverage, a bundled regulation-control
+**Not in 0.9.6:** PDF export of coverage, a bundled regulation-control
 catalogue, SHC validation with a deployer and indexer peers (issue #2), Splunk Cloud
 vetting submission (issue #3), and any Enterprise Security output mode (issue #4; 0.9.1 only
 reads ES and ESCU state and hands off, §5.2b).
@@ -536,7 +560,7 @@ reads ES and ESCU state and hands off, §5.2b).
 | Splunk | Enterprise 10.x (validated on 10.2.9 in development; tested by operators on 10.4.3 Darwin arm64). Python 3.9 or 3.13 in Splunk. |
 | KV Store | Must reach `status: ready`. The app stores catalogue, inventory, readiness, selections, deployments and audit in KV collections. |
 | Role | First-time setup needs `admin` (or `sc_admin` on Cloud). |
-| Disk | The 0.9.5 package is a few megabytes. Category 9 of Fenre is about 120 records; the full Fenre corpus is tens of thousands of records. |
+| Disk | The 0.9.6 package is a few megabytes. Category 9 of Fenre is about 120 records; the full Fenre corpus is tens of thousands of records. |
 | Network | Optional. Remote sync needs HTTPS to `api.github.com` and `raw.githubusercontent.com`. Offline import needs none. |
 | Browser | Splunk Web. The app is a set of Simple XML views plus JavaScript under `/en-US/app/sunavigator/`. |
 
@@ -553,7 +577,7 @@ Placeholders used below:
 
 ```bash
 ./tools/package.sh
-# writes dist/sunavigator-0.9.5.tar.gz
+# writes dist/sunavigator-0.9.6.tar.gz
 ```
 
 The tarball has a single top-level folder `sunavigator/`
@@ -571,11 +595,11 @@ then fails in the UI with `500 Internal Server Error` even though splunkd is
 still unpacking. Use the CLI:
 
 ```bash
-$SPLUNK_HOME/bin/splunk install app /path/to/sunavigator-0.9.5.tar.gz \
+$SPLUNK_HOME/bin/splunk install app /path/to/sunavigator-0.9.6.tar.gz \
   -auth "$SPLUNK_USER:$SPLUNK_PASSWORD"
 # first install: omit -update
 # upgrade of an existing copy:
-$SPLUNK_HOME/bin/splunk install app /path/to/sunavigator-0.9.5.tar.gz \
+$SPLUNK_HOME/bin/splunk install app /path/to/sunavigator-0.9.6.tar.gz \
   -update 1 -auth "$SPLUNK_USER:$SPLUNK_PASSWORD"
 
 $SPLUNK_HOME/bin/splunk restart
@@ -1688,7 +1712,7 @@ app. Do the steps in this order:
    $SPLUNK_HOME/bin/splunk restart
    ```
 
-4. **Install SUNavigator 0.9.5** as in §3.2. The first install omits
+4. **Install SUNavigator 0.9.6** as in §3.2. The first install omits
    `-update`, because `sunavigator` is a new app ID.
 5. **Re-create the GitHub token** if you use one (§3.6). It must be stored in
    realm `sunavigator`. The 0.7.0 token in realm `splunk_use_case_manager` is
@@ -2065,7 +2089,7 @@ Full table: [ARCHITECTURE.md §6](ARCHITECTURE.md).
 
 ---
 
-## 12. Known limitations (0.9.5)
+## 12. Known limitations (0.9.6)
 
 Each item says where to read more and ends with its tracking: an issue number on GitHub, a draft
 (`N-nn`) in `docs/ISSUES_PENDING.md` that has not been filed yet, or "no issue" for a limit that is
@@ -2193,7 +2217,7 @@ by design.
 
 ## 13. Quick start checklist
 
-1. `splunk install app sunavigator-0.9.5.tar.gz` then `splunk restart`.
+1. `splunk install app sunavigator-0.9.6.tar.gz` then `splunk restart`.
 2. `splunk show kvstore-status` → `ready` (macOS: §9.2 if stuck on `starting`).
 3. Open **SUNavigator → Administration**; all platform pills green.
 4. **Check provider for categories** → tick **9** → **Synchronize**, **or**

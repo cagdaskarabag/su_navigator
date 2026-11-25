@@ -82,7 +82,7 @@ def profile_spl(index: str, sourcetype: str, fields: Sequence[str], placeholders
         placeholder = " OR ".join('trim(%s)="%s"' % (ref, p) for p in placeholders)
         stats.append("sum(eval(if(%s,1,0))) as f%d_filled" % (filled, i))
         stats.append("sum(eval(if(%s,1,0))) as f%d_placeholder" % (placeholder, i))
-    return ('search index=%s sourcetype="%s" earliest=%s latest=now | head %d | stats %s'
+    return ('| search index=%s sourcetype="%s" earliest=%s latest=now | head %d | stats %s'
             % (index, _quote_free(sourcetype), WINDOW, sample, " ".join(stats)))
 
 

@@ -92,6 +92,14 @@ profile_budget_seconds = <integer 30-3600>
 profile_placeholders = <comma-separated strings>
 * Values treated as placeholders (for example "-", "N/A") when computing placeholder rates.
 * Empty uses the built-in list: -, N/A, n/a, null, NULL, unknown, none, 0.0.0.0.
+event_check = <boolean>
+* For each event type a detection reads (for example eventName=DescribeImageScanFindings in aws:cloudtrail), run one bounded search to see whether events of that type exist, over freshness_days (7 if 0). Only a count is stored (D-073). Default true.
+event_max_checks = <integer 0-1000>
+* Event types checked per job, most used by the catalogue first. Default 100.
+event_timeout_seconds = <integer 5-300>
+* Timeout for each event check. Default 30.
+event_budget_seconds = <integer 30-3600>
+* Total time one job may spend on event checks. Remaining checks are reported as skipped. Default 300.
 populated_check = <boolean>
 * Check whether installed data models hold events (issue #13). For each selected model
 * discovery runs one `| tstats count from datamodel=<model> where earliest=-24h` with the

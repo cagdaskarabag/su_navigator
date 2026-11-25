@@ -492,7 +492,8 @@ define(["jquery", "splunk.util"], function ($, splunkUtil) {
         unbounded_index: ["index=*", "Primary SPL searches index=* or no index"],
         es_required: ["needs ES", "Requires Splunk Enterprise Security"],
         duplicate_spl: ["duplicate SPL", "Primary SPL is identical to another use case"],
-        provider_twin: ["twin in other provider", "Primary SPL is identical to a use case from another provider", "info"]
+        provider_twin: ["twin in other provider", "Primary SPL is identical to a use case from another provider", "info"],
+        deprecated_upstream: ["deprecated upstream", "The provider has marked this detection deprecated", "warn"]
     };
 
     function qualityBadges(flags) {

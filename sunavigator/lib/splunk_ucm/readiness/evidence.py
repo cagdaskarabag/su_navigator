@@ -30,7 +30,7 @@ MAX_PLACEHOLDER_RATE = 0.2
 DATA_SEEN, DATA_PARTIAL, DATA_NONE, DATA_UNVERIFIED, DATA_NOT_APPLICABLE = (
     "seen", "partial", "none", "unverified", "not_applicable")
 DATA_STATES = (DATA_SEEN, DATA_PARTIAL, DATA_NONE, DATA_UNVERIFIED, DATA_NOT_APPLICABLE)
-DATA_TYPES = ("sourcetype", "index", "cim_model", "field")
+DATA_TYPES = ("sourcetype", "index", "cim_model", "field", "event_condition")
 MAX_LISTED = 10
 
 SEEN, MISSING, STALE, NOT_DECIDED = "seen", "missing", "stale", "unverified"

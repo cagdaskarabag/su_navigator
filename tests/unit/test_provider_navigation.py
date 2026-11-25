@@ -277,7 +277,7 @@ class TwinLineageTest(unittest.TestCase):
             d = detail(store, cid)
             self.assertEqual((d["spl_twins"], d["spl_duplicates"]), ([], []), cid)
             self.assertNotIn("provider_twin", d["quality_flags"])
-        self.assertEqual(get_facets(store)["quality_flags"][-1], {"id": "provider_twin", "count": 0})
+        self.assertIn({"id": "provider_twin", "count": 0}, get_facets(store)["quality_flags"])
 
     def test_without_the_other_provider_imported(self):
         store = two_provider_store(twin=True, escu=False)

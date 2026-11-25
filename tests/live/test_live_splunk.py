@@ -20,6 +20,7 @@ import uuid
 import helpers
 from splunk_ucm import conf
 from splunk_ucm.deployment.export import conf_search
+from splunk_ucm.platform.search import SearchClient
 from splunk_ucm.storage import collections as C
 from splunk_ucm.storage.kvstore import KVStore
 from splunk_ucm.util import sha256_text
@@ -1794,7 +1795,7 @@ class LiveFieldProfileTest(unittest.TestCase):
     def test_profile_search_counts_filled_and_placeholder_events(self):
         from splunk_ucm.discovery.profile import profile_spl, parse_profile
         spl = profile_spl("_internal", "splunkd", ["log_level", "component"], ["-", "N/A"], 500)
-        rows = oneshot(transport(), spl, earliest="-24h", latest="now")
+        rows = SearchClient(transport()).oneshot(spl, timeout=60, max_count=1).rows
         self.assertEqual(len(rows), 1, rows)
         profiled = parse_profile(rows[0], ["log_level", "component"])
         self.assertTrue(profiled, rows)
@@ -1802,6 +1803,43 @@ class LiveFieldProfileTest(unittest.TestCase):
             self.assertGreater(item["sample_size"], 0)
             self.assertTrue(0 <= item["fill_rate"] <= 1 and 0 <= item["placeholder_rate"] <= 1, item)
         self.assertGreater(profiled[0]["fill_rate"], 0.5, profiled)
+
+
+@unittest.skipUnless(LIVE, "set UCM_LIVE_SPLUNK=1 to run against a real Splunk instance")
+class LiveEventCheckTest(unittest.TestCase):
+    """D-073: the bounded event-type search runs on Splunk and answers with a capped count."""
+
+    def hits(self, value):
+        from splunk_ucm.discovery.events import event_spl
+        spl = event_spl("_internal", "splunkd", "log_level", value, 1)
+        rows = SearchClient(transport()).oneshot(spl, timeout=60, max_count=1).rows
+        self.assertEqual(len(rows), 1, rows)
+        return int(float(rows[0]["sun_hits"]))
+
+    def test_event_type_that_exists_is_counted_and_capped(self):
+        self.assertEqual(self.hits("INFO"), 100)
+
+    def test_event_type_that_never_occurs_is_zero(self):
+        self.assertEqual(self.hits("NOSUCHLEVELXYZ"), 0)
+
+    def test_discovery_passes_run_through_the_real_search_client(self):
+        """The leading-pipe rule of SearchClient.oneshot once made both passes count only errors."""
+        from unittest import mock
+        from splunk_ucm.discovery import events, profile
+        from splunk_ucm.storage.kvstore import InMemoryStore
+        store = InMemoryStore()
+        store.upsert(C.ENVIRONMENT_SOURCES, {"_key": "p", "kind": "pair", "status": "active", "index": "_internal",
+                                             "sourcetype": "splunkd", "window_count": 10})
+        client = SearchClient(transport())
+        triples = [(("splunkd", "log_level", "INFO"), 1), (("splunkd", "log_level", "NOSUCHLEVELXYZ"), 1)]
+        with mock.patch.object(events, "targets", return_value=triples):
+            summary = events.run_event_checks(store, client, None, events.EventCheckSettings(), "j", 1)
+        self.assertEqual((summary["checked"], summary["seen"], summary["not_seen"], summary["errors"]), (2, 1, 1, 0), summary)
+        wanted = {"splunkd": {"fields": {"log_level", "component"}}}
+        with mock.patch.object(profile, "targets", return_value=wanted):
+            summary = profile.run_profile(store, client, None, profile.ProfileSettings(), "j")
+        self.assertEqual((summary["sourcetypes"], summary["errors"]), (1, 0), summary)
+        self.assertGreater(store.query(C.FIELD_PROFILE, {"field": "log_level"})[0]["fill_rate"], 0.5)
 
 
 @unittest.skipUnless(LIVE, "set UCM_LIVE_SPLUNK=1 to run against a real Splunk instance")

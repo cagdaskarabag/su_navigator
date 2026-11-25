@@ -105,6 +105,31 @@ def eval_sourcetype(req, snap: EnvironmentSnapshot, settings: EvaluationSettings
     return result(NOT_MET, "not_found", "No events for this sourcetype in the discovery window (%s).%s" % (window, note))
 
 
+def eval_event_condition(req, snap: EnvironmentSnapshot, settings: EvaluationSettings):
+    """Events of one type within a sourcetype (D-073). Never worse than partial: a rare event can be normal."""
+    attrs = req.get("attributes") or {}
+    sourcetype, field, value = attrs.get("sourcetype") or "", attrs.get("field") or "", attrs.get("value") or ""
+    label = "%s=%s in %s" % (field, value, sourcetype)
+    if not (sourcetype and field and value):
+        return result(UNKNOWN, "empty_value", "Requirement does not name a sourcetype, field and value.")
+    if not snap.pairs_active.get(sourcetype.lower()):
+        return result(UNVERIFIED, "sourcetype_not_seen",
+                      "The sourcetype %s was not seen, so the event type %s=%s was not checked." % (sourcetype, field, value))
+    doc = snap.events.get(sourcetype.lower() + "|" + field.lower() + "|" + value.lower())
+    if doc is None:
+        return result(UNVERIFIED, "not_checked",
+                      "Events of type %s were not checked (the event check is off, or beyond its limit). Run discovery." % label)
+    row = {"index": doc.get("index"), "sourcetype": sourcetype, "field": field, "value": value,
+           "count": doc.get("count"), "window_days": doc.get("window_days"), "evaluated_at": doc.get("evaluated_at")}
+    days = doc.get("window_days") or "?"
+    if int(doc.get("count") or 0) > 0:
+        return result(MET, "event_seen", "Events with %s=%s were seen in %s in the last %s days." % (field, value, sourcetype, days), [row])
+    return result(PARTIAL, "event_not_seen",
+                  "%s has events, but none with %s=%s in the last %s days. That is normal for a rare event; otherwise the "
+                  "source may not capture it (check the add-on's input settings and the data source's documentation)."
+                  % (sourcetype, field, value, days), [row])
+
+
 def _internal_not_scanned(name: str) -> Dict[str, Any]:
     return result(UNVERIFIED, "internal_not_scanned",
                   "%s is an internal index and the last discovery ran without internal indexes ([discovery] "
@@ -376,7 +401,7 @@ EVALUATORS: Dict[str, Callable[..., Dict[str, Any]]] = {
     "spl_validity": eval_spl_validity,
     "other": eval_other,
     "field": eval_field,
-    "event_condition": _unverified("requires_data_sampling", "Event conditions need a bounded data sample (WP4)."),
+    "event_condition": eval_event_condition,
     "freshness": _unverified("not_evaluable", "No freshness target is defined for this requirement."),
     "permission": eval_permission,
     "data_source": _unverified("not_evaluable", "Free-text data source; map it to a sourcetype to evaluate."),

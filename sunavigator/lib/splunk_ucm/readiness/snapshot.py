@@ -20,7 +20,7 @@ def _lower(value: Any) -> str:
 class EnvironmentSnapshot:
     def __init__(self, sources: List[Dict[str, Any]], mappings: List[Dict[str, Any]],
                  discovery_state: Dict[str, Any], validations: Optional[List[Dict[str, Any]]] = None,
-                 profiles: Optional[List[Dict[str, Any]]] = None):
+                 profiles: Optional[List[Dict[str, Any]]] = None, events: Optional[List[Dict[str, Any]]] = None):
         self.discovery = discovery_state or {}
         self.principal: Optional[PrincipalAccess] = None
         self.validations: Dict[str, Dict[str, Any]] = {}
@@ -56,6 +56,9 @@ class EnvironmentSnapshot:
                 self.datamodels[_lower(doc.get("name"))] = doc
             elif kind in self.objects and active:
                 self.objects[kind].setdefault(_lower(doc.get("name")), []).append(doc)
+        self.events: Dict[str, Dict[str, Any]] = {}
+        for e in events or []:
+            self.events[_lower(e.get("sourcetype")) + "|" + _lower(e.get("field")) + "|" + _lower(e.get("value"))] = e
         self.profiles: Dict[str, List[Dict[str, Any]]] = {}
         for p in profiles or []:
             self.profiles.setdefault(_lower(p.get("field")), []).append(p)
@@ -73,7 +76,9 @@ class EnvironmentSnapshot:
             "field_samples", "sampled_at", "source_hash", "cim_parse_ok", "access_scan"])
         profiles = store.query(C.FIELD_PROFILE, fields=["index", "sourcetype", "field", "sample_size", "fill_rate",
                                                          "placeholder_rate"], limit=50000)
-        return cls(sources, mappings, DiscoveryStateRepository(store).state(), validations, profiles)
+        events = store.query(C.EVENT_CHECK, fields=["index", "sourcetype", "field", "value", "count", "window_days",
+                                                    "evaluated_at"], limit=50000)
+        return cls(sources, mappings, DiscoveryStateRepository(store).state(), validations, profiles, events)
 
     def field_profiles(self, field: str, sourcetypes: Sequence[str]) -> List[Dict[str, Any]]:
         """Stored profiles of ``field`` in the sourcetypes the use case reads (all sourcetypes if it names none)."""

@@ -44,7 +44,14 @@ def cmd_build_bundle(args) -> int:
 
 
 def cmd_build_escu_bundle(args) -> int:
-    bundle, report = build_escu_bundle(args.package)
+    enricher, extra, extra_report = None, "", None
+    if args.security_content:
+        import security_content
+        enricher, extra_report = security_content.load(args.security_content)
+        extra = "security_content:" + (extra_report["commit"] or "unpinned")
+    bundle, report = build_escu_bundle(args.package, enricher, extra)
+    if extra_report is not None:
+        report["security_content"] = extra_report
     data = json.dumps(bundle, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
     with open(args.output, "wb") as handle:
         handle.write(data)
@@ -104,6 +111,8 @@ def main(argv=None) -> int:
     p.set_defaults(func=cmd_build_bundle)
     p = sub.add_parser("build-escu-bundle", help="build an offline bundle from an ESCU package")
     p.add_argument("--package", required=True, help="extracted DA-ESS-ContentUpdate directory or .tar.gz")
+    p.add_argument("--security-content", help="pinned checkout of github.com/splunk/security_content; adds data "
+                   "sources, supported add-ons, drilldowns, risk entities, test references, macro definitions and status")
     p.add_argument("--output", required=True)
     p.set_defaults(func=cmd_build_escu_bundle)
     p = sub.add_parser("build-control-fixtures", help="build control-test fixtures from a Fenre samples/ tree")
