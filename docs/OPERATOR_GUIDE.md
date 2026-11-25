@@ -13,6 +13,8 @@ Related documents (design, not how-to):
 
 | Document | Contents |
 | --- | --- |
+| [USER_GUIDE.md](USER_GUIDE.md) | Step-by-step use of every page with screenshots, by role |
+| [FEATURE_STATUS.md](FEATURE_STATUS.md) | What works, what does not, what is planned |
 | [README.md](../README.md) | Status, layout, packaging, tests |
 | [ARCHITECTURE.md](ARCHITECTURE.md) | Components, KV collections, REST |
 | [SECURITY.md](SECURITY.md) | Trust boundaries, roles, ACLs |
@@ -731,6 +733,8 @@ $SPLUNK_HOME/bin/splunk display app sunavigator \
 
 `state` should be `enabled`. Open Splunk Web → **Apps → SUNavigator**.
 
+Passing the password in `-auth` shows it in the process list of the host. On a shared host, omit `-auth` and type the password when the command asks. An install through the REST endpoint (`/services/apps/local`) can also stay busy for several minutes on a slow host (seen on Splunk 10.4.3, macOS); the CLI does not have this problem.
+
 ![SUNavigator listed in Manage Apps with folder sunavigator and version 0.7.1](images/18-manage-apps.png)
 
 ![SUNavigator tile in the Splunk Enterprise app launcher](images/02-splunk-launcher.png)
@@ -843,6 +847,8 @@ and set:
 [deployment]
 scheduled_owner = sunavigator_scheduler
 ```
+
+After you edit `local/ucm.conf` by hand, run `POST /services/configs/conf-ucm/_reload` or restart Splunk; the app keeps the old values until then.
 
 The app refuses deploy, enable, disable, rollback and retire until this is set
 (the message names the setting). Searches run with that account's indexes,

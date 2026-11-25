@@ -247,6 +247,8 @@ If you run SUNavigator on one of these, treat it as untested and check the resul
 | Guide | Description |
 | --- | --- |
 | 📖 **[Operator Guide](docs/OPERATOR_GUIDE.md)** | Comprehensive manual covering installation, configuration, role assignment, first-run sync, view-by-view usage, upgrading, and troubleshooting. |
+| 🧭 **[User Guide](docs/USER_GUIDE.md)** | Step-by-step use of every page, by role, with 94 screenshots from a real Splunk 10.4.3 install. |
+| ✅ **[Feature status](docs/FEATURE_STATUS.md)** | What works, what does not, what is planned. Feedback goes through the [feedback form](https://github.com/cagdaskarabag/su_navigator/issues/new?template=feedback.yml). |
 | 🏗️ **[Architecture Specification](docs/ARCHITECTURE.md)** | Technical reference for software components, KV Store collection schemas, and REST endpoints. |
 | 🔒 **[Security & RBAC Model](docs/SECURITY.md)** | Detailed trust boundaries, Splunk capability definitions, and credential handling. |
 | 🧾 **[Final report](docs/FINAL_REPORT.md)** | What was delivered in 0.9.2 to 0.11.0, what was not done and why, what the lab validated, and what is open. |

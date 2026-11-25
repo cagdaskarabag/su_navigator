@@ -716,3 +716,19 @@ repository has no labels today; the "Labels" line is a suggestion.
 > - [ ] Each new rule has a positive and a negative unit test, a lab probe recorded in `docs/DECISIONS.md`, and a corpus
 >   measurement with 0 false positives against the parser where Splunk rejects the SPL.
 > - [ ] The lint stays advisory: no score, approval, gate or refusal changes.
+
+## 4. Issues filed after the 10.4.3 walkthrough
+
+Filed from the user guide run, as backlog. None is scheduled (see `docs/FEATURE_STATUS.md`).
+
+| Issue | Title |
+|---|---|
+| #34 | A refused Check provider click says the provider could not be reached |
+| #35 | Audit chain refusal names `ucm_admin` although `ucm_manage_content` may also verify it |
+| #36 | Buttons are shown to roles that cannot use them |
+| #37 | Platform card shows kvstore as unknown for users who cannot read it |
+| #38 | The enable note says enabling is blocked on use cases that are not blocked |
+| #39 | Deleting a local source mapping has no confirmation |
+| #40 | Control-test fixtures can only be imported through the REST API |
+| #41 | Unconfirmed: Splunk Web and the management API stopped answering during a discovery run (Splunk 10.4.3) |
+| #42 | Run the live test suite on Splunk 10.4.x |

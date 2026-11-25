@@ -1,0 +1,660 @@
+[
+ {
+  "file": "02-home.png",
+  "view": "/en-US/app/sunavigator/ucm_home",
+  "role": "sunguide_analyst",
+  "shows": "Home: where things stand and the six steps from content to monitoring.",
+  "guide_section": "page-home"
+ },
+ {
+  "file": "03-home-recommended-next.png",
+  "view": "/en-US/app/sunavigator/ucm_home",
+  "role": "sunguide_analyst",
+  "shows": "Home: the Recommended next list with the draft score breakdown.",
+  "guide_section": "page-home"
+ },
+ {
+  "file": "04-overview.png",
+  "view": "/en-US/app/sunavigator/ucm_overview",
+  "role": "sunguide_viewer",
+  "shows": "Overview: key figures, scheduler account check and charts.",
+  "guide_section": "page-overview"
+ },
+ {
+  "file": "05-catalogue.png",
+  "view": "/en-US/app/sunavigator/ucm_catalogue",
+  "role": "sunguide_viewer",
+  "shows": "Content Catalogue: filters and the use case table.",
+  "guide_section": "page-catalogue"
+ },
+ {
+  "file": "06-catalogue-search.png",
+  "view": "/en-US/app/sunavigator/ucm_catalogue",
+  "role": "sunguide_analyst",
+  "shows": "Catalogue after a text search for SSH.",
+  "guide_section": "page-catalogue"
+ },
+ {
+  "file": "07-catalogue-availability-filter.png",
+  "view": "/en-US/app/sunavigator/ucm_catalogue",
+  "role": "sunguide_analyst",
+  "shows": "The Availability filter opened, with counts per value.",
+  "guide_section": "page-catalogue"
+ },
+ {
+  "file": "08-catalogue-filter-applied.png",
+  "view": "/en-US/app/sunavigator/ucm_catalogue",
+  "role": "sunguide_analyst",
+  "shows": "Catalogue with an Availability filter applied.",
+  "guide_section": "page-catalogue"
+ },
+ {
+  "file": "09-usecase-top.png",
+  "view": "/en-US/app/sunavigator/ucm_usecase?id=fenre_UC-1.1.8",
+  "role": "sunguide_analyst",
+  "shows": "Use case page: title, badges and the four summary cards.",
+  "guide_section": "page-use-case"
+ },
+ {
+  "file": "10-usecase-requirements.png",
+  "view": "/en-US/app/sunavigator/ucm_usecase?id=fenre_UC-1.1.8",
+  "role": "sunguide_analyst",
+  "shows": "Requirements and readiness section with grouped requirement results.",
+  "guide_section": "page-use-case"
+ },
+ {
+  "file": "11-usecase-spl.png",
+  "view": "/en-US/app/sunavigator/ucm_usecase?id=fenre_UC-1.1.8",
+  "role": "sunguide_analyst",
+  "shows": "The SPL and search section.",
+  "guide_section": "page-use-case"
+ },
+ {
+  "file": "12-usecase-validation.png",
+  "view": "/en-US/app/sunavigator/ucm_usecase?id=fenre_UC-1.1.8",
+  "role": "sunguide_analyst",
+  "shows": "SPL validation after Parse and sample fields.",
+  "guide_section": "page-use-case"
+ },
+ {
+  "file": "13-usecase-run-search-form.png",
+  "view": "/en-US/app/sunavigator/ucm_usecase?id=fenre_UC-1.1.8",
+  "role": "sunguide_analyst",
+  "shows": "The Run this search panel with its warning and time range.",
+  "guide_section": "page-use-case"
+ },
+ {
+  "file": "14-usecase-run-search-result.png",
+  "view": "/en-US/app/sunavigator/ucm_usecase?id=fenre_UC-1.1.8",
+  "role": "sunguide_analyst",
+  "shows": "Results of an interactive search run in the browser.",
+  "guide_section": "page-use-case"
+ },
+ {
+  "file": "15-inventory-top.png",
+  "view": "/en-US/app/sunavigator/ucm_inventory",
+  "role": "sunguide_analyst",
+  "shows": "Data Inventory: discovery status, Run discovery and the coverage cards.",
+  "guide_section": "page-data-inventory"
+ },
+ {
+  "file": "16-inventory-before-discovery.png",
+  "view": "/en-US/app/sunavigator/ucm_inventory",
+  "role": "sunguide_viewer",
+  "shows": "Data Inventory before the first discovery run.",
+  "guide_section": "page-data-inventory"
+ },
+ {
+  "file": "17-inventory-sourcetypes.png",
+  "view": "/en-US/app/sunavigator/ucm_inventory",
+  "role": "sunguide_analyst",
+  "shows": "Inventory tables: sourcetypes and indexes found, with data age.",
+  "guide_section": "page-data-inventory"
+ },
+ {
+  "file": "18-inventory-source-mappings.png",
+  "view": "/en-US/app/sunavigator/ucm_inventory",
+  "role": "sunguide_analyst",
+  "shows": "Source mappings: the form and the automatic mappings.",
+  "guide_section": "page-data-inventory"
+ },
+ {
+  "file": "19-inventory-mapping-form.png",
+  "view": "/en-US/app/sunavigator/ucm_inventory",
+  "role": "sunguide_analyst",
+  "shows": "The local mapping form filled in.",
+  "guide_section": "page-data-inventory"
+ },
+ {
+  "file": "20-inventory-mapping-saved.png",
+  "view": "/en-US/app/sunavigator/ucm_inventory",
+  "role": "sunguide_analyst",
+  "shows": "The saved local mapping with origin local and confidence high.",
+  "guide_section": "page-data-inventory"
+ },
+ {
+  "file": "21-readiness.png",
+  "view": "/en-US/app/sunavigator/ucm_readiness",
+  "role": "sunguide_viewer",
+  "shows": "Readiness: key figures and state counts.",
+  "guide_section": "page-readiness"
+ },
+ {
+  "file": "22-readiness-list.png",
+  "view": "/en-US/app/sunavigator/ucm_readiness",
+  "role": "sunguide_analyst",
+  "shows": "Readiness list with filters and the most common unmet requirements.",
+  "guide_section": "page-readiness"
+ },
+ {
+  "file": "23-readiness-card-ready.png",
+  "view": "/en-US/app/sunavigator/ucm_usecase",
+  "role": "sunguide_analyst",
+  "shows": "Readiness card of a Ready use case.",
+  "guide_section": "page-readiness"
+ },
+ {
+  "file": "24-readiness-card-partial.png",
+  "view": "/en-US/app/sunavigator/ucm_usecase",
+  "role": "sunguide_analyst",
+  "shows": "Readiness card of a Partially ready use case.",
+  "guide_section": "page-readiness"
+ },
+ {
+  "file": "25-readiness-card-not-ready.png",
+  "view": "/en-US/app/sunavigator/ucm_usecase",
+  "role": "sunguide_analyst",
+  "shows": "Readiness card of a Not ready use case.",
+  "guide_section": "page-readiness"
+ },
+ {
+  "file": "26-readiness-card-stale-data.png",
+  "view": "/en-US/app/sunavigator/ucm_usecase",
+  "role": "sunguide_analyst",
+  "shows": "Readiness card where the data evidence is not current.",
+  "guide_section": "page-readiness"
+ },
+ {
+  "file": "27-backlog-empty.png",
+  "view": "/en-US/app/sunavigator/ucm_backlog",
+  "role": "sunguide_viewer",
+  "shows": "Backlog when nothing is selected.",
+  "guide_section": "page-backlog"
+ },
+ {
+  "file": "28-backlog.png",
+  "view": "/en-US/app/sunavigator/ucm_backlog",
+  "role": "sunguide_analyst",
+  "shows": "Backlog with selected and deferred use cases.",
+  "guide_section": "page-backlog"
+ },
+ {
+  "file": "29-deployments-viewer.png",
+  "view": "/en-US/app/sunavigator/ucm_deployments",
+  "role": "sunguide_viewer",
+  "shows": "Deployments page as a viewer: no action buttons beyond Export.",
+  "guide_section": "roles-and-permissions"
+ },
+ {
+  "file": "30-usecase-deployment-viewer.png",
+  "view": "/en-US/app/sunavigator/ucm_usecase?id=fenre_UC-1.1.8",
+  "role": "sunguide_viewer",
+  "shows": "Use case deployment panel as a viewer: no deployment action is offered.",
+  "guide_section": "roles-and-permissions"
+ },
+ {
+  "file": "31-deploy-form.png",
+  "view": "/en-US/app/sunavigator/ucm_usecase?id=fenre_UC-1.1.8",
+  "role": "sunguide_operator",
+  "shows": "Plan deployment panel: selection and the empty draft form.",
+  "guide_section": "task-deploy-as-two-people"
+ },
+ {
+  "file": "32-deploy-form-filled.png",
+  "view": "/en-US/app/sunavigator/ucm_usecase?id=fenre_UC-1.1.8",
+  "role": "sunguide_operator",
+  "shows": "Draft form with cron, time range and alert settings.",
+  "guide_section": "task-deploy-as-two-people"
+ },
+ {
+  "file": "33-deploy-draft-saved.png",
+  "view": "/en-US/app/sunavigator/ucm_usecase?id=fenre_UC-1.1.8",
+  "role": "sunguide_operator",
+  "shows": "Draft saved: validation result and Submit for approval.",
+  "guide_section": "task-deploy-as-two-people"
+ },
+ {
+  "file": "34-deploy-pending-approval.png",
+  "view": "/en-US/app/sunavigator/ucm_usecase?id=fenre_UC-1.1.8",
+  "role": "sunguide_operator",
+  "shows": "Submitted: the deployment is pending approval.",
+  "guide_section": "task-deploy-as-two-people"
+ },
+ {
+  "file": "35-deploy-self-approval-refusal.png",
+  "view": "/en-US/app/sunavigator/ucm_usecase?id=fenre_UC-1.1.8",
+  "role": "sunguide_operator",
+  "shows": "The submitter cannot approve: the Approve action is listed as unavailable with the reason.",
+  "guide_section": "task-deploy-as-two-people"
+ },
+ {
+  "file": "36-deploy-pending-as-approver.png",
+  "view": "/en-US/app/sunavigator/ucm_usecase?id=fenre_UC-1.1.8",
+  "role": "sunguide_operator2",
+  "shows": "A second operator sees the pending deployment and the Approve action.",
+  "guide_section": "task-deploy-as-two-people"
+ },
+ {
+  "file": "37-approve-dialog.png",
+  "view": "/en-US/app/sunavigator/ucm_usecase?id=fenre_UC-1.1.8",
+  "role": "sunguide_operator2",
+  "shows": "The approve dialog.",
+  "guide_section": "task-deploy-as-two-people"
+ },
+ {
+  "file": "38-deploy-approved.png",
+  "view": "/en-US/app/sunavigator/ucm_usecase?id=fenre_UC-1.1.8",
+  "role": "sunguide_operator2",
+  "shows": "Approved: Deploy (disabled) is now available.",
+  "guide_section": "task-deploy-as-two-people"
+ },
+ {
+  "file": "39-deploy-deployed-disabled.png",
+  "view": "/en-US/app/sunavigator/ucm_usecase?id=fenre_UC-1.1.8",
+  "role": "sunguide_operator2",
+  "shows": "Deployed: the saved search exists and is disabled.",
+  "guide_section": "task-deploy-as-two-people"
+ },
+ {
+  "file": "40-splunk-settings-searches.png",
+  "view": "/en-US/manager/sunavigator/saved/searches",
+  "role": "sunguide_admin",
+  "shows": "The disabled saved search in Splunk Settings, Searches, reports, and alerts.",
+  "guide_section": "task-deploy-as-two-people"
+ },
+ {
+  "file": "41-enable-dialog.png",
+  "view": "/en-US/app/sunavigator/ucm_usecase?id=fenre_UC-1.1.8",
+  "role": "sunguide_operator",
+  "shows": "The enable dialog.",
+  "guide_section": "task-deploy-as-two-people"
+ },
+ {
+  "file": "42-deploy-enabled.png",
+  "view": "/en-US/app/sunavigator/ucm_usecase?id=fenre_UC-1.1.8",
+  "role": "sunguide_operator",
+  "shows": "Enabled: the saved search is enabled.",
+  "guide_section": "task-deploy-as-two-people"
+ },
+ {
+  "file": "43-triggered-alerts.png",
+  "view": "/en-US/app/sunavigator/alerts",
+  "role": "sunguide_admin",
+  "shows": "Splunk Triggered Alerts after the search fired.",
+  "guide_section": "task-deploy-as-two-people"
+ },
+ {
+  "file": "44-deploy-run-status.png",
+  "view": "/en-US/app/sunavigator/ucm_usecase?id=fenre_UC-1.1.8",
+  "role": "sunguide_operator",
+  "shows": "Run status of the deployed search in the app.",
+  "guide_section": "task-deploy-as-two-people"
+ },
+ {
+  "file": "45-triggered-alerts-list.png",
+  "view": "/en-US/app/sunavigator/alerts",
+  "role": "sunguide_admin",
+  "shows": "Triggered Alerts list entry for the deployed search.",
+  "guide_section": "task-deploy-as-two-people"
+ },
+ {
+  "file": "46-deployments-page.png",
+  "view": "/en-US/app/sunavigator/ucm_deployments",
+  "role": "sunguide_operator",
+  "shows": "Deployments page: pipeline counts and the deployments table.",
+  "guide_section": "page-deployments"
+ },
+ {
+  "file": "47-control-test-result.png",
+  "view": "/en-US/app/sunavigator/ucm_usecase?id=fenre_UC-1.1.8",
+  "role": "sunguide_operator",
+  "shows": "Control test result on the use case page.",
+  "guide_section": "task-control-test"
+ },
+ {
+  "file": "48-control-test-card.png",
+  "view": "/en-US/app/sunavigator/ucm_usecase?id=fenre_UC-1.1.8",
+  "role": "sunguide_operator",
+  "shows": "Control test details card.",
+  "guide_section": "page-control-tests"
+ },
+ {
+  "file": "49-outcome-needs-tuning.png",
+  "view": "/en-US/app/sunavigator/ucm_usecase?id=fenre_UC-1.1.8",
+  "role": "sunguide_operator",
+  "shows": "Recording the outcome Needs tuning.",
+  "guide_section": "task-tune-a-noisy-search"
+ },
+ {
+  "file": "50-drift-detected.png",
+  "view": "/en-US/app/sunavigator/ucm_usecase?id=fenre_UC-1.1.8",
+  "role": "sunguide_operator",
+  "shows": "Drift detected after the saved search was edited in Splunk.",
+  "guide_section": "page-deployments"
+ },
+ {
+  "file": "51-new-revision-form.png",
+  "view": "/en-US/app/sunavigator/ucm_usecase?id=fenre_UC-1.1.8",
+  "role": "sunguide_operator",
+  "shows": "Start a new revision.",
+  "guide_section": "page-deployments"
+ },
+ {
+  "file": "52-deployed-revision-2.png",
+  "view": "/en-US/app/sunavigator/ucm_usecase?id=fenre_UC-1.1.8",
+  "role": "sunguide_operator",
+  "shows": "Revision 2 deployed.",
+  "guide_section": "page-deployments"
+ },
+ {
+  "file": "53-rollback-dialog.png",
+  "view": "/en-US/app/sunavigator/ucm_usecase?id=fenre_UC-1.1.8",
+  "role": "sunguide_operator",
+  "shows": "The roll back dialog.",
+  "guide_section": "page-deployments"
+ },
+ {
+  "file": "54-rolled-back.png",
+  "view": "/en-US/app/sunavigator/ucm_usecase?id=fenre_UC-1.1.8",
+  "role": "sunguide_operator",
+  "shows": "After rollback.",
+  "guide_section": "page-deployments"
+ },
+ {
+  "file": "55-access-gap-dialog.png",
+  "view": "/en-US/app/sunavigator/ucm_usecase?id=fenre_UC-1.1.9",
+  "role": "sunguide_operator",
+  "shows": "Submit dialog warning that the scheduler account cannot see the search's data.",
+  "guide_section": "task-handle-a-blocked-enable"
+ },
+ {
+  "file": "56-approve-with-access-gap.png",
+  "view": "/en-US/app/sunavigator/ucm_usecase?id=fenre_UC-1.1.9",
+  "role": "sunguide_operator2",
+  "shows": "Approving with an access gap: the approver is told.",
+  "guide_section": "task-handle-a-blocked-enable"
+ },
+ {
+  "file": "57-enable-override-dialog.png",
+  "view": "/en-US/app/sunavigator/ucm_usecase?id=fenre_UC-1.1.9",
+  "role": "sunguide_operator",
+  "shows": "Override the enable gate: reason of at least 10 characters.",
+  "guide_section": "task-handle-a-blocked-enable"
+ },
+ {
+  "file": "58-enable-request-pending.png",
+  "view": "/en-US/app/sunavigator/ucm_usecase?id=fenre_UC-1.1.9",
+  "role": "sunguide_operator2",
+  "shows": "An enable request is waiting for a second person.",
+  "guide_section": "task-handle-a-blocked-enable"
+ },
+ {
+  "file": "59-enable-confirm-by-second-person.png",
+  "view": "/en-US/app/sunavigator/ucm_usecase?id=fenre_UC-1.1.9",
+  "role": "sunguide_operator",
+  "shows": "The second person sees the open request.",
+  "guide_section": "task-handle-a-blocked-enable"
+ },
+ {
+  "file": "60-enable-confirm-dialog.png",
+  "view": "/en-US/app/sunavigator/ucm_usecase?id=fenre_UC-1.1.9",
+  "role": "sunguide_operator",
+  "shows": "Confirm the enable request.",
+  "guide_section": "task-handle-a-blocked-enable"
+ },
+ {
+  "file": "61-enabled-with-override.png",
+  "view": "/en-US/app/sunavigator/ucm_usecase?id=fenre_UC-1.1.9",
+  "role": "sunguide_operator",
+  "shows": "Enabled with an override; it expires after 14 days.",
+  "guide_section": "task-handle-a-blocked-enable"
+ },
+ {
+  "file": "62-withdraw-approval-dialog.png",
+  "view": "/en-US/app/sunavigator/ucm_usecase?id=fenre_UC-1.1.74",
+  "role": "sunguide_operator",
+  "shows": "Withdraw an approval before deployment.",
+  "guide_section": "page-deployments"
+ },
+ {
+  "file": "63-approval-withdrawn.png",
+  "view": "/en-US/app/sunavigator/ucm_usecase?id=fenre_UC-1.1.74",
+  "role": "sunguide_operator",
+  "shows": "After withdrawal the deployment is pending approval again.",
+  "guide_section": "page-deployments"
+ },
+ {
+  "file": "64-retire-dialog.png",
+  "view": "/en-US/app/sunavigator/ucm_usecase?id=fenre_UC-1.1.74",
+  "role": "sunguide_operator",
+  "shows": "The retire dialog.",
+  "guide_section": "page-deployments"
+ },
+ {
+  "file": "65-retired.png",
+  "view": "/en-US/app/sunavigator/ucm_usecase?id=fenre_UC-1.1.74",
+  "role": "sunguide_operator",
+  "shows": "Retired deployment.",
+  "guide_section": "page-deployments"
+ },
+ {
+  "file": "66-deployment-history.png",
+  "view": "/en-US/app/sunavigator/ucm_usecase?id=fenre_UC-1.1.74",
+  "role": "sunguide_operator",
+  "shows": "Deployment history list with actor and time.",
+  "guide_section": "page-deployments"
+ },
+ {
+  "file": "67-deployments-page-all.png",
+  "view": "/en-US/app/sunavigator/ucm_deployments",
+  "role": "sunguide_operator",
+  "shows": "Deployments page listing all workflow states.",
+  "guide_section": "page-deployments"
+ },
+ {
+  "file": "68-coverage-top.png",
+  "view": "/en-US/app/sunavigator/ucm_coverage",
+  "role": "sunguide_assessor",
+  "shows": "Coverage: framework selector and counts.",
+  "guide_section": "page-coverage"
+ },
+ {
+  "file": "69-coverage-mitre-matrix.png",
+  "view": "/en-US/app/sunavigator/ucm_coverage",
+  "role": "sunguide_assessor",
+  "shows": "The MITRE ATT&CK matrix coloured by coverage.",
+  "guide_section": "task-see-mitre-coverage"
+ },
+ {
+  "file": "70-coverage-gaps.png",
+  "view": "/en-US/app/sunavigator/ucm_coverage",
+  "role": "sunguide_assessor",
+  "shows": "Coverage gaps and mappings that need review.",
+  "guide_section": "task-see-mitre-coverage"
+ },
+ {
+  "file": "71-coverage-regulations.png",
+  "view": "/en-US/app/sunavigator/ucm_coverage",
+  "role": "sunguide_assessor",
+  "shows": "Other frameworks and regulations.",
+  "guide_section": "page-coverage"
+ },
+ {
+  "file": "72-control-catalogues.png",
+  "view": "/en-US/app/sunavigator/ucm_coverage",
+  "role": "sunguide_assessor",
+  "shows": "Control catalogues with mapped and unmapped controls.",
+  "guide_section": "page-coverage"
+ },
+ {
+  "file": "73-control-family-open.png",
+  "view": "/en-US/app/sunavigator/ucm_coverage",
+  "role": "sunguide_assessor",
+  "shows": "A control family opened with its controls.",
+  "guide_section": "page-coverage"
+ },
+ {
+  "file": "74-assessment-form.png",
+  "view": "/en-US/app/sunavigator/ucm_coverage",
+  "role": "sunguide_assessor",
+  "shows": "The assessment form for one control.",
+  "guide_section": "task-record-an-assessment-and-poam-item"
+ },
+ {
+  "file": "75-assessment-form-filled.png",
+  "view": "/en-US/app/sunavigator/ucm_coverage",
+  "role": "sunguide_assessor",
+  "shows": "The assessment form filled in.",
+  "guide_section": "task-record-an-assessment-and-poam-item"
+ },
+ {
+  "file": "76-cmmc-score-after-assessing.png",
+  "view": "/en-US/app/sunavigator/ucm_coverage",
+  "role": "sunguide_assessor",
+  "shows": "CMMC Level 2 score after three assessments.",
+  "guide_section": "task-record-an-assessment-and-poam-item"
+ },
+ {
+  "file": "77-poam-form-filled.png",
+  "view": "/en-US/app/sunavigator/ucm_coverage",
+  "role": "sunguide_assessor",
+  "shows": "The plan item form filled in.",
+  "guide_section": "task-record-an-assessment-and-poam-item"
+ },
+ {
+  "file": "78-poam-item-eligibility.png",
+  "view": "/en-US/app/sunavigator/ucm_coverage",
+  "role": "sunguide_assessor",
+  "shows": "A plan item with the eligibility note.",
+  "guide_section": "task-record-an-assessment-and-poam-item"
+ },
+ {
+  "file": "79-snapshot-dialog.png",
+  "view": "/en-US/app/sunavigator/ucm_coverage",
+  "role": "sunguide_assessor",
+  "shows": "Take a snapshot dialog.",
+  "guide_section": "task-take-an-evidence-snapshot"
+ },
+ {
+  "file": "80-snapshot-list.png",
+  "view": "/en-US/app/sunavigator/ucm_coverage",
+  "role": "sunguide_assessor",
+  "shows": "The list of evidence snapshots.",
+  "guide_section": "task-take-an-evidence-snapshot"
+ },
+ {
+  "file": "81-snapshot-integrity-check.png",
+  "view": "/en-US/app/sunavigator/ucm_coverage",
+  "role": "sunguide_assessor",
+  "shows": "Download shows Integrity check passed with the SHA-256.",
+  "guide_section": "task-take-an-evidence-snapshot"
+ },
+ {
+  "file": "82-domain-dashboard.png",
+  "view": "/en-US/app/sunavigator/ucm_domain",
+  "role": "sunguide_operator",
+  "shows": "Domain dashboard for Security.",
+  "guide_section": "page-dashboards"
+ },
+ {
+  "file": "83-dashboard-preview.png",
+  "view": "/en-US/app/sunavigator/ucm_dashboards",
+  "role": "sunguide_operator",
+  "shows": "Preview of the Simple XML for a generated dashboard.",
+  "guide_section": "page-dashboards"
+ },
+ {
+  "file": "84-dashboard-created.png",
+  "view": "/en-US/app/sunavigator/ucm_dashboards",
+  "role": "sunguide_operator",
+  "shows": "The generated dashboard listed with Regenerate and Delete.",
+  "guide_section": "page-dashboards"
+ },
+ {
+  "file": "85-generated-dashboard.png",
+  "view": "/en-US/app/sunavigator/ucm_gen_domain_overview_security",
+  "role": "sunguide_operator",
+  "shows": "The generated Security overview dashboard.",
+  "guide_section": "page-dashboards"
+ },
+ {
+  "file": "86-two-generated-dashboards.png",
+  "view": "/en-US/app/sunavigator/ucm_dashboards",
+  "role": "sunguide_operator",
+  "shows": "Two generated dashboards.",
+  "guide_section": "page-dashboards"
+ },
+ {
+  "file": "87-dashboard-delete-confirm.png",
+  "view": "/en-US/app/sunavigator/ucm_dashboards",
+  "role": "sunguide_operator",
+  "shows": "Delete dashboard confirmation.",
+  "guide_section": "page-dashboards"
+ },
+ {
+  "file": "88-admin-provider-platform.png",
+  "view": "/en-US/app/sunavigator/ucm_content_admin",
+  "role": "sunguide_content",
+  "shows": "Content Administration: provider card and platform capability checks. The Enterprise Security product name and version in the Platform card are covered.",
+  "guide_section": "page-content-administration"
+ },
+ {
+  "file": "89-admin-catalogue-summaries.png",
+  "view": "/en-US/app/sunavigator/ucm_content_admin",
+  "role": "sunguide_content",
+  "shows": "Catalogue summaries and the Reindex button.",
+  "guide_section": "page-content-administration"
+ },
+ {
+  "file": "90-admin-sync-import.png",
+  "view": "/en-US/app/sunavigator/ucm_content_admin",
+  "role": "sunguide_content",
+  "shows": "Remote synchronization and offline import.",
+  "guide_section": "page-content-administration"
+ },
+ {
+  "file": "91-admin-check-provider.png",
+  "view": "/en-US/app/sunavigator/ucm_content_admin",
+  "role": "sunguide_content",
+  "shows": "Check provider for categories lists the upstream categories.",
+  "guide_section": "page-content-administration"
+ },
+ {
+  "file": "92-admin-reindex-confirm.png",
+  "view": "/en-US/app/sunavigator/ucm_content_admin",
+  "role": "sunguide_content",
+  "shows": "Reindex confirmation dialog. The Enterprise Security product name and version in the Platform card are covered.",
+  "guide_section": "page-content-administration"
+ },
+ {
+  "file": "93-admin-audit-chain-verified.png",
+  "view": "/en-US/app/sunavigator/ucm_content_admin",
+  "role": "sunguide_content",
+  "shows": "Audit trail, the audit chain check result and the refused requests table.",
+  "guide_section": "task-verify-the-audit-trail"
+ },
+ {
+  "file": "94-viewer-refused-check-provider.png",
+  "view": "/en-US/app/sunavigator/ucm_content_admin",
+  "role": "sunguide_viewer",
+  "shows": "A viewer clicks Check provider: the page says the provider could not be reached. The Enterprise Security product name and version in the Platform card are covered.",
+  "guide_section": "troubleshooting"
+ },
+ {
+  "file": "95-error-outcome-needs-note.png",
+  "view": "/en-US/app/sunavigator/ucm_usecase?id=fenre_UC-1.1.8",
+  "role": "sunguide_operator",
+  "shows": "Saving an outcome without a note is refused.",
+  "guide_section": "troubleshooting"
+ }
+]

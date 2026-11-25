@@ -4,6 +4,9 @@ Release: [v0.11.0](https://github.com/cagdaskarabag/su_navigator/releases/tag/v0
 Validated on Splunk Enterprise 10.2.9, single instance. Splunk Cloud, search head clusters with a deployer, and
 Splunk Enterprise Security 8 are **not validated and not planned** (D-078).
 
+A full walkthrough of every page, by role, was also run on Splunk Enterprise 10.4.3 (macOS, arm64) and is written up in
+[USER_GUIDE.md](USER_GUIDE.md). It worked, with the small defects below. The live test suite has not been run on 10.4.x (issue #42).
+
 This page is the feature list for feedback. Each item links to the decision record (`docs/DECISIONS.md`), the
 operator guide (`docs/OPERATOR_GUIDE.md`) or an issue. Every "working" line was checked on the lab, and every
 "not working" line is a limit the project already knows about. Feedback on either kind is welcome.
@@ -62,6 +65,21 @@ Legend: **Working** = built and checked on the lab. **Built, limited** = works, 
 | Browser tests | Node logic tests exist; Splunk Web is checked by hand | issue #15 |
 | Install | Splunk Web upload can time out; use the CLI install | §3.2 |
 
+## Known small defects
+
+Found while writing the user guide. None changes data or exposes anything; all are wording or layout.
+
+| Item | Reference |
+|---|---|
+| A refused **Check provider for categories** says "The provider could not be reached" | issue #34 |
+| The audit-chain refusal names only `ucm_admin`, though `ucm_manage_content` also may verify | issue #35 |
+| Buttons are shown to roles that cannot use them (the server refuses them) | issue #36 |
+| The Platform card shows kvstore as unknown to roles that cannot read it | issue #37 |
+| The enable note ("blocked while readiness is blocked") appears on every use case | issue #38 |
+| Deleting a local source mapping has no confirmation | issue #39 |
+| One use case's control-test fixture fails (UC-1.1.8); it is a known content finding in the Fenre corpus | `docs/upstream/FENRE_FINDINGS.md`, F-02 |
+| Unconfirmed: Splunk Web and the management API stopped answering for about six minutes during a discovery run on 10.4.3; cause unknown | issue #41 |
+
 ## Not working / not built
 
 | Item | Why | Reference |
@@ -80,6 +98,9 @@ Legend: **Working** = built and checked on the lab. **Built, limited** = works, 
 
 | Item | Why it matters | Reference |
 |---|---|---|
+| How-to help inside the app (the user guide exists; the in-app panels do not) | New users have to leave Splunk to learn the pages | [IN_APP_HELP_PLAN.md](IN_APP_HELP_PLAN.md) |
+| Import control for control-test fixtures on Administration (REST only today) | People without REST access | issue #40 |
+| Run the live suite on Splunk 10.4.x | Confirms the walkthrough result | issue #42 |
 | Browser tests for the UI | Catch Splunk Web regressions automatically | issue #15 |
 | Re-assess readiness when scheduler roles change | Stale results after a role change | issue #17 |
 | Say whether an internal index has data, without a full scan | Better internal-index results | issue #19 |

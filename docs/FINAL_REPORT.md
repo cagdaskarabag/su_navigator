@@ -105,3 +105,9 @@ Steps 1 and 2 would be enough to start #31. #23 is skipped (D-079); steps 3 and 
 
 Splunk Cloud, a search head cluster with a deployer and indexer peers, and Splunk Enterprise Security 8 are not
 validated and not planned (D-078). The README support statement and operator guide §12 say so.
+
+## 7. After the release
+
+- A walkthrough of every page, by role, was run on Splunk Enterprise 10.4.3 (macOS) by a second operator and is published as [USER_GUIDE.md](USER_GUIDE.md) with 94 screenshots. Product names that are not part of this project were removed from three of them.
+- It found small wording and layout defects (issues #34 to #41) and one unexplained outage of Splunk Web (#41, unconfirmed). Nothing changed data. None is scheduled; the feature list is [FEATURE_STATUS.md](FEATURE_STATUS.md).
+- The app is not being changed until feedback has been collected. The next release adds how-to help inside the app: [IN_APP_HELP_PLAN.md](IN_APP_HELP_PLAN.md).
