@@ -2209,8 +2209,8 @@ class LiveAssessmentTest(unittest.TestCase):
         status, out = api(self.assessor, "POST", "assessment", body={
             "framework_id": "nist-800-171", "control_id": row["id"], "note": "Live test: one fails",
             "objectives": {ids[0]: {"result": "not_met", "note": ""}}})
-        self.assertEqual(out["assessment"]["status"], "not_implemented", out)
-        self.assertEqual(len(out["assessment"]["history"]), 2)
+        self.assertEqual((out["assessment"]["status"], out["assessment"]["complete"]), ("partially_implemented", True), out)
+        self.assertEqual([h["status"] for h in out["assessment"]["history"]], ["implemented"])
         status, stored = api(self.assessor, "GET", "assessment/control", {"framework_id": "nist-800-171", "control_id": row["id"]})
         self.assertEqual(stored["assessment"]["objectives"][ids[0]]["result"], "not_met")
         self.assertEqual(stored["assessment"]["first_assessed_by"], self.USER)
@@ -2236,7 +2236,7 @@ class LiveAssessmentTest(unittest.TestCase):
         self.assertEqual((status, out["item"]["state"]), (200, "closed"), out)
         status, out = api(self.assessor, "POST", "poam/reopen", body={"id": item["id"], "note": "Regression found"})
         self.assertEqual((status, out["item"]["state"]), (200, "open"), out)
-        self.assertGreaterEqual(len(out["item"]["history"]), 5)
+        self.assertEqual([h["action"] for h in out["item"]["history"]], ["created", "updated", "closed", "reopened"])
 
     def test_snapshot_is_stored_hashed_and_verifiable(self):
         status, out = api(self.assessor, "POST", "assessment/snapshot", body={"framework_id": "cmmc-l2", "label": "Live snapshot"})

@@ -2275,9 +2275,11 @@ as drift.
   dropped or silently carried over. Removing one needs a reason and keeps the audit row.
 * **Decision, objectives.** SP 800-171 Rev. 3 now carries its 422 assessment objectives (`objectives` on a control, from
   the same NIST OSCAL file). For such a requirement the person records `met`, `not_met` or `not_applicable` per objective
-  (not applicable needs 10 characters); the status is derived: any not met gives not implemented, all met or not
-  applicable gives implemented, a mix with some unassessed gives *incomplete* and no status until every objective has a
-  result. Objective results are stored as a list, because the KV Store refuses a field name that contains a dot (found
+  (not applicable needs 10 characters); the status is derived: every result not met gives not implemented, a mix of met
+  and not met gives partially implemented, all met or not applicable (at least one met) gives implemented, all not
+  applicable gives not applicable. While some objectives have no result the status is at most partially implemented and the
+  requirement is flagged *incomplete*; an objective set back to *not assessed* is removed. The point is that a partly
+  assessed requirement is never shown as met. Objective results are stored as a list, because the KV Store refuses a field name that contains a dot (found
   with the in-memory test store and fixed before the first live run).
 * **Decision, CMMC Level 2 score.** `cmmc-l2` (110 requirements of 800-171 Rev. 2) is bundled with the point values and
   the partial-credit rules of the DoD assessment methodology v1.2.1 (start 110, floor -203, sum of values 313, cross-checked

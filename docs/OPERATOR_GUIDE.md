@@ -33,7 +33,7 @@ upgrade.
 - **Assess (Coverage, Control catalogues).** Each control has **Assess** or **Edit**. Choose a status and say why (the
   reason is required). The row shows the status, who and when are kept, and **History** lists earlier answers.
 - **Per objective.** For SP 800-171 Rev. 3 the dialog lists the assessment objectives. Mark each met, not met or not
-  applicable; the requirement's status follows from them and stays *incomplete* until every objective has a result.
+  applicable; the requirement's status follows from them (all met: implemented; a mix: partially implemented; none met: not implemented). Until every objective has a result it is flagged *incomplete* and shows at most *partially implemented*.
 - **CMMC Level 2.** A new catalogue with the DoD methodology's score: 110 at best, -203 at worst. Anything not assessed
   counts as not implemented, so the score rises as you record work. *Best possible score* shows what is reachable. A plan
   of action does not lift the score. If 3.12.4 (system security plan) is not implemented the page says so.
