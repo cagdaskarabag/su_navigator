@@ -71,6 +71,7 @@ class FakeSavedSearches:
 
 
 def service(store=None, saved=None, parser=None, **kw):
+    kw.setdefault("override_second_person", False)
     store = store or loaded_catalog()
     saved = saved or FakeSavedSearches()
     svc = DeploymentService(store, AuditService(store), parser or FakeParser(), saved, DeploymentSettings(**kw))

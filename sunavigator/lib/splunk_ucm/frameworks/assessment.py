@@ -18,6 +18,7 @@ from ..errors import ConflictError, NotFoundError, ValidationError
 from ..storage import collections as C
 from ..storage.kvstore import DocumentStore
 from ..util import canonical_json, new_id, sha256_text, utc_now_iso
+from . import poam_rules
 from .controls import ASSESSED, assessable
 
 STATUSES = ("implemented", "partially_implemented", "planned", "not_implemented", "not_applicable")
@@ -178,7 +179,9 @@ class AssessmentService:
         return {"method": scoring["method"], "start": scoring["start"], "note": scoring.get("note", ""),
                 "score": scoring["start"] - lost, "ceiling": scoring["start"] - ceiling_lost, "points_lost": lost,
                 "requirements": total, "assessed": assessed, "unassessed": total - assessed,
-                "lost_by_value": by_value, "complete": assessed == total, "blocked_by": blocked}
+                "lost_by_value": by_value, "all_assessed": assessed == total, "can_pass": not blocked,
+                "complete": assessed == total,  # deprecated alias of all_assessed: it never meant "can pass"
+                "blocked_by": blocked}
 
     def set(self, user: str, definition: Dict[str, Any], control_id: str, status: str, note: Any,
             objectives: Any) -> Dict[str, Any]:
@@ -269,7 +272,8 @@ class AssessmentService:
                         "done": bool(m.get("done"))})
         return out
 
-    def poam_public(self, doc: Dict[str, Any], statuses: Optional[Dict[str, str]] = None) -> Dict[str, Any]:
+    def poam_public(self, doc: Dict[str, Any], statuses: Optional[Dict[str, str]] = None,
+                    definition: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         keys = ("framework_id", "control_id", "title", "weakness", "owner", "due", "state", "milestones", "created_by",
                 "created_at", "updated_by", "updated_at", "closed_by", "closed_at", "close_note", "history")
         out = {k: doc.get(k) for k in keys}
@@ -277,10 +281,15 @@ class AssessmentService:
         out["overdue"] = doc.get("state") in POAM_OPEN and bool(doc.get("due")) and doc["due"] < today()
         if statuses is not None:
             out["control_status"] = statuses.get(doc.get("control_id"), "")
+        out["eligibility"] = None
+        if definition is not None and doc.get("state") in POAM_OPEN:
+            out["eligibility"] = poam_rules.item_flags(definition, doc.get("control_id") or "",
+                                                       (statuses or {}).get(doc.get("control_id"), ""),
+                                                       doc.get("due") or "", today())
         return out
 
     def poam_list(self, framework_id: str, states: List[str], control_id: str = "", overdue: bool = False,
-                  offset: int = 0, count: int = 100) -> Dict[str, Any]:
+                  offset: int = 0, count: int = 100, definition: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         for s in states:
             if s not in POAM_STATES:
                 raise ValidationError("invalid state", {"allowed": list(POAM_STATES)})
@@ -288,8 +297,9 @@ class AssessmentService:
         if control_id:
             query["control_id"] = control_id
         rows = self.store.query(C.POAM, query, sort=[("due", 1), ("_key", 1)], limit=50000)
-        statuses = {cid: d.get("status", "") for cid, d in self.docs(framework_id).items()}
-        items = [self.poam_public(r, statuses) for r in rows]
+        docs = self.docs(framework_id)
+        statuses = {cid: d.get("status", "") for cid, d in docs.items()}
+        items = [self.poam_public(r, statuses, definition) for r in rows]
         counts = {s: sum(1 for i in items if i["state"] == s) for s in POAM_STATES}
         counts["overdue"] = sum(1 for i in items if i["overdue"])
         if states:
@@ -299,7 +309,8 @@ class AssessmentService:
         count = max(1, min(200, count))
         page = items[max(0, offset):max(0, offset) + count]
         return {"items": page, "offset": offset, "count": count, "has_more": len(items) > max(0, offset) + count,
-                "total": len(items), "counts": counts, "today": today()}
+                "total": len(items), "counts": counts, "today": today(),
+                "programme": poam_rules.programme(definition, self.score(definition, docs)) if definition else None}
 
     def poam_create(self, user: str, definition: Dict[str, Any], body: Dict[str, Any]) -> Dict[str, Any]:
         control_id = str(body.get("control_id") or "")
@@ -312,9 +323,14 @@ class AssessmentService:
                "state": "open", "milestones": self._milestones(body.get("milestones")), "created_by": user, "created_at": now,
                "updated_by": user, "updated_at": now, "history": [{"action": "created", "by": user, "at": now, "note": ""}]}
         self.store.upsert(C.POAM, doc)
-        self.audit.record(user, "poam.created", "poam", doc["_key"],
-                          details={"framework_id": doc["framework_id"], "control_id": control_id, "due": doc["due"]})
-        return self.poam_public(doc)
+        status = (self.docs(definition["framework_id"]).get(control_id) or {}).get("status", "")
+        public = self.poam_public(doc, {control_id: status}, definition)
+        details = {"framework_id": doc["framework_id"], "control_id": control_id, "due": doc["due"]}
+        if public["eligibility"] is not None:
+            details["conditional_eligible"] = public["eligibility"]["eligible"]
+            details["eligibility_reasons"] = public["eligibility"]["reasons"]
+        self.audit.record(user, "poam.created", "poam", doc["_key"], details=details)
+        return public
 
     def _poam(self, item_id: str) -> Dict[str, Any]:
         doc = self.store.get(C.POAM, item_id) if _POAM_ID.match(item_id or "") else None

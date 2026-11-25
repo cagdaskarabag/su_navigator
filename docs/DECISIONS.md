@@ -2288,6 +2288,8 @@ as drift.
   deducts. Only 3.5.3 and 3.13.11 give partial credit. 3.12.4 (system security plan) has value 0 and is a precondition:
   while it is not implemented the page says the assessment cannot be completed. The values come from a Web Archive copy
   of the methodology (the DoD site refused the build machine); the file records the URL and SHA-256.
+  *Correction (D-080):* the statement in the first release notes that 32 CFR 170.21 "could not be verified" is withdrawn.
+  The eCFR text was fetched and read for Sprint 21; D-080 records what it says and the one informational flag built on it.
 * **Decision, POA&M.** `uc_poam` items per control: title, weakness, owner, due date (YYYY-MM-DD), up to 20 milestones,
   state `open`, `in_progress`, `closed`, `risk_accepted`. Closing needs a note, accepting a risk 10 characters. Changing a
   due date needs a note. A closed item is reopened, not edited. Overdue is computed from the date, never stored. A plan
@@ -2331,3 +2333,54 @@ as drift.
   `docs/upstream/CONTROL_TEST_CAMPAIGN.md` stay as the record of the run without add-ons. Issue #31 (CIM field
   reference and field-level checks) stays open as an unscheduled backlog item; it needs `Splunk_SA_CIM` on a lab.
 * **Not changed.** No code, schema, route or permission changed. The build number stays 22.
+
+## D-080 Stabilisation: the browser guard fails closed, access gaps and overrides need a second look, refusals are audited (Sprint 21)
+
+*0.11.0 (Sprint 21).*
+
+* **Context.** An independent review of 0.10.0 found six things that were true and one that was not a defect. Nothing in
+  this sprint adds a feature; each item closes a gap between what the product says and what it does. Human review of the
+  security paths is planned by the owner after the sprints, before 1.0.
+* **1. The browser guard refuses what it does not know.** `splPolicy` in `ucm_common.js` returned "allowed" for a command
+  that was in neither list. It now returns `unknown`, and `searchGuard` refuses unknown commands unless the server's
+  validation (`/spl/validate`, the authoritative `classify()` in `spl/policy.py`) has cleared the search. The five lists in
+  the JS (read-only, side-effect, indirect, hidden, generating) are generated from the Python lists by
+  `tools/sync_guard_lists.py` (`--check` in the tests), and `test_spl_guard_parity.py` runs every command through both
+  implementations. The guard remains a convenience; the server still decides what is offered.
+* **2. The scheduler access check is shown where it matters.** Whether the scheduler role can read the indexes of a
+  search (D-070) was a report on the readiness page. It is now shown when a request is submitted and in the approval
+  dialog. Approving with an access gap needs a reason (`access_gap_reason_required`, audited as
+  `approved_with_access_gap`); it does not block, because the approver may know the role is about to change.
+* **3. Overriding a gate needs a second person by default.** `[deployment] override_second_person = true`. Enabling a
+  search that a gate blocks (D-066, D-070) is requested by one person and confirmed by another, as for
+  `enable_second_person`, and the same person cannot do both. Switch it off in `ucm.conf` for a one-person team. The
+  default is true because the override is the one deliberate hole in the gates.
+* **4. Refused governance requests are audited, with limits.** A refused POST (400, 403, 409) to a governance route
+  writes `refused.<route>` to the hash chain (`outcome=refused`, error code, a message shortened to 200 characters
+  with any URL query or credentials removed, no body). The limits exist so that refusals cannot flood the chain: a repeat
+  of the same (user, route, object, code) inside `refusal_window_seconds` (300) is not written; at most
+  `refusal_actor_per_hour` (20) rows per user and `refusal_total_per_hour` (200) in all; the first request over a limit
+  writes one `refused.rate_limited` row for that hour and nothing after it. Counting uses one marker row per scope
+  and hour. `[audit] refusals = false` turns it off. The Content administration page lists recent refusals.
+  A refused row never counts as a change: it is evidence of an attempt, not of an outcome.
+* **5. POA&M eligibility, informational only.** 32 CFR 170.21(a)(2): Conditional Level 2 status with a plan needs
+  score/110 of at least 0.8, only requirements worth one point on the plan (3.13.11 at three points when encryption is not
+  FIPS-validated), none of AC.L2-3.1.20, AC.L2-3.1.22, CA.L2-3.12.4, PE.L2-3.10.3, PE.L2-3.10.4, PE.L2-3.10.5; 170.21(b)
+  requires closeout within 180 days. `frameworks/poam_rules.py` computes, for a plan item, whether its control is
+  excluded, worth more than a point, or pushes the score under 0.8, and the Coverage page shows a note with the basis
+  and "not a CMMC status determination". It never blocks an item and never changes a score. This does **not** build the
+  conditional-status feature that D-079 left out; there is still no status, no 180-day clock and no closeout record.
+* **6. Upgrade and score wording.** Records written by an older provider normaliser carry no analytic stories or data
+  sources, and Reindex cannot add what the record does not hold. The catalogue summary now counts them
+  (`normalizer_outdated`, facets version 5, migration `0006_catalog_facets_v5`) and Content administration says to
+  import the ESCU bundle again or sync Fenre; the same hint is on the catalogue page. The scored-catalogue response has
+  `all_assessed` (every requirement has an answer) and `can_pass` (no precondition requirement, 3.12.4, is
+  standing in the way); `complete` stays as a deprecated alias of `all_assessed`, which is what it always meant.
+* **Not a defect.** The review's remaining remark about Fenre's SPL (153 lint findings in 16,726 use cases) stays as
+  D-072 says: the app does not file anything on the Fenre repository. `tools/fenre_report.py` writes the findings and
+  the control-test results as one document and one CSV (`docs/upstream/for-fenre-owner/`) that the owner can hand over.
+* **Not built, unchanged from D-079.** CMMC conditional status, objectives for 800-53 and CMMC, snapshot signing and
+  deletion, and the 94-fixture re-run.
+* **Migration.** `0006_catalog_facets_v5` rebuilds the catalogue summary once. No collection or capability is added.
+* Evidence: `tests/unit/test_sprint21.py`, `tests/unit/test_poam_rules.py`, `tests/unit/test_spl_guard_parity.py`,
+  `tests/js/test_usecase.js`, `test_admin.js`, `test_assessment_ui.js`, and the live suite on the lab.

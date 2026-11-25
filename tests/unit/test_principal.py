@@ -490,13 +490,13 @@ class DeploymentGateTest(unittest.TestCase):
         transport = FakeRoles({"ucm_scheduler": {"roles": ["r"]}}, {"r": p_roles}, fail=fail)
         access = SchedulerAccess(store, transport, "ucm_scheduler")
         svc = DeploymentService(store, AuditService(store), FakeParser(), FakeSavedSearches(),
-                                DeploymentSettings(), access=access)
+                                DeploymentSettings(override_second_person=False), access=access)
         return svc, store
 
     def deployed(self, svc, spec=None):
         svc.save_draft("alice", UC, dict(spec or self.CUSTOM))
         svc.submit("alice", UC)
-        svc.approve("bob", UC)
+        svc.approve("bob", UC, access_reason="Reviewed: the role is being changed")
         svc.deploy("bob", UC)
 
     def test_submit_warns_but_does_not_block(self):
@@ -540,7 +540,7 @@ class DeploymentGateTest(unittest.TestCase):
 
     def test_no_access_checker_does_not_block(self):
         store = loaded_catalog()
-        svc = DeploymentService(store, AuditService(store), FakeParser(), FakeSavedSearches(), DeploymentSettings())
+        svc = DeploymentService(store, AuditService(store), FakeParser(), FakeSavedSearches(), DeploymentSettings(override_second_person=False))
         self.deployed(svc)
         self.assertEqual(svc.enable("bob", UC)["live"]["status"], "enabled")
 

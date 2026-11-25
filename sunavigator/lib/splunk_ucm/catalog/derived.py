@@ -16,15 +16,22 @@ from .summary import SUMMARY_VERSION
 FACETS_KEY = "catalog::facets"
 # 2 adds global counts per domain, category, criticality and difficulty (D-059). 3 adds providers,
 # waves, analytic stories, data sources and the number of summaries older than SUMMARY_VERSION (D-066).
-# 4 adds data maturity (D-074).
-FACETS_VERSION = 4
+# 4 adds data maturity (D-074). 5 adds the number of records written by an older provider normalizer (D-080).
+FACETS_VERSION = 5
 # Longest value list stored per facet (analytic stories and data sources): most frequent first.
 MAX_FACET_VALUES = 600
 _PAGE = 5000
 _FIELDS = ["_key", "spl_hash", "quality_flags", "provider_status", "review_status", "frameworks",
            "regulation_labels", "domains", "category_key", "criticality", "difficulty", "provider", "wave",
            "data_maturity", "analytic_stories", "data_sources", "summary_version",
-           "provider_version", "imported_at"]
+           "provider_version", "imported_at", "normalizer_version"]
+
+
+def current_normalizers() -> Dict[str, str]:
+    """The normalizer version each provider writes today; a record with another version came from an older release."""
+    from ..content.escu.normalizer import NORMALIZER_VERSION as ESCU
+    from ..content.fenre.normalizer import NORMALIZER_VERSION as FENRE
+    return {"fenre": FENRE, "escu": ESCU}
 
 
 def scan_catalog(store: DocumentStore) -> List[Dict[str, Any]]:
@@ -101,12 +108,16 @@ def compute_facets(rows: List[Dict[str, Any]]) -> Dict[str, Any]:
     info: Dict[str, Dict[str, Any]] = {}
     active = 0
     outdated = 0
+    older_normalizer = 0
+    current = current_normalizers()
     for row in rows:
         if not _active(row):
             continue
         active += 1
         if (row.get("summary_version") or 0) < SUMMARY_VERSION:
             outdated += 1
+        if row.get("provider") in current and row.get("normalizer_version") != current[row["provider"]]:
+            older_normalizer += 1
         if row.get("provider"):
             entry = info.setdefault(row["provider"], {"count": 0, "version": "", "updated": ""})
             entry["count"] += 1
@@ -150,7 +161,7 @@ def compute_facets(rows: List[Dict[str, Any]]) -> Dict[str, Any]:
         "data_sources": _top(sources),
         "analytic_stories_total": len(stories),
         "data_sources_total": len(sources),
-        "summary": {"version": SUMMARY_VERSION, "outdated": outdated},
+        "summary": {"version": SUMMARY_VERSION, "outdated": outdated, "normalizer_outdated": older_normalizer},
         "review_statuses": [{"id": k, "count": review[k]} for k in sorted(review)],
         "regulations": sorted(regulations.values(), key=lambda r: (r["label"].lower(), r["id"])),
         "quality_flags": [{"id": f, "count": quality[f]} for f in FLAG_ORDER],

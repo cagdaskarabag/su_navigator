@@ -7,7 +7,7 @@ import unittest
 import helpers  # noqa: F401  (sets sys.path)
 from splunk_ucm import __version__
 from splunk_ucm.audit import AuditService
-from splunk_ucm.catalog.derived import FACETS_KEY, FACETS_VERSION, compute_facets, get_facets, refresh_derived
+from splunk_ucm.catalog.derived import FACETS_KEY, FACETS_VERSION, compute_facets, get_facets, refresh_derived, scan_catalog
 from splunk_ucm.catalog.detail import UseCaseDetailService
 from splunk_ucm.catalog.lineage import AUTHORITY, find_twins
 from splunk_ucm.catalog.query import AVAILABILITY, SORTS, CatalogFilter, CatalogQueryService, build_query
@@ -196,7 +196,7 @@ class FacetCountsTest(unittest.TestCase):
 
     def test_stored_facets_document_is_current(self):
         self.assertEqual(self.store.get(C.SYNC_STATE, FACETS_KEY)["facets_version"], FACETS_VERSION)
-        self.assertEqual(FACETS_VERSION, 4)
+        self.assertEqual(FACETS_VERSION, 5)
 
     def test_provider_counts_equal_the_filter_totals(self):
         self.assertEqual(set(self.facets["providers"]), {"fenre", "escu"})
@@ -243,7 +243,31 @@ class FacetCountsTest(unittest.TestCase):
         self.assertEqual(flags["provider_twin"], self.total(quality=["provider_twin"]))
 
     def test_current_summaries_report_nothing_outdated(self):
-        self.assertEqual(self.facets["summary"], {"version": SUMMARY_VERSION, "outdated": 0})
+        self.assertEqual(self.facets["summary"], {"version": SUMMARY_VERSION, "outdated": 0, "normalizer_outdated": 0})
+
+
+class OlderNormalizerTest(unittest.TestCase):
+    def test_records_written_by_an_older_provider_normalizer_are_counted(self):
+        from splunk_ucm.catalog.derived import current_normalizers
+        store = two_provider_store()
+        current = current_normalizers()
+        self.assertEqual(set(current), {"fenre", "escu"})
+        self.assertEqual(compute_facets(scan_catalog(store))["summary"]["normalizer_outdated"], 0)
+        escu = [d for d in store.query(C.CATALOG, {"provider": "escu"})]
+        for doc in escu[:2]:
+            doc["normalizer_version"] = "escu-0.9.0"
+            store.upsert(C.CATALOG, doc)
+        self.assertEqual(compute_facets(scan_catalog(store))["summary"]["normalizer_outdated"], 2)
+
+    def test_withdrawn_records_and_unknown_providers_are_not_counted(self):
+        store = two_provider_store()
+        doc = store.query(C.CATALOG, {"provider": "escu"})[0]
+        doc.update({"normalizer_version": "escu-0.9.0", "provider_status": "withdrawn"})
+        store.upsert(C.CATALOG, doc)
+        other = store.query(C.CATALOG, {"provider": "fenre"})[0]
+        other.update({"provider": "someone-else", "normalizer_version": "x-1"})
+        store.upsert(C.CATALOG, other)
+        self.assertEqual(compute_facets(scan_catalog(store))["summary"]["normalizer_outdated"], 0)
 
 
 class TwinLineageTest(unittest.TestCase):
@@ -349,7 +373,7 @@ class OldSummaryTest(unittest.TestCase):
     def test_facets_report_how_many_summaries_are_old_and_degrade_to_empty_lists(self):
         store = self.old_store()
         facets = get_facets(store)
-        self.assertEqual(facets["summary"], {"version": SUMMARY_VERSION, "outdated": facets["active"]})
+        self.assertEqual(facets["summary"], {"version": SUMMARY_VERSION, "outdated": facets["active"], "normalizer_outdated": 0})
         self.assertEqual((facets["waves"], facets["analytic_stories"], facets["data_sources"]), ({}, [], []))
         self.assertEqual(set(facets["providers"]), {"fenre", "escu"})
 
@@ -417,14 +441,14 @@ class UpgradeFrom089Test(unittest.TestCase):
         store = self.installed_089()
         before = json.dumps(catalog_docs(store), sort_keys=True)
         runner = MigrationRunner(store, lambda: "2026-11-25T09:00:00Z")
-        self.assertEqual(runner.pending(), ["0004_catalog_facets_v3", "0005_catalog_facets_v4"])
+        self.assertEqual(runner.pending(), ["0004_catalog_facets_v3", "0005_catalog_facets_v4", "0006_catalog_facets_v5"])
         self.assertTrue(runner.outdated())
         results = runner.run()
-        self.assertEqual([r["id"] for r in results], ["0004_catalog_facets_v3", "0005_catalog_facets_v4"])
+        self.assertEqual([r["id"] for r in results], ["0004_catalog_facets_v3", "0005_catalog_facets_v4", "0006_catalog_facets_v5"])
         self.assertEqual(json.dumps(catalog_docs(store), sort_keys=True), before)
         self.assertTrue(all(d["summary_version"] == 5 for d in catalog_docs(store).values()))
         facets = store.get(C.SYNC_STATE, FACETS_KEY)
-        self.assertEqual(facets["facets_version"], 4)
+        self.assertEqual(facets["facets_version"], 5)
         self.assertEqual(facets["summary"]["outdated"], facets["active"])
         state = store.get(C.SYNC_STATE, STATE_KEY)
         self.assertEqual((state["app_version"], state["previous_app_version"]), (__version__, "0.8.9"))

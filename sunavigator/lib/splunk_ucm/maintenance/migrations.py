@@ -53,6 +53,8 @@ MIGRATIONS: List[Tuple[str, Callable[[DocumentStore], bool], Callable[[DocumentS
     ("0004_catalog_facets_v3", lambda s: facets_outdated(s) and s.count(C.CATALOG) > 0, _store_facets),
     # Data maturity counts (D-074). Like 0004: the facets only; the filter fills after Reindex.
     ("0005_catalog_facets_v4", lambda s: facets_outdated(s) and s.count(C.CATALOG) > 0, _store_facets),
+    # Records written by an older provider normalizer (D-080). Only the facets; the records themselves need a re-import.
+    ("0006_catalog_facets_v5", lambda s: facets_outdated(s) and s.count(C.CATALOG) > 0, _store_facets),
 ]
 
 

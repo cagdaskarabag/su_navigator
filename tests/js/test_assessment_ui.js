@@ -135,6 +135,26 @@ var tests = {
         assert.strictEqual(asked.opts.minLength, 5);
         assert.ok(!v.calls.some(function (c) { return c.path === "assessment/clear"; }));
     },
+    "a plan item that may not count toward Conditional status says why, and the score line is shown": function () {
+        var elig = { eligible: false, basis: "32 CFR 170.21(a)(2) and (b)", notice: "Information only: this is not a CMMC status determination.",
+            reasons: ["Its point value is 5; only requirements worth one point may be on a plan."] };
+        var v = open(["ucm_assess"], { poam: { items: [{ id: "pm_1", control_id: "AC.L2-3.1.1", title: "MFA", weakness: "none", owner: "bob", due: "2026-12-01",
+            state: "open", overdue: false, milestones: [], control_status: "not_implemented", eligibility: elig }],
+            counts: { open: 1, in_progress: 0, closed: 0, risk_accepted: 0, overdue: 0 }, total: 1, today: "2026-11-25",
+            programme: { basis: "32 CFR 170.21(a)(2) and (b)", notice: elig.notice, score: 95, requirements: 110, ratio: 0.8636, threshold: 0.8, meets_threshold: true } } });
+        openAll(v);
+        var t = v.root.textContent;
+        assert.ok(/may not count toward Conditional status/.test(t) && /point value is 5/.test(t), t);
+        assert.ok(/Score now 95 of 110 \(0\.86\)/.test(t) && /at least 0\.80/.test(t) && /not a CMMC status determination/.test(t), t);
+        assert.ok(button(v, "Close").length === 1, "the item is not blocked");
+    },
+    "an eligible item shows no warning": function () {
+        var v = open(["ucm_assess"], { poam: { items: [{ id: "pm_1", control_id: "AC.L2-3.1.3", title: "t", weakness: "w", owner: "bob", due: "2026-12-01",
+            state: "open", overdue: false, milestones: [], eligibility: { eligible: true, reasons: [], basis: "b", notice: "n" } }],
+            counts: { open: 1, in_progress: 0, closed: 0, risk_accepted: 0, overdue: 0 }, total: 1, today: "2026-11-25", programme: null } });
+        openAll(v);
+        assert.ok(!/may not count toward/.test(v.root.textContent));
+    },
     "closing a plan item needs a note and accepting a risk needs a longer one": function () {
         var v = open(["ucm_assess"], { "POST poam/close": { item: {} } });
         var asked = [];

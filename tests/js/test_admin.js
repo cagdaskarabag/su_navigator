@@ -21,6 +21,17 @@ var tests = {
         assert.ok(/Reindex needed/.test(v.root.textContent) && /4 of 10/.test(v.root.textContent));
         assert.ok(buttons(v).indexOf("Reindex catalogue summaries") >= 0);
     },
+    "records from an older provider normalizer say a re-import is needed, and Reindex is not offered for them alone": function () {
+        var v = open({ active: 10, summary: { version: 7, outdated: 0, normalizer_outdated: 6 } });
+        var t = v.root.textContent;
+        assert.ok(/earlier release/.test(t) && /6 records were written by an earlier version/.test(t) && /import the ESCU bundle again/.test(t), t);
+        assert.ok(!/Reindex needed/.test(t));
+    },
+    "old summaries and old records are explained together": function () {
+        var v = open({ active: 10, summary: { version: 7, outdated: 4, normalizer_outdated: 1 } });
+        var t = v.root.textContent;
+        assert.ok(/Reindex needed/.test(t) && /1 record was written by an earlier version/.test(t), t);
+    },
     "a current summary says so and offers no warning": function () {
         var v = open({ active: 10, summary: { version: 6, outdated: 0 } });
         assert.ok(!/Reindex needed/.test(v.root.textContent));
@@ -30,6 +41,18 @@ var tests = {
         var v = open(new Error("down"));
         assert.ok(!/Reindex needed/.test(v.root.textContent));
         assert.ok(buttons(v).indexOf("Reindex catalogue summaries") >= 0);
+    },
+    "refused requests are listed with their code and the limits are explained": function () {
+        var event = { time_iso: "2026-11-25T10:00:00Z", actor: "mallory", action: "refused.deployment.approve", object_id: "fenre:UC-1",
+            outcome: "refused", details: { code: "permission_denied", message: "missing capability ucm_deploy" } };
+        var v = runView("ucm_content_admin.js", "ucm-admin", { sync: {}, categories: { categories: [] }, platform: new Error("x"),
+            audit: { events: [event] }, "catalog/facets": new Error("x"), "audit/verify": new Error("x") });
+        var t = v.root.textContent;
+        assert.ok(/Refused requests/.test(t) && /mallory/.test(t) && /deployment\.approve/.test(t) && /permission_denied/.test(t), t);
+        assert.ok(/once per window/.test(t));
+    },
+    "no refused requests, no extra section": function () {
+        assert.ok(!/Refused requests/.test(open({ active: 1, summary: { version: 6, outdated: 0 } }).root.textContent));
     },
     "verifying an intact chain says so, with the head and the rows it could not check": function () {
         var v = open({ active: 1, summary: { version: 6, outdated: 0 } }, intact());

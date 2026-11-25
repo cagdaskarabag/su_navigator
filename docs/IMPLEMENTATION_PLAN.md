@@ -176,7 +176,7 @@ Deferred at 0.9.1, and what became of each by 0.10.0:
 | Background Reindex | Not built; not simple with the existing job mechanism | #25 open |
 | Browser tests | Node logic tests exist; Splunk Web is checked by hand | #15 open |
 
-## WP9 — Trust, evidence, lifecycle and assessments (0.9.2 to 0.10.0) ✅
+## WP9 — Trust, evidence, lifecycle and assessments (0.9.2 to 0.11.0) ✅
 
 Done, with the decision record (each sprint was validated on the lab before merging; the live suite of the last
 build ran 77 tests OK, 2 skipped):
@@ -192,6 +192,7 @@ build ran 77 tests OK, 2 skipped):
 | 0.9.8 | Audit hash chain with verification, withdraw approval, optional second-person enable, override expiry, outcome tracking | D-075 |
 | 0.9.9 | Control catalogues (`ucm.framework/2`): NIST SP 800-53 Rev. 5.2.0, SP 800-171 Rev. 3, CSF 2.0; unmapped controls visible | D-076 |
 | 0.10.0 | Assessed state per control, assessment objectives (SP 800-171 Rev. 3), CMMC Level 2 score, POA&M, immutable evidence snapshots | D-077 |
+| 0.11.0 | Stabilisation: fail-closed browser guard, scheduler access at submit and approval, override needs a second person, audited refusals with limits, informational POA&M eligibility, upgrade notice, Fenre findings export | D-080 |
 | 0.10.0 (docs) | Support statement; platforms without a lab dropped; Sprint 20 limits left as is; 94-fixture re-run skipped | D-078, D-079 |
 
 Not built in WP9, with the reason (details in `docs/FINAL_REPORT.md`):

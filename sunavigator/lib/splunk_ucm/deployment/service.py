@@ -65,8 +65,9 @@ class DeploymentSettings:
                  extra_safe_commands: Sequence[str] = (), schedule_window: str = "auto",
                  scheduled_owner: str = "", cron_jitter: bool = False, actions: Optional[ActionPolicy] = None,
                  enable_second_person: bool = False, enable_request_hours: int = 24, override_days: int = 14,
-                 override_expiry_action: str = "remind"):
+                 override_expiry_action: str = "remind", override_second_person: bool = True):
         self.enable_second_person = enable_second_person
+        self.override_second_person = override_second_person
         self.enable_request_hours = enable_request_hours
         self.override_days = override_days
         self.override_expiry_action = override_expiry_action if override_expiry_action in OVERRIDE_ACTIONS else "remind"
@@ -325,7 +326,7 @@ class DeploymentService:
         return self._decorate(doc)
 
     def approve(self, actor: str, content_id: str, note: str = "", acknowledge_commands: bool = False,
-                acknowledge_actions: bool = False) -> Dict[str, Any]:
+                acknowledge_actions: bool = False, access_reason: str = "") -> Dict[str, Any]:
         doc = self._require(content_id)
         self._expect(doc, (PENDING,), "approve")
         rev = self._latest(doc)
@@ -333,14 +334,26 @@ class DeploymentService:
             raise PermissionDenied("the submitter cannot approve their own deployment "
                                    "(ucm.conf [deployment] allow_self_approval)")
         self._require_clean_spl(rev)
+        access = self.scheduler_access(rev)
+        reason = (access_reason or "").strip()
+        if access["status"] == NOT_MET and len(reason) < MIN_OVERRIDE_REASON:
+            raise ConflictError("%s Approving a revision that cannot see its data needs a reason (at least %d characters)."
+                                % (access["detail"].split(" A scheduled run")[0], MIN_OVERRIDE_REASON),
+                                {"code": "access_gap_reason_required", "scheduler_access": access["status"],
+                                 "scheduler_access_code": access["code"]})
         self._acknowledge(rev, actor, acknowledge_commands)
         self._acknowledge_actions(rev, actor, acknowledge_actions)
         rev["approved_by"] = actor
         rev["approved_at"] = utc_now_iso()
         rev["approval"] = "approved"
-        self._transition(doc, actor, "approve", APPROVED, note,
-                         {"acknowledged_commands": rev.get("acknowledged_commands") or [],
-                          "actions": action_rules.summary(rev.get("actions") or {})})
+        details = {"acknowledged_commands": rev.get("acknowledged_commands") or [],
+                   "actions": action_rules.summary(rev.get("actions") or {}),
+                   "scheduler_access": access["status"], "scheduler_access_code": access["code"]}
+        if access["status"] == NOT_MET:
+            rev["approved_with_access_gap"] = {"reason": reason[:500], "by": actor, "at": rev["approved_at"],
+                                               "code": access["code"], "detail": access["detail"][:500]}
+            details["access_gap_reason"] = reason[:500]
+        self._transition(doc, actor, "approve", APPROVED, note, details)
         return self._decorate(doc)
 
     def reject(self, actor: str, content_id: str, note: str = "") -> Dict[str, Any]:
@@ -441,7 +454,7 @@ class DeploymentService:
                                     {"code": code, "readiness": state, "scheduler_access": access["status"]})
             override = override_reason.strip()[:500]
         request = None
-        if self.settings.enable_second_person:
+        if self.settings.enable_second_person or (blocked_by and self.settings.override_second_person):
             request = doc.get("enable_request") if self._request_active(doc, utc_now_iso()) else None
             if request is None:
                 doc["enable_request"] = {"by": actor, "at": utc_now_iso(), "revision": rev["rev"],

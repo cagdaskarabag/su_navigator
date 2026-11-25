@@ -283,6 +283,30 @@ host; the revision (visible to deployment users), the export and the saved searc
 Residual risk: a permitted webhook host receives a call whenever the alert fires, and the message and subject
 may contain Splunk tokens such as `$name$`.
 
+### The browser guard fails closed (D-080)
+
+Before the search is dispatched the page checks it with `searchGuard` (`ucm_common.js`). Since 0.11.0 a command
+that is in none of the lists (read-only, side-effect, indirect) is refused unless the server's validation has cleared
+the search; the server's `classify()` stays authoritative when it answers. The browser lists are generated from the
+Python lists (`tools/sync_guard_lists.py`) and a test compares both implementations on every command. This is a
+convenience in front of Splunk's own role checks, not a security boundary: a user who bypasses the page can still run
+anything their role allows.
+
+## Refused requests are audited, with limits (D-080)
+
+A refused POST (400, 403, 409) to a governance route writes `refused.<route>` to `uc_audit`: the actor, the route, the
+object, the error code and a message cut to 200 characters with URL queries and credentials removed. Request bodies are
+never stored. To keep refusals from filling the hash chain: a repeat of the same actor, route, object and code within
+`[audit] refusal_window_seconds` is dropped; `refusal_actor_per_hour` and `refusal_total_per_hour` cap the rows, and the
+first request over a cap writes a single `refused.rate_limited` row for that hour. `[audit] refusals = false` disables
+it. The chain verification treats these rows like any other row.
+
+## Overrides and access gaps need a second look (D-080)
+
+`[deployment] override_second_person` (default true) makes enabling a search that a gate blocks a two-person act: one
+requests, another confirms, never the same user. Approving a revision whose search the scheduler role cannot read needs a
+written reason and is audited as `approved_with_access_gap`.
+
 ## Control tests write to Splunk (D-054)
 
 A control test sends fixture events to the test index in `[controltest] index`

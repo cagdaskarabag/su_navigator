@@ -1,9 +1,9 @@
 # SUNavigator (Splunk Use Case Navigator)
 
-[![Version](https://img.shields.io/badge/version-0.10.x-blue.svg)](docs/OPERATOR_GUIDE.md#what-changed-in-09x-and-010)
+[![Version](https://img.shields.io/badge/version-0.11.x-blue.svg)](docs/OPERATOR_GUIDE.md#what-changed-in-09x-to-011)
 [![Splunk Compatibility](https://img.shields.io/badge/splunk-Enterprise%2010.x%20%7C%20Cloud%2C%20SHC%2C%20ES%3A%20not%20validated-orange.svg)](docs/OPERATOR_GUIDE.md#2-requirements)
 [![Python Support](https://img.shields.io/badge/python-3.9%20%7C%203.13-brightgreen.svg)](docs/DECISIONS.md#d-005-stdlib-only-python-compatible-with-39313)
-[![Tests](https://img.shields.io/badge/unit%20tests-1026%20passed-success.svg)](tests/)
+[![Tests](https://img.shields.io/badge/unit%20tests-1073%20passed-success.svg)](tests/)
 [![AppInspect](https://img.shields.io/badge/Splunk%20AppInspect-Clean-brightgreen.svg)](docs/DECISIONS.md#d-019-packaging-constraints-from-appinspect)
 
 **SUNavigator** is a native Splunk application for Splunk Enterprise (the package passes AppInspect, but nothing runs on Splunk Cloud, on a search head cluster with a deployer, or with Splunk Enterprise Security installed; see [Support statement](#support-statement)) that bridges the gap between external security detection catalogues and live production environments. It empowers SOC and detection engineering teams to **discover**, **assess**, **backlog**, **validate**, and **safely deploy** monitoring use cases with built-in four-eyes governance.
@@ -128,7 +128,7 @@ Package the production `.tar.gz` bundle from this repository:
 git clone https://github.com/cagdaskarabag/sun_navigator.git
 cd sun_navigator
 ./tools/package.sh
-# Output: dist/sunavigator-0.10.0.tar.gz
+# Output: dist/sunavigator-0.11.0.tar.gz
 ```
 
 ### CLI Installation (Recommended)
@@ -136,7 +136,7 @@ cd sun_navigator
 Splunk Web's UI upload times out on packages over standard browser HTTP limits. Install via the Splunk CLI:
 
 ```bash
-$SPLUNK_HOME/bin/splunk install app dist/sunavigator-0.10.0.tar.gz \
+$SPLUNK_HOME/bin/splunk install app dist/sunavigator-0.11.0.tar.gz \
   -auth "$SPLUNK_USER:$SPLUNK_PASSWORD"
 
 $SPLUNK_HOME/bin/splunk restart
@@ -186,7 +186,7 @@ python3 tools/ucm_cli.py build-escu-bundle --package DA-ESS-ContentUpdate-latest
 
 With `--security-content <checkout of github.com/splunk/security_content>` the ESCU bundle also carries each detection's data sources, supported add-ons, event types, drilldowns, risk entities, test-data links, macro definitions and upstream status (0.9.6, D-073); discovery then checks whether those event types exist in your data.
 
-Since 0.10.0 a user with the `ucm_assess` capability can record whether each control is met (per objective for SP 800-171 Rev. 3), track a plan of action and milestones, take hashed evidence snapshots and see the DoD-methodology score for CMMC Level 2 (D-077). Since 0.9.9 Coverage lists the whole of NIST SP 800-53, SP 800-171 and CSF 2.0, so controls that no use case maps to are visible (D-076); the catalogues carry identifiers and titles only, attributed to NIST.
+Since 0.11.0 the browser's search guard refuses commands it does not know unless the server clears them, approving a search the scheduler cannot read needs a reason, overriding a gate needs a second person by default (`override_second_person`), refused governance requests are written to the audit trail under rate limits, and POA&M items for CMMC Level 2 carry an informational 32 CFR 170.21 eligibility note (D-080). Since 0.10.0 a user with the `ucm_assess` capability can record whether each control is met (per objective for SP 800-171 Rev. 3), track a plan of action and milestones, take hashed evidence snapshots and see the DoD-methodology score for CMMC Level 2 (D-077). Since 0.9.9 Coverage lists the whole of NIST SP 800-53, SP 800-171 and CSF 2.0, so controls that no use case maps to are visible (D-076); the catalogues carry identifiers and titles only, attributed to NIST.
 
 Since 0.9.8 every audit row is linked to the one before it by a hash, and **Verify audit chain** reports edited or deleted rows; approvals can be withdrawn, enabling can require a second person, overrides expire, and a deployed use case can be marked *needs tuning* or *waiting on data* (D-075).
 
@@ -247,9 +247,9 @@ If you run SUNavigator on one of these, treat it as untested and check the resul
 | 📖 **[Operator Guide](docs/OPERATOR_GUIDE.md)** | Comprehensive manual covering installation, configuration, role assignment, first-run sync, view-by-view usage, upgrading, and troubleshooting. |
 | 🏗️ **[Architecture Specification](docs/ARCHITECTURE.md)** | Technical reference for software components, KV Store collection schemas, and REST endpoints. |
 | 🔒 **[Security & RBAC Model](docs/SECURITY.md)** | Detailed trust boundaries, Splunk capability definitions, and credential handling. |
-| 🧾 **[Final report](docs/FINAL_REPORT.md)** | What was delivered in 0.9.2 to 0.10.0, what was not done and why, what the lab validated, and what is open. |
+| 🧾 **[Final report](docs/FINAL_REPORT.md)** | What was delivered in 0.9.2 to 0.11.0, what was not done and why, what the lab validated, and what is open. |
 | 🗂️ **[Pending issues](docs/ISSUES_PENDING.md)** | Which GitHub issues the code resolves (with ready closing comments), which stay open, and drafts of new issues. |
-| 📜 **[Architecture Decision Records (ADRs)](docs/DECISIONS.md)** | Recorded technical decisions and trade-offs (D-001 through D-079). |
+| 📜 **[Architecture Decision Records (ADRs)](docs/DECISIONS.md)** | Recorded technical decisions and trade-offs (D-001 through D-080). |
 | 📋 **[Implementation Plan](docs/IMPLEMENTATION_PLAN.md)** | Work package breakdown (WP0–WP9), what is deferred or dropped and why, and validation test matrices. |
 
 ---
@@ -272,7 +272,7 @@ sun_navigator/
 │   └── appserver/static/         # Simple XML JS modules and styles
 ├── tools/                        # Development, packaging, and bundle CLI tools
 ├── tests/                        # Automated test suites
-│   ├── unit/                     # 1026 mocked unit tests (runs without Splunk)
+│   ├── unit/                     # 1073 mocked unit tests (runs without Splunk)
 │   ├── js/                       # Node tests of the browser modules (run by the unit suite when Node is present)
 │   ├── fixtures/readiness/       # Readiness regression corpus and its baseline
 │   └── live/                     # Integration tests against live Splunk instances
