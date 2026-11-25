@@ -2300,3 +2300,21 @@ as drift.
 * Not built: CMMC conditional status and POA&M eligibility rules (32 CFR 170); assessment objectives for 800-53 and CMMC;
   signing snapshots; deleting snapshots; control text or assessment procedures.
 * Evidence: `tests/unit/test_assessment.py` (42), `tests/js/test_assessment_ui.js` (10), `LiveAssessmentTest` on the lab.
+
+## D-078 Platforms without a lab are not validated and not planned
+
+*0.10.0 (documentation; owner decision, 2026-11-25).*
+
+* **Decision.** The owner dropped three validation items because there is no lab environment for them and none will
+  be provided: Splunk Cloud (issue #3), a search head cluster with a deployer and indexer peers (issue #2), and
+  Splunk Enterprise Security 8 (issues #4 and #27). Issue #18 (scheduler role reads on an SHC and on Splunk Cloud)
+  depends on the first two and is dropped with them.
+* **What the product says now.** The README support statement, the operator guide (§1 and §12) and the implementation
+  plan say that these platforms are not validated and not planned, not "pending". Nothing is removed from the code:
+  the cluster-aware leader gate (D-055), the cloud-tag AppInspect pass and the read-only ES and ESCU hand-off (D-067)
+  stay as they are, and keep their earlier wording that they were tested without the real platform.
+* **ES.** There is no ES output mode (findings, notable events, risk). No test or document in this repository relies
+  on ES content, and no premium ES material is stored here.
+* **Revisit.** A dropped item is reopened only if a lab for it becomes available. Until then the validation matrix
+  shows "not validated" in those columns.
+* **Not changed.** No code, schema, route or permission changed. The build number stays 22.

@@ -351,7 +351,7 @@ Full model: `docs/SECURITY.md`.
 * `populated` (0.9.1) is a snapshot from the last discovery: one 24-hour count per model, not a
   field, tagging or acceleration check, and it never changes a score (D-067, issue #13).
 * ES and ESCU state (0.9.1) is read, never written. Everything that needs ES installed is mocked in
-  tests and unvalidated (no ES lab, issue #4); SUN deploys plain scheduled searches, not ES
+  tests and unvalidated (no ES lab, not planned, D-078); SUN deploys plain scheduled searches, not ES
   correlation searches.
 * Reindex runs inside one REST call (about 5 ms per use case); there is no background job (#25).
 * Coverage is computed on read over the whole active catalogue (no cache):

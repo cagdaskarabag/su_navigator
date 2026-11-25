@@ -162,23 +162,52 @@ Done, with the decision record:
 | 0.9.0 | Provider-aware navigation, twin lineage, quality-aware discovery, Plan deployment panel | D-066 |
 | 0.9.1 | Read-only ES and ESCU hand-off, parallel-copy warning, populated check for CIM data models, release documentation pass | D-067 (issues #4 in part, #13 in part) |
 
-Deferred, each with its reason and its tracking:
+Deferred at 0.9.1, and what became of each by 0.10.0:
 
-| Item | Why deferred | Tracking |
+| Item | Status at 0.10.0 | Tracking |
 |---|---|---|
-| Search head cluster with a deployer and indexer peers | no such lab | issue #2 |
-| Splunk Cloud validation and vetting submission | no Cloud stack | issue #3 |
-| ES output mode (findings, notable events, risk) | it cannot be built or verified without an ES 8 lab; 0.9.1 only reads and hands off | issue #4, #27 |
-| Alert action profiles (email, webhook) | gated by a product decision on safe defaults and by the approval model; deployed searches have no actions | #28 |
-| Counts beyond the catalogue marked at the 50,000 bound; join scan paged | the corpora fit today | issue #14, #24 |
-| Macro assistance ("Add Macro") | product decision | issue #10 |
-| Field and acceleration checks behind `populated`; scoring decision | needs a decision on what a `no` should do | issue #13 |
-| Background Reindex | not simple with the existing job mechanism | #25 |
-| Browser tests | Node logic tests exist; Splunk Web is checked by hand | issue #15 |
+| Search head cluster with a deployer and indexer peers | **Dropped**: no lab, not planned (D-078) | issue #2 |
+| Splunk Cloud validation and vetting submission | **Dropped**: no lab, not planned (D-078) | issue #3 (and #18, which depends on it) |
+| ES output mode (findings, notable events, risk) and ES-installed validation | **Dropped**: no ES lab, not planned (D-078) | issues #4, #27 |
+| Alert action profiles (email, webhook) | Built in 0.9.5 (D-072) | #28 closed |
+| Counts beyond the catalogue marked at the 50,000 bound; join scan paged | Catalogue part done; paged counts remain | #14 closed, #24 open |
+| Macro assistance ("Add Macro") | Decided: help section, no button (D-072) | #10 closed |
+| Field and acceleration checks behind `populated`; scoring decision | Scoring decided (an empty model is partial, D-072); field reference, field presence and acceleration freshness not built | #13 closed, remainder in #31 |
+| Background Reindex | Not built; not simple with the existing job mechanism | #25 open |
+| Browser tests | Node logic tests exist; Splunk Web is checked by hand | #15 open |
+
+## WP9 — Trust, evidence, lifecycle and assessments (0.9.2 to 0.10.0) ✅
+
+Done, with the decision record (each sprint was validated on the lab before merging; the live suite of the last
+build ran 77 tests OK, 2 skipped):
+
+| Version | Delivered | Record |
+|---|---|---|
+| 0.9.2 | SPL guard classifies the first word of a bracket, scheduler role cannot write, acceleration read from the listing, licence notes | D-068 |
+| 0.9.3 | Dispatch failures in run status, health advisories H001 to H004, schedule advice S001 to S005, cron jitter | D-069 |
+| 0.9.4 | Data seen state beside readiness, 30-day freshness, environment health panel, summary check, field profile; Apache License 2.0 | D-070, D-071 |
+| 0.9.5 | Owner decisions: an empty data model makes a requirement partial, macro help section, email and webhook actions decided by drafter and approver, Fenre findings kept in the repository | D-072 |
+| 0.9.6 | ESCU depth: `security_content` enrichment, event-level data check, deprecated-upstream flag | D-073 |
+| 0.9.7 | Brownfield: detections already running in other apps, graded coverage and gap lists, data maturity facet | D-074 |
+| 0.9.8 | Audit hash chain with verification, withdraw approval, optional second-person enable, override expiry, outcome tracking | D-075 |
+| 0.9.9 | Control catalogues (`ucm.framework/2`): NIST SP 800-53 Rev. 5.2.0, SP 800-171 Rev. 3, CSF 2.0; unmapped controls visible | D-076 |
+| 0.10.0 | Assessed state per control, assessment objectives (SP 800-171 Rev. 3), CMMC Level 2 score, POA&M, immutable evidence snapshots | D-077 |
+| 0.10.0 (docs) | Support statement; platforms without a lab dropped | D-078 |
+
+Not built in WP9, with the reason (details in `docs/FINAL_REPORT.md`):
+
+| Item | Why not | Tracking |
+|---|---|---|
+| CMMC conditional status and POA&M eligibility rules (32 CFR 170) | a legal-weight certification claim; the regulation text was not verified from an authoritative source; the app records coverage and assessments, not certification | none |
+| Assessment objectives for SP 800-53 and CMMC | no machine-readable, verifiable source in the pinned NIST OSCAL content | none |
+| Signing snapshots | needs a key custody and rotation decision | none |
+| Deleting snapshots | omitted on purpose so evidence cannot be removed from the app | none |
+| CIM field reference, field presence, acceleration freshness | needs a lab with `Splunk_SA_CIM` and a populated, accelerated model | #31 |
+| Re-run of the 94 control-test fixtures with add-ons | needs the add-ons the fixtures name on the lab | #23 |
 
 ## Validation status (keep current)
 
-"Live" means Splunk Enterprise 10.2.9, single instance, in the development VM.
+"Live" means Splunk Enterprise 10.2.9, single instance, in the development VM. The SHC / distributed and Splunk Cloud columns are **not validated and not planned**: there is no lab for them (D-078). A ⬜ in them is a statement of fact, not a to-do.
 
 | Area | Mocked tests | Live single instance | SHC / distributed | Splunk Cloud |
 |---|---|---|---|---|
@@ -203,5 +232,13 @@ Deferred, each with its reason and its tracking:
 | RBAC review | ✅ every POST route without capabilities, every GET | ✅ per-feature 403 checks in the live suite | ⬜ | ⬜ |
 | Packaging | n/a | ✅ AppInspect 4.4.0 precert (all checks; `cloud`, `private_victoria`, `private_classic` tags): 0 failures, 0 errors | n/a | ⬜ vetting |
 | ES / ESCU hand-off (0.9.1) | ✅ mocked app lists and stanza states (ES present, ES disabled, 403, unreadable, non-admin, renamed stanza), name mapping, cache, draft record | ✅ ESCU 6.11.1 without ES: version, real stanza state, schedule, actions, not-found, viewer view | ⬜ | ⬜ |
-| ES installed (0.9.1) | ✅ mocked only | ⬜ no ES lab (issue #4) | ⬜ | ⬜ |
+| ES installed (0.9.1) | ✅ mocked only | ⬜ no ES lab; not planned (D-078) | ⬜ | ⬜ |
 | CIM data model populated check (0.9.1) | ✅ yes, no, timeout, failure, cap, budget, setting off, invalid name | ✅ temporary models: yes, no, not referenced, setting off; the lab has no CIM add-on, so no real CIM model was checked | ⬜ | ⬜ |
+| Sprints 13 to 20 (0.9.2 to 0.10.0), all areas | ✅ 1026 unit tests, 11+ Node suites | ✅ full lab live suite: 77 tests OK, 2 skipped (Splunk 10.2.9) | ⬜ not planned | ⬜ not planned |
+| Operational health, data evidence, freshness (0.9.3, 0.9.4) | ✅ | ✅ `LiveDispatchHealthTest`, `LiveFieldProfileTest` (profile search on `_internal`), `LivePopulatedTest` | ⬜ | ⬜ |
+| ESCU enrichment, event-level check (0.9.6) | ✅ | ✅ `LiveSecurityContentTest`, `LiveEventCheckTest` (ESCU 6.11.1 is the only add-on on the lab) | ⬜ | ⬜ |
+| Brownfield matching, graded coverage (0.9.7) | ✅ | ✅ `LiveExternalMatchTest` | ⬜ | ⬜ |
+| Audit chain, lifecycle refinements (0.9.8) | ✅ | ✅ `LiveLifecycleRefinementsTest` | ⬜ | ⬜ |
+| Control catalogues (0.9.9) | ✅ builder and validation | ✅ `LiveControlCatalogueTest` | ⬜ | ⬜ |
+| Assessments, POA&M, snapshots (0.10.0) | ✅ 42 unit tests, 10 Node tests | ✅ `LiveAssessmentTest` (6 tests): record, derive status, POA&M, snapshot integrity, RBAC | ⬜ | ⬜ |
+| Packaging (0.10.0) | n/a | ✅ AppInspect `cloud` tag: 0 errors, 0 failures, 4 warnings | n/a | ⬜ vetting not planned |

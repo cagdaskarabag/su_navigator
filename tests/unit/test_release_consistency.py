@@ -39,6 +39,21 @@ class ReleaseConsistencyTest(unittest.TestCase):
         first = re.search(r"^## What changed in \d+\.\d+\.x(?: and [\d.]+)?\n.*?^### (\d+\.\d+\.\d+)", text, re.MULTILINE | re.DOTALL)
         self.assertEqual(first.group(1), self.version)
 
+    def test_readme_version_badge_matches_the_app_version(self):
+        badge = re.search(r"img\.shields\.io/badge/version-(\d+)\.(\d+)\.x-", read("README.md"))
+        self.assertIsNotNone(badge, "README has no version badge of the form version-X.Y.x")
+        major, minor = self.version.split(".")[:2]
+        self.assertEqual((badge.group(1), badge.group(2)), (major, minor))
+
+    def test_readme_badge_link_points_at_an_existing_operator_guide_heading(self):
+        link = re.search(r"badge/version-[^)]*\)\]\(docs/OPERATOR_GUIDE\.md#([^)]+)\)", read("README.md")).group(1)
+        anchors = set()
+        for line in read("docs", "OPERATOR_GUIDE.md").splitlines():
+            if line.startswith("#"):
+                title = line.lstrip("#").strip().lower()
+                anchors.add(re.sub(r"[^a-z0-9 _-]", "", title).replace(" ", "-"))
+        self.assertIn(link, anchors)
+
     def test_latest_decision_record_names_this_version(self):
         records = re.findall(r"^## (D-\d+) .*\n+\*(\d+\.\d+\.\d+)", read("docs", "DECISIONS.md"), re.MULTILINE)
         self.assertEqual(records[-1][1], self.version, records[-1])
