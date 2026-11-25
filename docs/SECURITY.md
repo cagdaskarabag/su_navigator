@@ -269,6 +269,18 @@ It is not a gate: the deployment workflow, the four-eyes rule, the capabilities 
 unchanged. Behaviour with ES installed is unvalidated (no ES lab); only the ESCU-without-ES case
 was checked on a real instance.
 
+## Email and webhook actions (D-072)
+
+Deployed searches can send an email or call a webhook only when all of these hold: an administrator listed the
+permitted mail domains or webhook hosts in `[actions]` (both lists are empty by default); the drafter asked for
+it in the revision; the approver, who cannot be the submitter, acknowledged the exact recipients and URL; and the
+allowlists still permit them at deploy, enable and rollback. Results are never attached, script and every other
+action kind are refused, a changed recipient or URL is drift, and a revision whose actions changed after the
+acknowledgment is not deployed (digest check). Webhook URLs may carry tokens: the audit trail records only the
+host; the revision (visible to deployment users), the export and the saved search hold the full URL.
+Residual risk: a permitted webhook host receives a call whenever the alert fires, and the message and subject
+may contain Splunk tokens such as `$name$`.
+
 ## Control tests write to Splunk (D-054)
 
 A control test sends fixture events to the test index in `[controltest] index`

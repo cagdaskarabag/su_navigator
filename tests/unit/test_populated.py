@@ -10,7 +10,7 @@ from splunk_ucm.discovery.service import DiscoveryService, DiscoverySettings, ne
 from splunk_ucm.discovery.worker import settings_from_config
 from splunk_ucm.errors import StorageError, UnsupportedOperation, ValidationError
 from splunk_ucm.platform.search import SearchClient, SearchResult
-from splunk_ucm.readiness.evaluators import MET, EvaluationSettings, evaluate
+from splunk_ucm.readiness.evaluators import MET, PARTIAL, EvaluationSettings, evaluate
 from splunk_ucm.readiness.recommend import RecommendationService
 from splunk_ucm.readiness.scoring import ScoringSettings, score
 from splunk_ucm.storage import collections as C
@@ -275,12 +275,16 @@ class EvaluatorTest(unittest.TestCase):
     def evaluate(self, **extra):
         return evaluate(req("cim_model", "Authentication"), snap([self.doc(**extra)]), EvaluationSettings())
 
-    def test_status_is_met_for_every_populated_value(self):
+    def test_status_is_met_unless_the_model_is_empty(self):
         for extra in ({"populated": "yes", "populated_count": 5, "populated_window": "-24h"},
-                      {"populated": "no", "populated_count": 0, "populated_window": "-24h"},
                       {"populated": "unverified", "populated_reason": "timeout"}, {}):
             r = self.evaluate(**extra)
             self.assertEqual((r["status"], r["code"]), (MET, "model_present"), extra)
+
+    def test_an_empty_model_is_partial_and_points_to_ingestion(self):
+        r = self.evaluate(populated="no", populated_count=0, populated_window="-24h")
+        self.assertEqual((r["status"], r["code"], r["populated"]), (PARTIAL, "model_empty", "no"))
+        self.assertIn("Check data ingestion", r["detail"])
 
     def test_yes_no_unverified_are_stated_separately(self):
         yes = self.evaluate(populated="yes", populated_count=5, populated_window="-24h")
@@ -299,14 +303,14 @@ class EvaluatorTest(unittest.TestCase):
         self.assertEqual((r["populated"], r["populated_reason"]), ("unverified", "predates_check"))
         self.assertIn("run discovery again", r["detail"])
 
-    def test_scores_and_state_do_not_depend_on_populated(self):
+    def test_unverified_and_unchecked_score_like_populated_and_empty_scores_lower(self):
         results = []
         for extra in ({"populated": "yes", "populated_count": 5}, {"populated": "no", "populated_count": 0}, {}):
             r = self.evaluate(**extra)
             results.append(score([dict(r, req_id="a", type="cim_model", level="required", confidence="high",
                                        source="provider_structured")], ScoringSettings()))
-        self.assertEqual(results[0], results[1])
-        self.assertEqual(results[1], results[2])
+        self.assertEqual(results[0], results[2])
+        self.assertLess(results[1]["score"], results[0]["score"])
 
     def test_missing_model_has_no_populated_field(self):
         r = evaluate(req("cim_model", "Web"), snap([self.doc()]), EvaluationSettings())
@@ -318,7 +322,7 @@ class EvaluatorTest(unittest.TestCase):
                  [{"kind": "datamodel", "value": "Mine", "canonical_value": "Authentication", "origin": "local",
                    "confidence": "high"}])
         r = evaluate(req("cim_model", "Authentication"), s, EvaluationSettings())
-        self.assertEqual((r["status"], r["populated"]), (MET, "no"))
+        self.assertEqual((r["status"], r["populated"]), (PARTIAL, "no"))
 
 
 class RecommendationTest(unittest.TestCase):
@@ -337,7 +341,7 @@ class RecommendationTest(unittest.TestCase):
         yes = " ".join(self.reasons(self.base(populated="yes")))
         self.assertIn("Data model Authentication: installed and populated in the last 24 h at discovery (12 events).", yes)
         no = " ".join(self.reasons(self.base(populated="no")))
-        self.assertIn("found no events in the last 24 h (populated: no). The requirement still counts as met.", no)
+        self.assertIn("found no events in the last 24 h (populated: no). The requirement counts as partial: check data ingestion.", no)
         un = " ".join(self.reasons(self.base(populated="unverified", populated_reason="timeout")))
         self.assertIn("populated data not verified: the search hit its time limit", un)
 

@@ -72,8 +72,9 @@ function ucmViewMain($, ucm) {
     var CONFIDENCE_HELP = "How sure the app is that the requirement is real. Requirements derived from SPL are hypotheses with lower confidence and weight.";
 
     var POPULATED_KIND = { yes: "ok", no: "warn", unverified: "neutral" };
-    var POPULATED_HELP = "Informational. Discovery ran one bounded search over the last 24 hours to see whether this data " +
-        "model holds events. It does not change the requirement's status, the score or the readiness state.";
+    var POPULATED_HELP = "Discovery ran one bounded search over the last 24 hours to see whether this data model holds " +
+        "events. A model with no events makes the requirement partial and lowers the score: check data ingestion " +
+        "(are the sources sending data, do their add-ons tag events to this model, can the account read the indexes).";
 
     function populatedChip(res) {
         if (!res || !res.populated) { return null; }
@@ -88,7 +89,31 @@ function ucmViewMain($, ucm) {
         ((rd && rd.results) || []).forEach(function (r) {
             if (r.type === "cim_model" && r.populated && !seen[r.value]) { seen[r.value] = true; parts.push(r.value + ": " + r.populated); }
         });
-        return parts.length ? el("div", { "class": "ucm-sub", text: "Data model populated flags (informational, not part of the score): " + parts.join("; ") + "." }) : null;
+        return parts.length ? el("div", { "class": "ucm-sub", text: "Data model populated flags (a model with no events lowers the score; check data ingestion): " + parts.join("; ") + "." }) : null;
+    }
+
+    var MACRO_STATUS_HELP = "Macros are created by you in Splunk; SUNavigator never creates or changes one. Open How to create " +
+        "this macro under the requirement for the steps.";
+
+    /* Help only: the provider names a macro but gives no definition, so the app cannot know what it should hold. */
+    function macroHelp(r, res) {
+        if (r.type !== "macro" || !res || res.status === "met") { return null; }
+        var name = r.value;
+        var arity = /\((\d+)\)\s*$/.exec(name || "");
+        var steps = [
+            "In Splunk Web open Settings, then Advanced search, then Search macros, and choose New Search Macro.",
+            "Destination app: the app whose searches use the macro. SUNavigator deploys searches into its own app, so create it there or share it with all apps (last step).",
+            "Name: exactly " + name + (arity ? " (the number in brackets is the argument count, and the Arguments field lists that many names)" : "") + ".",
+            "Definition: the SPL fragment the macro stands for, for example an index and sourcetype constraint such as index=wineventlog. " +
+                "The content provider does not supply it, so take it from the content's own documentation or your data owner.",
+            "Save, then in the macro's Permissions choose All apps if a search in another app uses it. App-only sharing shows here as partial.",
+            "Run discovery again in Data Inventory so the requirement is re-checked."
+        ];
+        return el("details", { "class": "ucm-details" },
+            el("summary", { text: "How to create this macro" }),
+            el("ol", { "class": "ucm-sub" }, steps.map(function (s) { return el("li", { text: s }); })),
+            el("div", { "class": "ucm-sub", text: "A macro with an empty or wrong definition would make this requirement read as met while the " +
+                "search returns nothing, so check the definition against a test search before relying on it." }));
     }
 
     function requirementRow(r, res) {
@@ -99,8 +124,9 @@ function ucmViewMain($, ucm) {
             el("td", {}, ucm.badge(r.level, r.level === "critical" ? "critical" : (r.level === "required" ? "high" : "neutral"))),
             el("td", { text: r.source.replace("_", " ") }),
             el("td", { text: r.confidence }),
-            el("td", {}, res ? ucm.statusBadge(res.status) : ucm.badge("not assessed", "neutral")),
-            el("td", { "class": "ucm-sub" }, evidence, populatedChip(res),
+            el("td", { "title": r.type === "macro" ? MACRO_STATUS_HELP : null },
+                res ? ucm.statusBadge(res.status) : ucm.badge("not assessed", "neutral")),
+            el("td", { "class": "ucm-sub" }, evidence, populatedChip(res), macroHelp(r, res),
                 res && res.observed && res.observed.length
                     ? el("details", { "class": "ucm-details" }, el("summary", { text: "Observed (" + res.observed.length + ")" }),
                         el("pre", { "class": "ucm-pre ucm-mono", text: res.observed.map(function (o) {
@@ -298,6 +324,73 @@ function ucmViewMain($, ucm) {
             el("div", { "class": "ucm-sub", text: "Preview forces a short time window and a result cap. Searches with delete, outputlookup, collect, script or similar commands are refused, and so are searches with map, savedsearch, rest or commands outside SUN's read-only list. Field sampling uses a constructed fieldsummary, not the imported pipeline." }));
     }
 
+    /* One sentence per notification, shown to the approver and in the acknowledgment dialog. */
+    function actionLines(actions) {
+        var lines = [];
+        if (actions && actions.email) {
+            lines.push("An email to " + actions.email.to.join(", ") +
+                (actions.email.subject ? ", subject \"" + actions.email.subject + "\"" : "") +
+                (actions.email.message ? ", message \"" + actions.email.message + "\"" : "") +
+                (actions.email.include_link ? ", with a link to the results" : "") + ". Results are never attached.");
+        }
+        if (actions && actions.webhook) { lines.push("A webhook call to " + actions.webhook.url + "."); }
+        return lines;
+    }
+
+    function actionsBox(latest) {
+        var lines = actionLines(latest.actions);
+        if (!lines.length) { return null; }
+        var box = ucm.stateBox("warn", "Notifications on this revision",
+            "Sent when the alert fires and the search is enabled. " + (latest.actions_acknowledged_by
+                ? "Acknowledged by " + latest.actions_acknowledged_by + "." : "Not yet acknowledged by an approver."));
+        box.appendChild(el("ul", { "class": "ucm-sub" }, lines.map(function (l) { return el("li", { text: l }); })));
+        return box;
+    }
+
+    function notificationFields(cur, policy) {
+        var acts = cur.actions || {};
+        var emailPolicy = (policy.email_domains || []).length > 0;
+        var hookPolicy = (policy.webhook_hosts || []).length > 0;
+        function box(checked, disabled) {
+            var c = el("input", { type: "checkbox" });
+            c.checked = !!checked;
+            c.disabled = !!disabled;
+            return c;
+        }
+        function text(value) { var i = el("input", { "class": "ucm-input", type: "text" }); i.value = value || ""; return i; }
+        var emailOn = box(acts.email, !emailPolicy);
+        var emailTo = text(acts.email ? acts.email.to.join(", ") : "");
+        emailTo.placeholder = "soc@" + ((policy.email_domains || [])[0] || "example.com");
+        var emailSubject = text(acts.email ? acts.email.subject : "");
+        emailSubject.placeholder = "optional, e.g. Alert: $name$";
+        var emailMessage = text(acts.email ? acts.email.message : "");
+        emailMessage.placeholder = "optional";
+        var hookOn = box(acts.webhook, !hookPolicy);
+        var hookUrl = text(acts.webhook ? acts.webhook.url : "");
+        hookUrl.placeholder = "https://" + ((policy.webhook_hosts || [])[0] || "hooks.example.com") + "/...";
+        var hint = [];
+        if (!policy.enabled) { hint.push("Alert actions are turned off by an administrator."); }
+        else {
+            hint.push(emailPolicy ? "Email allowed to: " + policy.email_domains.join(", ") + "." : "Email is off: an administrator has not listed permitted mail domains.");
+            hint.push(hookPolicy ? "Webhooks allowed to: " + policy.webhook_hosts.join(", ") + "." : "Webhooks are off: an administrator has not listed permitted hosts.");
+        }
+        var node = el("div", {},
+            el("div", {}, el("label", {}, emailOn, " Send an email")), kv([["To (comma separated)", emailTo], ["Subject", emailSubject], ["Message", emailMessage]]),
+            el("div", {}, el("label", {}, hookOn, " Call a webhook")), kv([["URL", hookUrl]]),
+            el("div", { "class": "ucm-sub", text: hint.join(" ") + " Needs Type = Alert and a 'Suppress repeats for' period. " +
+                "The approver sees every recipient and must acknowledge them; results are never attached." }));
+        return {
+            node: policy.enabled === false ? el("div", { "class": "ucm-sub", text: hint.join(" ") }) : node,
+            collect: function () {
+                var out = {};
+                if (policy.enabled === false) { return out; }
+                if (emailOn.checked) { out.email = { to: emailTo.value, subject: emailSubject.value, message: emailMessage.value, include_link: true }; }
+                if (hookOn.checked) { out.webhook = { url: hookUrl.value }; }
+                return out;
+            }
+        };
+    }
+
     var ACTION_LABELS = { submit: "Submit for approval", approve: "Approve", reject: "Reject", deploy: "Deploy (disabled)",
         enable: "Enable", disable: "Disable", rollback: "Roll back", retire: "Retire", verify: "Verify now",
         controltest: "Run control test" };
@@ -308,19 +401,32 @@ function ucmViewMain($, ucm) {
         var label = ACTION_LABELS[action] || action;
         var revs = (dep.deployment && dep.deployment.revisions) || [];
         var review = (revs[revs.length - 1] || {}).review_commands || [];
-        var needsAck = review.length && (action === "approve" || (action === "submit" && settings.require_approval === false));
+        var decides = action === "approve" || (action === "submit" && settings.require_approval === false);
+        var needsAck = review.length && decides;
+        var latestActions = (revs[revs.length - 1] || {}).actions || {};
+        var needsActionsAck = decides && (latestActions.email || latestActions.webhook);
 
         function send() {
             ucm.post("deployment/" + action, body).done(load).fail(function (err) { ucm.notify(err.message); });
         }
+        function acknowledgeActions() {
+            if (!needsActionsAck) { send(); return; }
+            ucm.confirmAction("Notifications need review",
+                "When this alert fires it will send: " + actionLines(latestActions).join(" ") +
+                " Confirm these destinations are correct and permitted. Your acknowledgment is recorded in the audit trail.",
+                "I reviewed them", function () {
+                    body.acknowledge_actions = true;
+                    send();
+                });
+        }
         function acknowledgeThenSend() {
-            if (!needsAck) { send(); return; }
+            if (!needsAck) { acknowledgeActions(); return; }
             ucm.confirmAction("Commands need review",
                 "This search runs commands SUN cannot verify as read-only: " + review.join(", ") +
                 ". They can run other searches or reach data the SPL does not show. Confirm you reviewed them. " +
                 "Your acknowledgment is recorded in the audit trail.", "I reviewed them", function () {
                     body.acknowledge_commands = true;
-                    send();
+                    acknowledgeActions();
                 });
         }
 
@@ -427,12 +533,13 @@ function ucmViewMain($, ucm) {
         severity.value = cur.severity || (uc.criticality === "critical" ? "critical" : (uc.criticality === "high" ? "high" : "medium"));
         var threshold = input(String(cur.threshold === undefined ? 0 : cur.threshold));
         var notes = input("");
+        var notify = notificationFields(cur, (dep.settings && dep.settings.actions) || {});
         var save = el("button", { "class": "btn btn-primary", type: "button", text: "Save draft", onclick: function () {
             this.disabled = true;
             ucm.post("deployment/draft", { id: uc.content_id, spl_source: source.value, custom_spl: custom.value,
                 cron: cron.value, earliest: earliest.value, latest: latest.value, alert_mode: mode.value,
                 schedule_window: windowIn.value, suppress_period: suppressPeriod.value, suppress_fields: suppressFields.value,
-                severity: severity.value, threshold: threshold.value, notes: notes.value })
+                severity: severity.value, threshold: threshold.value, notes: notes.value, actions: notify.collect() })
                 .done(load).fail(function (err) { save.disabled = false; ucm.notify(err.message); });
         } });
         return el("div", { "class": "ucm-form" }, kv([
@@ -440,8 +547,9 @@ function ucmViewMain($, ucm) {
             ["Latest", latest], ["Schedule window (auto or minutes)", windowIn], ["Type", mode], ["Severity", severity],
             ["Trigger when results >", threshold], ["Suppress repeats for", suppressPeriod], ["Suppress by fields", suppressFields],
             ["Notes", notes]]),
+            el("div", {}, el("strong", { text: "Notifications" })), notify.node,
             el("div", { "class": "ucm-actions" }, save),
-            el("div", { "class": "ucm-sub", text: "The draft is parsed by Splunk. Searches with side-effect commands cannot be submitted. No email, webhook or script actions are configured. The default range ends 5 minutes ago so late events are still counted; suppression applies to alerts only." }));
+            el("div", { "class": "ucm-sub", text: "The draft is parsed by Splunk. Searches with side-effect commands cannot be submitted. Only email and webhook notifications can be configured; script actions are not available. The default range ends 5 minutes ago so late events are still counted; suppression applies to alerts only." }));
     }
 
     var LIVE_KIND = { enabled: "ok", disabled: "info", missing: "error", unmanaged: "error", absent: "neutral" };
@@ -485,6 +593,8 @@ function ucmViewMain($, ucm) {
                 (latest.acknowledged_by ? " (acknowledged by " + latest.acknowledged_by + ")" : "") + "." : "") +
             (latest.submitted_by ? " Submitted by " + latest.submitted_by + "." : "") +
             (latest.approved_by ? " Approved by " + latest.approved_by + "." : "") }));
+        var notified = actionsBox(latest);
+        if (notified) { card.appendChild(notified); }
         var recorded = recordedParallel(latest);
         if (recorded) { card.appendChild(recorded); }
         if (latest.spl_time_bounds) {

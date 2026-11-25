@@ -158,10 +158,17 @@ def eval_cim_model(req, snap: EnvironmentSnapshot, settings: EvaluationSettings)
                    "populated": populated}
             if populated != POPULATED_UNVERIFIED:
                 row["populated_count"] = doc.get("populated_count")
-            out = result(MET, "model_present",
-                         "Data model definition is installed; %s. Which fields it holds and whether its acceleration "
-                         "is current are not verified. The populated flag is informational and does not change this "
-                         "status." % sentence, [row], _via(mapping))
+            if populated == POPULATED_NO:
+                out = result(PARTIAL, "model_empty",
+                             "Data model definition is installed but holds no events (%s). Searches that read it "
+                             "return nothing. Check data ingestion: that the sources which feed this model are "
+                             "sending data, that their add-ons tag and normalise events to it, and that the "
+                             "scheduled account can read the indexes it searches." % sentence,
+                             [row], _via(mapping))
+            else:
+                out = result(MET, "model_present",
+                             "Data model definition is installed; %s. Which fields it holds and whether its "
+                             "acceleration is current are not verified." % sentence, [row], _via(mapping))
             out["populated"] = populated
             if populated == POPULATED_UNVERIFIED:
                 out["populated_reason"] = doc.get("populated_reason") or "predates_check"

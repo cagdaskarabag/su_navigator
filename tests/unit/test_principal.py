@@ -349,7 +349,7 @@ class ReadinessIntegrationTest(unittest.TestCase):
                               {"kind": "index", "name": "main", "status": "active", "window_count": 5}]
 
     def test_engine_version_was_bumped(self):
-        self.assertEqual(ENGINE_VERSION, "ucm.readiness/5")
+        self.assertEqual(ENGINE_VERSION, "ucm.readiness/6")
 
     def test_permission_evaluator_uses_snapshot_principal(self):
         s = snap(self.INTERNAL_INDEX_SOURCES)

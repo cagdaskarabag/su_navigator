@@ -1,10 +1,10 @@
-# SUNavigator 0.9.4 — operator guide
+# SUNavigator 0.9.5 — operator guide
 
 **SUNavigator** (short for **Splunk use case navigator**) discovers, assesses,
 selects, validates and deploys monitoring use cases in Splunk.
 
 This is the install, usage and troubleshooting guide for **SUNavigator
-0.9.4**. It is written for a single Splunk Enterprise instance
+0.9.5**. It is written for a single Splunk Enterprise instance
 (search head + indexer on one host), including a local macOS install. Search
 head clusters and Splunk Cloud are **not** validated in this version.
 
@@ -22,6 +22,33 @@ Related documents (design, not how-to):
 ---
 
 ## What changed in 0.9.x
+
+### 0.9.5
+
+0.9.5 acts on the owner's decisions (D-072). Upgrade as usual; stored assessments are recomputed once
+(engine `ucm.readiness/6`).
+
+- **An empty data model lowers the score.** A CIM data model that is installed but held no events at
+  the last discovery makes its requirement *partial* (it was *met*). The use-case page and the
+  recommendation reasons say to check data ingestion: sources sending, add-ons tagging events to the model,
+  and the scheduled account's index access. Run discovery again after fixing ingestion.
+- **Macro help.** A missing or app-scoped macro has a *How to create this macro* section. The app
+  does not create macros.
+- **Email and webhook alerts.** The person who drafts a deployment may choose an email and/or a webhook.
+  The approver sees the recipients and the URL and must acknowledge them when approving. Nothing is sent
+  until an administrator sets, in `ucm.conf`, the permitted destinations:
+
+  ```
+  [actions]
+  email_domains = example.com, *.corp.example
+  webhook_hosts = hooks.example.com
+  ```
+
+  Both lists are empty by default. Notifications need the Alert type and *Suppress repeats for*, never
+  attach results, and are checked against the lists again at deploy, enable and rollback. A webhook URL is
+  often a secret: the audit trail stores only its host, but the revision, the export and the saved search hold
+  the full URL. Splunk's own mail server settings are outside the app; the saved search is written disabled
+  and sends nothing until it is enabled.
 
 ### 0.9.4
 
@@ -491,10 +518,11 @@ the one exception is the interactive search a user starts from the use-case page
 which runs as that user (§6.2a, D-058).
 Preview and field sampling are explicit, bounded, and refuse side-effect
 commands (`delete`, `outputlookup`, `collect`, script, and similar). Deployed
-searches have **no email, webhook or script alert actions**; the default
-alert mode only writes to Splunk's Triggered Alerts.
+searches have **no script alert actions**. Email and webhook actions exist only when
+an administrator has listed permitted destinations in `[actions]` and the approver has acknowledged
+them (0.9.5, D-072); the default alert mode only writes to Splunk's Triggered Alerts.
 
-**Not in 0.9.4:** PDF export of coverage, a bundled regulation-control
+**Not in 0.9.5:** PDF export of coverage, a bundled regulation-control
 catalogue, SHC validation with a deployer and indexer peers (issue #2), Splunk Cloud
 vetting submission (issue #3), and any Enterprise Security output mode (issue #4; 0.9.1 only
 reads ES and ESCU state and hands off, §5.2b).
@@ -508,7 +536,7 @@ reads ES and ESCU state and hands off, §5.2b).
 | Splunk | Enterprise 10.x (validated on 10.2.9 in development; tested by operators on 10.4.3 Darwin arm64). Python 3.9 or 3.13 in Splunk. |
 | KV Store | Must reach `status: ready`. The app stores catalogue, inventory, readiness, selections, deployments and audit in KV collections. |
 | Role | First-time setup needs `admin` (or `sc_admin` on Cloud). |
-| Disk | The 0.9.4 package is a few megabytes. Category 9 of Fenre is about 120 records; the full Fenre corpus is tens of thousands of records. |
+| Disk | The 0.9.5 package is a few megabytes. Category 9 of Fenre is about 120 records; the full Fenre corpus is tens of thousands of records. |
 | Network | Optional. Remote sync needs HTTPS to `api.github.com` and `raw.githubusercontent.com`. Offline import needs none. |
 | Browser | Splunk Web. The app is a set of Simple XML views plus JavaScript under `/en-US/app/sunavigator/`. |
 
@@ -525,7 +553,7 @@ Placeholders used below:
 
 ```bash
 ./tools/package.sh
-# writes dist/sunavigator-0.9.4.tar.gz
+# writes dist/sunavigator-0.9.5.tar.gz
 ```
 
 The tarball has a single top-level folder `sunavigator/`
@@ -543,11 +571,11 @@ then fails in the UI with `500 Internal Server Error` even though splunkd is
 still unpacking. Use the CLI:
 
 ```bash
-$SPLUNK_HOME/bin/splunk install app /path/to/sunavigator-0.9.4.tar.gz \
+$SPLUNK_HOME/bin/splunk install app /path/to/sunavigator-0.9.5.tar.gz \
   -auth "$SPLUNK_USER:$SPLUNK_PASSWORD"
 # first install: omit -update
 # upgrade of an existing copy:
-$SPLUNK_HOME/bin/splunk install app /path/to/sunavigator-0.9.4.tar.gz \
+$SPLUNK_HOME/bin/splunk install app /path/to/sunavigator-0.9.5.tar.gz \
   -update 1 -auth "$SPLUNK_USER:$SPLUNK_PASSWORD"
 
 $SPLUNK_HOME/bin/splunk restart
@@ -1660,7 +1688,7 @@ app. Do the steps in this order:
    $SPLUNK_HOME/bin/splunk restart
    ```
 
-4. **Install SUNavigator 0.9.4** as in §3.2. The first install omits
+4. **Install SUNavigator 0.9.5** as in §3.2. The first install omits
    `-update`, because `sunavigator` is a new app ID.
 5. **Re-create the GitHub token** if you use one (§3.6). It must be stored in
    realm `sunavigator`. The 0.7.0 token in realm `splunk_use_case_manager` is
@@ -2029,17 +2057,15 @@ Full table: [ARCHITECTURE.md §6](ARCHITECTURE.md).
   (`[deployment] scheduled_owner`, D-051), not the operator who clicked Deploy.
   Treat that account as you would any scheduled-search owner and keep its role
   narrow.
-- No alert actions are configured by the app. If you add email/webhook in
-  Settings afterwards, the next **Verify** will report drift; the app will
-  not send those actions itself until someone copies them into a revision
-  (it will not: alert actions are out of scope).
+- Alert actions come only from an approved revision (email and webhook, D-072). If you add or change
+  one in Settings afterwards, the next **Verify** reports drift.
 - GitHub tokens belong in `storage/passwords` only.
 - Audit records older than `[retention] audit_days` (365) are purged. The
   same events are in `sunavigator.log` / `_internal`.
 
 ---
 
-## 12. Known limitations (0.9.4)
+## 12. Known limitations (0.9.5)
 
 Each item says where to read more and ends with its tracking: an issue number on GitHub, a draft
 (`N-nn`) in `docs/ISSUES_PENDING.md` that has not been filed yet, or "no issue" for a limit that is
@@ -2147,7 +2173,7 @@ by design.
   the SPL lint now flags it). A pass on a `timechart` or on `coalesce` defaults is weak.
   Test-index events are not removed by the app. Tracking: issues #5 and #6 are resolved by
   the 0.8.8 campaign; what is left is #20 (upstream report), #21 (`source=` searches), #22 (weak passes) and #23 (re-run
-  with add-ons). Action profiles (email, webhook) are not built: #28.
+  with add-ons). Email and webhook actions are built in 0.9.5 (D-072; issue #28 can be closed after review).
 
 **Access control**
 
@@ -2167,7 +2193,7 @@ by design.
 
 ## 13. Quick start checklist
 
-1. `splunk install app sunavigator-0.9.4.tar.gz` then `splunk restart`.
+1. `splunk install app sunavigator-0.9.5.tar.gz` then `splunk restart`.
 2. `splunk show kvstore-status` → `ready` (macOS: §9.2 if stuck on `starting`).
 3. Open **SUNavigator → Administration**; all platform pills green.
 4. **Check provider for categories** → tick **9** → **Synchronize**, **or**

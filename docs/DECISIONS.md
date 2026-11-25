@@ -2048,3 +2048,51 @@ as drift.
   `NOTICE` attribution, and state changes where the licence requires it (Apache-2.0 sections 4 and 5).
   No warranty is given (section 7).
 * The repository visibility is public and stays public (owner decision, 2026-11-25).
+
+## D-072 Owner decisions of 2026-11-25: no data lowers the score, macro help, email and webhook actions, Fenre findings stay in the repository
+
+*0.9.5 (owner decisions; they close the open questions in the expanded assessment, section 12).*
+
+* **Decision, an installed but empty data model is `partial` (supersedes the informational wording of D-067 and issue #13).**
+  When discovery's populated check found no events in 24 hours, the CIM requirement is `partial` (code
+  `model_empty`, weight 0.5) instead of `met`. The explanation and the recommendation reason say the model holds
+  no events and tell the operator to check data ingestion: that the sources which feed it are sending, that their
+  add-ons tag and normalise events to it, and that the scheduled account can read the indexes. `unverified` and
+  `yes` are unchanged. Engine `ucm.readiness/6` recomputes every stored assessment once. The check is a
+  24-hour snapshot taken at discovery; a model that is quiet at night reads `no` until the next discovery.
+* **Decision, macro help, not macro creation (answers issue #10; Option 1 without a link).** No "Add Macro" button
+  and no write path. A macro requirement that is not met or only app-scoped gets a "How to create this macro"
+  section with the steps (where to open Search macros, the exact name and argument count, what the definition is,
+  sharing, re-run discovery) and a warning that an empty definition would read as met while returning nothing. The
+  status badge has a tooltip saying SUNavigator never creates or changes macros. No deep link is built because the
+  Splunk Web path is not verified across versions.
+* **Decision, email and webhook actions are chosen by the drafter and decided by the approver (answers issue #28).**
+  * The draft may carry `actions`: an email (recipients, optional subject and message, link to results) and/or a
+    webhook (URL). They are frozen in the revision like the SPL.
+  * Destinations are limited by `[actions]` in `ucm.conf`: `email_domains` and `webhook_hosts` (exact or
+    `*.example.com`), both empty by default, so nothing can be sent until an administrator names them. `enabled`
+    is a master switch, `webhook_allow_http` is false (https only), `max_recipients` is 10, and
+    `require_suppression` is true.
+  * Rules: actions need the Alert type and a "Suppress repeats for" period (so one condition cannot send on every run);
+    results are never attached (`sendresults`, `sendcsv`, `sendpdf` and `inline` are written as 0 and checked for
+    drift); script, log-event and every other action kind is refused, not ignored; subject and message are single
+    lines; webhook URLs may not carry credentials or fragments.
+  * Approval: the approver sees every recipient and URL on the revision, and approving needs
+    `acknowledge_actions` (the same mechanism as `acknowledge_commands`). The acknowledgment stores a digest of the
+    actions; deploy refuses a revision whose actions changed after it. Without four-eyes
+    (`require_approval = false`) the submitter acknowledges. The submitter still cannot approve their own revision.
+  * The allowlists are checked again at deploy, enable and rollback, so tightening them stops an old approval.
+  * Drift: the frozen actions, recipients, subject and webhook URL are compared with the saved search; a revision
+    from before 0.9.5 keeps the old rule (any action is drift). The audit trail records counts, mail domains and
+    the webhook host only, never the webhook path, which often carries a token. The revision, the export and the
+    saved search do contain the full URL: treat them as secret-bearing.
+  * Not built: result attachment, per-recipient approval, templates, and any change to Splunk's mail server.
+* **Decision, the Fenre findings (answers issue #20).** The findings F-01 to F-11 stay documented in this repository
+  (`docs/upstream/FENRE_FINDINGS.md`, issue #20). They are not sent to the Fenre project by SUNavigator's
+  maintainers.
+* Open and unchanged: an ES 8 lab (#4, #27) is provided by the owner later; the compliance scope (Sprints 19 and 20)
+  and the lab scheduler role follow the recommendations in the assessment (coverage, not assessed compliance; the
+  role change is made on the lab only).
+* Evidence: `tests/unit/test_actions.py`, `test_populated.py`, `tests/js/test_actions.js`, `test_handoff.js`; the
+  lab check on Splunk 10.2.9 (`LiveActionsTest`: draft, refusal without acknowledgment, deploy disabled, the keys read
+  back, drift on a changed recipient, removal in a later revision).

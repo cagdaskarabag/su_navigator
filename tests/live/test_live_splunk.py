@@ -1734,8 +1734,8 @@ class LivePopulatedTest(unittest.TestCase):
         self.map(self.NO)
         self.unmap(self.YES)
         doc_no, res_no = self.cim_result()
-        self.assertEqual((res_no["status"], res_no["code"], res_no["populated"]), ("met", "model_present", "no"), res_no)
-        self.assertEqual((doc_yes["score"], doc_yes["state"], doc_yes["counts"]), (doc_no["score"], doc_no["state"], doc_no["counts"]))
+        self.assertEqual((res_no["status"], res_no["code"], res_no["populated"]), ("partial", "model_empty", "no"), res_no)
+        self.assertLess(doc_no["score"], doc_yes["score"])
 
     @unittest.skipUnless(os.environ.get("UCM_LIVE_CONF_WRITE") == "1",
                          "set UCM_LIVE_CONF_WRITE=1: the test leaves a local [discovery] populated_check line in local/ucm.conf")
@@ -1802,3 +1802,96 @@ class LiveFieldProfileTest(unittest.TestCase):
             self.assertGreater(item["sample_size"], 0)
             self.assertTrue(0 <= item["fill_rate"] <= 1 and 0 <= item["placeholder_rate"] <= 1, item)
         self.assertGreater(profiled[0]["fill_rate"], 0.5, profiled)
+
+
+@unittest.skipUnless(LIVE, "set UCM_LIVE_SPLUNK=1 to run against a real Splunk instance")
+class LiveActionsTest(unittest.TestCase):
+    """D-072: email and webhook actions are drafted, approved with an acknowledgment, written disabled and verified."""
+
+    OPERATOR = "ucm_test_actions_" + uuid.uuid4().hex[:6]
+    OPERATOR_PW = "T3st!" + uuid.uuid4().hex
+    UC = "fenre:UC-9.1.2"
+    SAVED = "/servicesNS/nobody/sunavigator/saved/searches/"
+    KEYS = {"email_domains": "example.com", "webhook_hosts": "hooks.example.com"}
+
+    @classmethod
+    def setUpClass(cls):
+        cls.admin = transport()
+        cls.before = {k: conf_value(cls.admin, "actions", k) for k in cls.KEYS}
+        for key, value in cls.KEYS.items():
+            set_conf_value(cls.admin, "actions", key, value)
+        status, _ = cls.admin.request("POST", "/services/authentication/users",
+                                      form={"name": cls.OPERATOR, "password": cls.OPERATOR_PW,
+                                            "roles": "ucm_deployment_operator"})
+        assert status in (200, 201), status
+        cls.operator = transport(cls.OPERATOR, cls.OPERATOR_PW)
+        bundle = helpers.fixture_bundle(record_ids=["9.1.2"])
+        status, body = api(cls.admin, "POST", "import", raw=json.dumps(bundle).encode("utf-8"))
+        assert status == 200, body
+        cls.kv = KVStore(cls.admin)
+        cls.kv.delete(C.DEPLOYMENTS, "dep_fenre_UC-9.1.2")
+
+    @classmethod
+    def tearDownClass(cls):
+        from urllib.parse import quote
+        doc = cls.kv.get(C.DEPLOYMENTS, "dep_fenre_UC-9.1.2")
+        if doc:
+            cls.admin.request("DELETE", cls.SAVED + quote(doc["saved_search"]["name"], safe=""))
+            cls.kv.delete(C.DEPLOYMENTS, "dep_fenre_UC-9.1.2")
+        cls.admin.request("DELETE", "/services/authentication/users/" + cls.OPERATOR)
+        for key, value in cls.before.items():
+            set_conf_value(cls.admin, "actions", key, value)
+
+    def act(self, who, action, **body):
+        body["id"] = self.UC
+        return api(who, "POST", "deployment/" + action, body=body)
+
+    def saved(self, name):
+        from urllib.parse import quote
+        status, content = self.admin.request("GET", self.SAVED + quote(name, safe=""), {"output_mode": "json"})
+        return json.loads(content)["entry"][0]["content"] if status == 200 else None
+
+    def test_actions_round_trip_through_splunk(self):
+        actions = {"email": {"to": "soc@example.com, lead@example.com", "subject": "Alert $name$", "message": "Check it"},
+                   "webhook": {"url": "https://hooks.example.com/services/T1/B2/token"}}
+        status, body = self.act(self.operator, "draft", suppress_period="1h", actions={"email": {"to": "x@evil.test"}})
+        self.assertEqual(status, 400, body)
+        status, body = self.act(self.operator, "draft", actions=actions)
+        self.assertEqual(status, 400, body)
+        status, body = self.act(self.operator, "draft", suppress_period="1h", actions=actions)
+        self.assertEqual(status, 200, body)
+        name = body["deployment"]["saved_search"]["name"]
+        self.assertEqual(body["deployment"]["notify"], ["email", "webhook"])
+        self.assertEqual(self.act(self.operator, "submit")[0], 200)
+        status, body = self.act(self.admin, "approve")
+        self.assertEqual(status, 409, body)
+        self.assertEqual(body["error"]["details"]["code"], "actions_acknowledgment_required")
+        status, body = self.act(self.admin, "approve", acknowledge_actions=True)
+        self.assertEqual(status, 200, body)
+        status, body = self.act(self.operator, "deploy")
+        self.assertEqual(status, 200, body)
+        self.assertEqual(body["deployment"]["live"]["drift"], [])
+        live = self.saved(name)
+        self.assertTrue(live["disabled"])
+        self.assertEqual([a.strip() for a in live["actions"].split(",")], ["email", "webhook"])
+        self.assertEqual(live["action.email.to"], "soc@example.com,lead@example.com")
+        self.assertEqual(live["action.webhook.param.url"], actions["webhook"]["url"])
+        self.assertIn(str(live["action.email.sendresults"]).lower(), ("0", "false"))
+        from urllib.parse import quote
+        self.admin.request("POST", self.SAVED + quote(name, safe=""), form={"action.email.to": "someone@example.com"})
+        status, body = self.act(self.operator, "verify")
+        self.assertEqual([d["field"] for d in body["deployment"]["live"]["drift"]], ["action.email.to"])
+        status, bundle = api(self.operator, "GET", "deployments/export")
+        entry = [e for e in bundle["manifest"]["entries"] if e["saved_search"] == name][0]
+        self.assertEqual(entry["actions"]["webhook"], {"host": "hooks.example.com"})
+        self.assertNotIn("token", json.dumps(entry))
+        self.act(self.operator, "draft", suppress_period="1h")
+        self.act(self.operator, "submit")
+        self.act(self.admin, "approve")
+        status, body = self.act(self.operator, "deploy")
+        self.assertEqual(status, 200, body)
+        live = self.saved(name)
+        self.assertEqual(live["actions"], "", live)
+        self.assertEqual([str(live["action.email"]).lower(), str(live["action.webhook"]).lower()].count("true"), 0, live)
+        self.assertEqual(body["deployment"]["live"]["drift"], [])
+        self.act(self.operator, "retire")

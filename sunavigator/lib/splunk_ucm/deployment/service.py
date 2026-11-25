@@ -33,6 +33,8 @@ from ..storage.collections import DOC_SCHEMA
 from ..storage.kvstore import DocumentStore
 from ..storage.repositories import CategoryRepository, ContentRepository
 from ..util import safe_key, utc_now_iso
+from . import actions as action_rules
+from .actions import ActionPolicy
 from .controltest import ControlTestRunner, bundle_hash, expectations, validate_bundle
 from .savedsearch import SavedSearchClient
 from .export import build_bundle
@@ -55,7 +57,8 @@ class DeploymentSettings:
                  earliest: str = "-20m@m", latest: str = "-5m@m", alert_mode: str = "track",
                  max_revisions: int = 20, verify_interval_minutes: int = 60,
                  extra_safe_commands: Sequence[str] = (), schedule_window: str = "auto",
-                 scheduled_owner: str = "", cron_jitter: bool = False):
+                 scheduled_owner: str = "", cron_jitter: bool = False, actions: Optional[ActionPolicy] = None):
+        self.actions = actions or ActionPolicy()
         self.scheduled_owner = scheduled_owner
         self.cron_jitter = cron_jitter
         self.extra_safe_commands = tuple(extra_safe_commands)
@@ -119,7 +122,7 @@ class DeploymentService:
         rows = self.store.query(C.DEPLOYMENTS, query, sort=[("updated_at", -1)], skip=offset, limit=count + 1,
                                 fields=["content_id", "catalog_key", "title", "record_id", "state", "revision",
                                         "deployed_revision", "live", "live_status", "saved_search", "updated_at",
-                                        "updated_by", "last_error", "criticality"])
+                                        "updated_by", "last_error", "criticality", "notify"])
         items = [self._decorate(r, summary=True) for r in rows[:count]]
         return {"items": items, "offset": offset, "count": len(items), "has_more": len(rows) > count}
 
@@ -181,6 +184,8 @@ class DeploymentService:
     def save_draft(self, actor: str, content_id: str, body: Dict[str, Any]) -> Dict[str, Any]:
         uc = self._load(content_id)
         spec = normalize_spec(body, self.settings.defaults())
+        actions = action_rules.normalize_actions(body.get("actions"), self.settings.actions, spec["alert_mode"],
+                                                 spec["suppress_period"])
         if self.settings.cron_jitter and not str(body.get("cron") or "").strip():
             spec["cron"] = jittered_cron(spec["cron"], uc.key)
         spl = {"primary": uc.spl, "cim": uc.cim_spl, "custom": spec["custom_spl"]}[spec["spl_source"]]
@@ -205,7 +210,7 @@ class DeploymentService:
             "schedule_window": spec["schedule_window"], "suppress_period": spec["suppress_period"],
             "suppress_fields": spec["suppress_fields"], "spl_time_bounds": analyze(spl).has_time_bounds,
             "alert_mode": spec["alert_mode"], "severity": spec["severity"], "threshold": spec["threshold"],
-            "notes": spec["notes"], "content_source_hash": uc.provenance.source_hash,
+            "actions": actions, "notes": spec["notes"], "content_source_hash": uc.provenance.source_hash,
             "readiness_state": readiness.get("state"), "readiness_score": readiness.get("score"),
             "created_by": actor, "created_at": utc_now_iso(),
         }
@@ -217,6 +222,7 @@ class DeploymentService:
             revision["parallel_copy"] = parallel
         revisions.append(revision)
         doc["revision"] = rev_no
+        doc["notify"] = action_rules.kinds(actions)
         doc["state"] = DRAFT
         doc["title"] = uc.title
         doc["criticality"] = uc.criticality
@@ -225,7 +231,7 @@ class DeploymentService:
         self._save(doc, actor)
         details = {"revision": rev_no, "spl_source": spec["spl_source"],
                    "parse_ok": check["parse_ok"], "side_effects": check["side_effects"],
-                   "review_commands": check["review_commands"]}
+                   "review_commands": check["review_commands"], "actions": action_rules.summary(actions)}
         if parallel:
             details["parallel_copy"] = parallel
         self.audit.record(actor, "deployment.draft", "deployment", uc.content_id, details=details)
@@ -240,13 +246,15 @@ class DeploymentService:
         except Exception:
             return None
 
-    def submit(self, actor: str, content_id: str, note: str = "", acknowledge_commands: bool = False) -> Dict[str, Any]:
+    def submit(self, actor: str, content_id: str, note: str = "", acknowledge_commands: bool = False,
+               acknowledge_actions: bool = False) -> Dict[str, Any]:
         doc = self._require(content_id)
         self._expect(doc, (DRAFT,), "submit")
         rev = self._latest(doc)
         self._require_clean_spl(rev)
         if not self.settings.require_approval:
             self._acknowledge(rev, actor, acknowledge_commands)
+            self._acknowledge_actions(rev, actor, acknowledge_actions)
         rev["submitted_by"] = actor
         rev["submitted_at"] = utc_now_iso()
         access = self.scheduler_access(rev)
@@ -262,7 +270,8 @@ class DeploymentService:
                          {"scheduler_access": access["status"], "scheduler_access_code": access["code"]})
         return self._decorate(doc)
 
-    def approve(self, actor: str, content_id: str, note: str = "", acknowledge_commands: bool = False) -> Dict[str, Any]:
+    def approve(self, actor: str, content_id: str, note: str = "", acknowledge_commands: bool = False,
+                acknowledge_actions: bool = False) -> Dict[str, Any]:
         doc = self._require(content_id)
         self._expect(doc, (PENDING,), "approve")
         rev = self._latest(doc)
@@ -271,11 +280,13 @@ class DeploymentService:
                                    "(ucm.conf [deployment] allow_self_approval)")
         self._require_clean_spl(rev)
         self._acknowledge(rev, actor, acknowledge_commands)
+        self._acknowledge_actions(rev, actor, acknowledge_actions)
         rev["approved_by"] = actor
         rev["approved_at"] = utc_now_iso()
         rev["approval"] = "approved"
         self._transition(doc, actor, "approve", APPROVED, note,
-                         {"acknowledged_commands": rev.get("acknowledged_commands") or []})
+                         {"acknowledged_commands": rev.get("acknowledged_commands") or [],
+                          "actions": action_rules.summary(rev.get("actions") or {})})
         return self._decorate(doc)
 
     def reject(self, actor: str, content_id: str, note: str = "") -> Dict[str, Any]:
@@ -297,6 +308,7 @@ class DeploymentService:
         rev.update(recheck)
         self._require_clean_spl(rev)
         self._require_acknowledged(rev)
+        self._require_actions_ready(rev)
         name = doc["saved_search"]["name"]
         settings = settings_for(rev, doc["content_id"], disabled=True)
         try:
@@ -330,6 +342,7 @@ class DeploymentService:
     def enable(self, actor: str, content_id: str, override_reason: str = "") -> Dict[str, Any]:
         doc = self._require(content_id)
         rev = self._deployed(doc)
+        self._check_actions_policy(rev)
         readiness = self.store.get(C.READINESS, doc["catalog_key"]) or {}
         state = readiness.get("state") or "not_assessed"
         access = self.scheduler_access(rev)
@@ -387,6 +400,7 @@ class DeploymentService:
             raise ConflictError("no earlier deployed revision to roll back to", {"code": "no_previous_revision"})
         name = doc["saved_search"]["name"]
         self._require_managed(doc, name)
+        self._check_actions_policy(prev)
         try:
             self.saved.update(name, settings_for(prev, doc["content_id"], disabled=True))
         except UcmError as exc:
@@ -627,6 +641,37 @@ class DeploymentService:
             raise ConflictError("the search now runs commands the approver did not acknowledge (%s), for example "
                                 "after a macro changed; start a new revision" % ", ".join(missing),
                                 {"code": "unacknowledged_commands", "commands": missing})
+
+    @staticmethod
+    def _acknowledge_actions(rev: Dict[str, Any], actor: str, acknowledged: bool) -> None:
+        actions = rev.get("actions") or {}
+        if not actions:
+            return
+        if not acknowledged:
+            raise ConflictError("this revision sends %s when the alert fires; approving it needs an explicit "
+                                "acknowledgment of the recipients" % " and ".join(action_rules.kinds(actions)),
+                                {"code": "actions_acknowledgment_required", "actions": action_rules.kinds(actions)})
+        rev["actions_acknowledged_by"] = actor
+        rev["actions_acknowledged_at"] = utc_now_iso()
+        rev["actions_acknowledged_digest"] = action_rules.digest(actions)
+
+    def _check_actions_policy(self, rev: Dict[str, Any]) -> None:
+        """Today's allowlists apply to what is deployed, not only to what was drafted."""
+        try:
+            action_rules.validate_current(rev.get("actions") or {}, self.settings.actions,
+                                          rev.get("alert_mode") or "none", rev.get("suppress_period") or "")
+        except ValidationError as exc:
+            raise ConflictError("the alert actions of revision %d are no longer allowed: %s" % (rev["rev"], exc.message),
+                                {"code": "actions_not_allowed"})
+
+    def _require_actions_ready(self, rev: Dict[str, Any]) -> None:
+        actions = rev.get("actions") or {}
+        if not actions:
+            return
+        if rev.get("actions_acknowledged_digest") != action_rules.digest(actions):
+            raise ConflictError("the alert actions of revision %d were not acknowledged by the approver" % rev["rev"],
+                                {"code": "unacknowledged_actions"})
+        self._check_actions_policy(rev)
 
     @staticmethod
     def _require_clean_spl(rev: Dict[str, Any]) -> None:

@@ -585,7 +585,7 @@ def _deployment_view(ctx: Context, svc: DeploymentService, doc: Optional[Dict[st
             "settings": {"require_approval": svc.settings.require_approval,
                          "allow_self_approval": svc.settings.allow_self_approval,
                          "block_enable_states": list(svc.settings.block_enable_states),
-                         "defaults": svc.settings.defaults()}}
+                         "defaults": svc.settings.defaults(), "actions": svc.settings.actions.public()}}
 
 
 def get_deployments(ctx: Context, req: Request) -> Response:
@@ -641,7 +641,8 @@ def _deployment_action(action: str) -> Handler:
             doc = svc.control_test(ctx.user, use_case_id)
         elif action in ("submit", "approve"):
             doc = getattr(svc, action)(ctx.user, use_case_id, note,
-                                       acknowledge_commands=body.get("acknowledge_commands") is True)
+                                       acknowledge_commands=body.get("acknowledge_commands") is True,
+                                       acknowledge_actions=body.get("acknowledge_actions") is True)
         else:
             doc = getattr(svc, action)(ctx.user, use_case_id, note)
         return Response(200, _deployment_view(ctx, svc, doc))

@@ -239,9 +239,9 @@ Downgrades are not supported (D-033).
 | `POST ucm/preview` | `ucm_run_discovery` | Bounded preview of imported SPL; refused when side-effect, indirect-execution or unknown commands are present (D-038). |
 | `GET ucm/deployments` | read | Deployments (`state`, `live`, `drift=1`, `summary=1`, paging). |
 | `GET ucm/deployment?id=` | read | Deployment document plus `allowed_actions` for the caller. Also embedded in `GET ucm/usecase`. |
-| `POST ucm/deployment/draft` | `ucm_run_discovery` or `ucm_deploy` | Create or replace a draft revision (`spl_source`, `custom_spl`, `cron`, `earliest`, `latest`, `schedule_window`, `suppress_period`, `suppress_fields`, `alert_mode`, `severity`, `threshold`, `notes`). |
+| `POST ucm/deployment/draft` | `ucm_run_discovery` or `ucm_deploy` | Create or replace a draft revision (`spl_source`, `custom_spl`, `cron`, `earliest`, `latest`, `schedule_window`, `suppress_period`, `suppress_fields`, `alert_mode`, `severity`, `threshold`, `notes`, `actions` (email and/or webhook, D-072)). |
 | `POST ucm/deployment/submit` | `ucm_run_discovery` or `ucm_deploy` | Submit the draft for approval. |
-| `POST ucm/deployment/{approve,reject,deploy,enable,disable,rollback,retire}` | `ucm_deploy` | Workflow and saved-search actions (`note`; `override_reason` for enable). |
+| `POST ucm/deployment/{approve,reject,deploy,enable,disable,rollback,retire}` | `ucm_deploy` | Workflow and saved-search actions (`note`; `override_reason` for enable; `acknowledge_commands`, `acknowledge_actions` for approve). |
 | `POST ucm/deployment/verify` | `ucm_run_discovery` or `ucm_deploy` | Compare the saved search with its revision. |
 | `POST ucm/deployment/controltest` | `ucm_deploy` | Replay control fixtures against the deployed search in the test index (D-054). |
 | `POST ucm/controltest/import` | `ucm_manage_content` | Import Fenre control-test fixtures (`ucm-control-fixtures/1`) into `uc_control_fixtures` (D-054). |

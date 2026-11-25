@@ -12,6 +12,7 @@ from ..storage.kvstore import DocumentStore
 from ..storage.transport import SplunkdTransport
 from ..util import utc_now
 from .savedsearch import SavedSearchClient
+from .actions import ActionPolicy, parse_list
 from .service import DeploymentService, DeploymentSettings
 
 STATE_KEY = "deployment::verify"
@@ -29,6 +30,13 @@ def settings_from_config(config: AppConfig) -> DeploymentSettings:
         schedule_window=config.get("deployment", "default_schedule_window", "auto") or "auto",
         scheduled_owner=config.get("deployment", "scheduled_owner", "").strip(),
         cron_jitter=config.get_bool("deployment", "cron_jitter", True),
+        actions=ActionPolicy(
+            enabled=config.get_bool("actions", "enabled", True),
+            email_domains=parse_list(config.get("actions", "email_domains", "")),
+            webhook_hosts=parse_list(config.get("actions", "webhook_hosts", "")),
+            webhook_allow_http=config.get_bool("actions", "webhook_allow_http", False),
+            max_recipients=config.get_int("actions", "max_recipients", 10, 1, 50),
+            require_suppression=config.get_bool("actions", "require_suppression", True)),
         alert_mode=config.get("deployment", "default_alert_mode", "track") or "track",
         max_revisions=config.get_int("deployment", "max_revisions", 20, 2, 100),
         verify_interval_minutes=config.get_int("deployment", "verify_interval_minutes", 60, 0, 10080),

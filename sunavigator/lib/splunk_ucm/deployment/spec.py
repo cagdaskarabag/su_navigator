@@ -5,6 +5,7 @@ from typing import Any, Dict
 
 from ..errors import ValidationError
 from ..util import sha256_text
+from . import actions as actions_mod
 from .savedsearch import MANAGED_MARKER
 
 SPL_SOURCES = ("primary", "cim", "custom")
@@ -148,6 +149,8 @@ def settings_for(revision: Dict[str, Any], content_id: str, disabled: bool = Tru
                              "alert.suppress.fields": revision.get("suppress_fields") or ""})
         else:
             settings["alert.suppress"] = "0"
+    if "actions" in revision:
+        settings.update(actions_mod.settings(revision["actions"]))
     return settings
 
 
@@ -193,9 +196,12 @@ def drift(revision: Dict[str, Any], live: Dict[str, Any], expected_disabled: boo
                      _fields(live.get("alert.suppress.fields")))):
                 if observed != expected:
                     out.append({"field": key, "expected": expected, "observed": live.get(key)})
-    actions = [a.strip() for a in str(live.get("actions") or "").split(",") if a.strip()]
-    if actions:
-        out.append({"field": "actions", "expected": "", "observed": ",".join(actions)})
+    if "actions" in revision:
+        out.extend(actions_mod.drift(revision["actions"], live))
+    else:
+        actions = [a.strip() for a in str(live.get("actions") or "").split(",") if a.strip()]
+        if actions:
+            out.append({"field": "actions", "expected": "", "observed": ",".join(actions)})
     if not live.get("is_scheduled"):
         out.append({"field": "is_scheduled", "expected": True, "observed": False})
     if bool(live.get("disabled")) != expected_disabled:

@@ -121,21 +121,21 @@ var tests = {
         var v = open(uc);
         assert.ok(/Recorded when this revision was drafted: Enterprise Security was installed/.test(text(v)));
     },
-    "populated chip is a separate, informational flag next to the CIM requirement": function () {
+    "populated chip sits next to the CIM requirement and an empty model is partial": function () {
         var uc = fixture("escu_macros");
         uc.requirements.push({ req_id: "cim_model:Authentication", type: "cim_model", value: "Authentication", level: "required",
             source: "provider_structured", confidence: "high", attributes: {}, notes: "" });
         uc.readiness.results.push({ req_id: "cim_model:Authentication", type: "cim_model", value: "Authentication", level: "required",
-            source: "provider_structured", confidence: "high", status: "met", code: "model_present", populated: "no",
-            detail: "Data model definition is installed; populated: no (the discovery check found no events in the last 24 h).",
+            source: "provider_structured", confidence: "high", status: "partial", code: "model_empty", populated: "no",
+            detail: "Data model definition is installed but holds no events; populated: no (the discovery check found no events in the last 24 h).",
             observed: [{ name: "Authentication", populated: "no", populated_count: 0 }], via_mapping: null });
         var v = open(uc);
         var chips = v.root.find(function (n) { return /populated: no/.test(n.getAttribute("class") ? n.textContent : "") && /ucm-badge/.test(n.getAttribute("class")); });
         assert.strictEqual(chips.length, 1);
-        assert.ok(/informational/i.test(chips[0].getAttribute("title")));
-        assert.ok(/Data model populated flags \(informational, not part of the score\): Authentication: no\./.test(text(v)));
-        var status = v.root.find(function (n) { return /ucm-badge/.test(n.getAttribute("class") || "") && n.textContent === "met"; });
-        assert.ok(status.length >= 1, "the status stays met");
+        assert.ok(/check data ingestion/i.test(chips[0].getAttribute("title")));
+        assert.ok(/Data model populated flags \(a model with no events lowers the score; check data ingestion\): Authentication: no\./.test(text(v)));
+        var status = v.root.find(function (n) { return /ucm-badge/.test(n.getAttribute("class") || "") && n.textContent === "partial"; });
+        assert.ok(status.length >= 1, "the status is partial");
     },
     "populated unverified and yes render their own values; results without the field show no chip": function () {
         ["yes", "unverified"].forEach(function (value) {
@@ -149,6 +149,24 @@ var tests = {
         });
         var plain = open(fixture("escu_macros"));
         assert.ok(text(plain).indexOf("populated:") < 0);
+    },
+    "an unmet macro gets a how-to section and no create button; a met macro gets neither": function () {
+        function withMacro(status) {
+            var uc = fixture("escu_macros");
+            uc.requirements.push({ req_id: "macro:sec_ctime(1)", type: "macro", value: "sec_ctime(1)", level: "required",
+                source: "provider_structured", confidence: "high", attributes: {}, notes: "" });
+            uc.readiness.results.push({ req_id: "macro:sec_ctime(1)", type: "macro", value: "sec_ctime(1)", level: "required",
+                source: "provider_structured", confidence: "high", status: status, code: status === "met" ? "present_global" : "not_found",
+                detail: "Macro", observed: [], via_mapping: null });
+            return open(uc);
+        }
+        var missing = withMacro("not_met");
+        assert.ok(text(missing).indexOf("How to create this macro") >= 0);
+        assert.ok(/Name: exactly sec_ctime\(1\)/.test(text(missing)));
+        assert.ok(/Arguments field lists that many names/.test(text(missing)));
+        assert.strictEqual(missing.root.find(function (n) { return /add macro|create macro/i.test(n.textContent) && n.tagName === "BUTTON"; }).length, 0);
+        assert.ok(missing.root.find(function (n) { return /never creates or changes one/.test(n.getAttribute("title") || ""); }).length >= 1);
+        assert.ok(withMacro("met").root.textContent.indexOf("How to create this macro") < 0);
     },
     "nothing is posted when the card renders": function () {
         var uc = fixture("escu_macros");

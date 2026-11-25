@@ -72,13 +72,13 @@ def draft_score(readiness_score: float, criticality_rank: int, mitre_gain: float
 def _data_model_reasons(results: Sequence[Dict[str, Any]]) -> List[str]:
     """One line per installed data model requirement, stating what the stored result says about its data.
 
-    ``populated`` is informational (issue #13): it never changes a state or score, and a result
-    stored before the check existed has no such field and keeps the original wording.
+    A model that is installed but holds no events is a partial requirement (``model_empty``, D-072);
+    a result stored before the check existed has no ``populated`` field and keeps the original wording.
     """
     lines: List[str] = []
     seen: Set[str] = set()
     for r in results:
-        if r.get("type") != "cim_model" or r.get("code") != "model_present" or r.get("value") in seen:
+        if r.get("type") != "cim_model" or r.get("code") not in ("model_present", "model_empty") or r.get("value") in seen:
             continue
         seen.add(r.get("value"))
         name = r.get("value") or "model"
@@ -89,7 +89,7 @@ def _data_model_reasons(results: Sequence[Dict[str, Any]]) -> List[str]:
                 name, " (%s events)" % count if count is not None else ""))
         elif populated == "no":
             lines.append("Data model %s: installed, but the discovery check found no events in the last 24 h "
-                         "(populated: no). The requirement still counts as met." % name)
+                         "(populated: no). The requirement counts as partial: check data ingestion." % name)
         elif populated == "unverified":
             lines.append("Data model %s: definition installed (populated data not verified%s)."
                          % (name, ": " + reason_text(r.get("populated_reason") or "") if r.get("populated_reason") else ""))
