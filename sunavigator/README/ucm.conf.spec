@@ -172,6 +172,14 @@ allow_self_approval = <boolean>
 * Allow the submitter to approve their own revision. Default false (four-eyes principle).
 block_enable_states = <comma-separated readiness states>
 * Enabling a deployed search whose readiness is in this list requires an override reason. Default blocked.
+enable_second_person = <boolean>
+* Enabling needs a request and a confirmation by two different people. Default false. D-075.
+enable_request_hours = <integer 1-720>
+* How long an enable request stays open. Default 24.
+override_days = <integer 0-365>
+* How long an override (enabling past a blocking readiness state) lasts. 0 means no expiry. Default 14.
+override_expiry_action = remind|disable
+* What the verification worker does when an override expires: record one reminder, or also disable the search. Default remind.
 default_cron = <five-field cron>
 * Schedule proposed for new drafts. Default */15 * * * *.
 default_earliest = <relative-time>

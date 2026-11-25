@@ -1,10 +1,10 @@
-# SUNavigator 0.9.7 — operator guide
+# SUNavigator 0.9.8 — operator guide
 
 **SUNavigator** (short for **Splunk use case navigator**) discovers, assesses,
 selects, validates and deploys monitoring use cases in Splunk.
 
 This is the install, usage and troubleshooting guide for **SUNavigator
-0.9.7**. It is written for a single Splunk Enterprise instance
+0.9.8**. It is written for a single Splunk Enterprise instance
 (search head + indexer on one host), including a local macOS install. Search
 head clusters and Splunk Cloud are **not** validated in this version.
 
@@ -22,6 +22,27 @@ Related documents (design, not how-to):
 ---
 
 ## What changed in 0.9.x
+
+### 0.9.8
+
+0.9.8 adds safer lifecycle steps and a way to prove the audit trail was not edited (D-075). No migration is needed.
+
+- **Verify audit chain (Content administration).** Every audit row now links to the one before it. The button re-checks
+  all of them and says how many rows are intact, edited, or missing a predecessor. Rows from before 0.9.8 show as
+  *legacy*. Copy the *head* value into a ticket after each check: that is what lets you notice later that the newest rows
+  were removed, which the check cannot see by itself.
+- **Withdraw approval.** On an approved revision that is not deployed yet, **Withdraw approval** (reason of 5 characters or
+  more) sends it back for review.
+- **Request enable and confirm.** With `[deployment] enable_second_person = true`, *Enable* becomes **Request enable** and a
+  second person presses **Confirm enable (asked by ...)** within 24 hours (`enable_request_hours`). Default off.
+- **Overrides expire.** An override to enable a blocked search lasts 14 days (`override_days`). Afterwards the use case
+  shows a red box, and with `override_expiry_action = disable` the search is switched off by the worker.
+- **Outcome.** On a deployed use case, set *Needs tuning* or *Waiting on data* with a note. The Deployments page counts them
+  and filters by them. *Waiting on data* is the cue to check ingestion.
+- **Pipeline (Deployments).** Draft, pending approval, approved, deployed, enabled, plus the needs-attention counts.
+  Click one to filter.
+- **Compare revisions (use case page).** Choose two revisions to see the changed settings and the SPL difference. Older
+  revisions that were trimmed show only their hash.
 
 ### 0.9.7
 
@@ -570,7 +591,7 @@ searches have **no script alert actions**. Email and webhook actions exist only 
 an administrator has listed permitted destinations in `[actions]` and the approver has acknowledged
 them (0.9.5, D-072); the default alert mode only writes to Splunk's Triggered Alerts.
 
-**Not in 0.9.7:** PDF export of coverage, a bundled regulation-control
+**Not in 0.9.8:** PDF export of coverage, a bundled regulation-control
 catalogue, SHC validation with a deployer and indexer peers (issue #2), Splunk Cloud
 vetting submission (issue #3), and any Enterprise Security output mode (issue #4; 0.9.1 only
 reads ES and ESCU state and hands off, §5.2b).
@@ -584,7 +605,7 @@ reads ES and ESCU state and hands off, §5.2b).
 | Splunk | Enterprise 10.x (validated on 10.2.9 in development; tested by operators on 10.4.3 Darwin arm64). Python 3.9 or 3.13 in Splunk. |
 | KV Store | Must reach `status: ready`. The app stores catalogue, inventory, readiness, selections, deployments and audit in KV collections. |
 | Role | First-time setup needs `admin` (or `sc_admin` on Cloud). |
-| Disk | The 0.9.7 package is a few megabytes. Category 9 of Fenre is about 120 records; the full Fenre corpus is tens of thousands of records. |
+| Disk | The 0.9.8 package is a few megabytes. Category 9 of Fenre is about 120 records; the full Fenre corpus is tens of thousands of records. |
 | Network | Optional. Remote sync needs HTTPS to `api.github.com` and `raw.githubusercontent.com`. Offline import needs none. |
 | Browser | Splunk Web. The app is a set of Simple XML views plus JavaScript under `/en-US/app/sunavigator/`. |
 
@@ -601,7 +622,7 @@ Placeholders used below:
 
 ```bash
 ./tools/package.sh
-# writes dist/sunavigator-0.9.7.tar.gz
+# writes dist/sunavigator-0.9.8.tar.gz
 ```
 
 The tarball has a single top-level folder `sunavigator/`
@@ -619,11 +640,11 @@ then fails in the UI with `500 Internal Server Error` even though splunkd is
 still unpacking. Use the CLI:
 
 ```bash
-$SPLUNK_HOME/bin/splunk install app /path/to/sunavigator-0.9.7.tar.gz \
+$SPLUNK_HOME/bin/splunk install app /path/to/sunavigator-0.9.8.tar.gz \
   -auth "$SPLUNK_USER:$SPLUNK_PASSWORD"
 # first install: omit -update
 # upgrade of an existing copy:
-$SPLUNK_HOME/bin/splunk install app /path/to/sunavigator-0.9.7.tar.gz \
+$SPLUNK_HOME/bin/splunk install app /path/to/sunavigator-0.9.8.tar.gz \
   -update 1 -auth "$SPLUNK_USER:$SPLUNK_PASSWORD"
 
 $SPLUNK_HOME/bin/splunk restart
@@ -1736,7 +1757,7 @@ app. Do the steps in this order:
    $SPLUNK_HOME/bin/splunk restart
    ```
 
-4. **Install SUNavigator 0.9.7** as in §3.2. The first install omits
+4. **Install SUNavigator 0.9.8** as in §3.2. The first install omits
    `-update`, because `sunavigator` is a new app ID.
 5. **Re-create the GitHub token** if you use one (§3.6). It must be stored in
    realm `sunavigator`. The 0.7.0 token in realm `splunk_use_case_manager` is
@@ -2113,7 +2134,7 @@ Full table: [ARCHITECTURE.md §6](ARCHITECTURE.md).
 
 ---
 
-## 12. Known limitations (0.9.7)
+## 12. Known limitations (0.9.8)
 
 Each item says where to read more and ends with its tracking: an issue number on GitHub, a draft
 (`N-nn`) in `docs/ISSUES_PENDING.md` that has not been filed yet, or "no issue" for a limit that is
@@ -2241,7 +2262,7 @@ by design.
 
 ## 13. Quick start checklist
 
-1. `splunk install app sunavigator-0.9.7.tar.gz` then `splunk restart`.
+1. `splunk install app sunavigator-0.9.8.tar.gz` then `splunk restart`.
 2. `splunk show kvstore-status` → `ready` (macOS: §9.2 if stuck on `starting`).
 3. Open **SUNavigator → Administration**; all platform pills green.
 4. **Check provider for categories** → tick **9** → **Synchronize**, **or**

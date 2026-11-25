@@ -16,7 +16,8 @@ function ucmViewMain($, ucm) {
     var el = ucm.el;
     var root = document.getElementById("ucm-deployments");
     var params = ucm.queryParams();
-    var state = { state: params.state || "", live: params.live || "", drift: params.drift || "", offset: parseInt(params.offset || "0", 10) || 0 };
+    var state = { state: params.state || "", live: params.live || "", drift: params.drift || "", outcome: params.outcome || "", override: params.override || "",
+        offset: parseInt(params.offset || "0", 10) || 0 };
     var COUNT = 50;
     var STATES = ["draft", "pending_approval", "approved", "rejected", "deployed", "failed", "retired"];
     var LIVE = ["enabled", "disabled", "missing", "unmanaged", "absent"];
@@ -43,11 +44,13 @@ function ucmViewMain($, ucm) {
     }
 
     function load() {
-        ucm.setQueryParams({ state: state.state, live: state.live, drift: state.drift, offset: state.offset || "" });
+        ucm.setQueryParams({ state: state.state, live: state.live, drift: state.drift, outcome: state.outcome, override: state.override, offset: state.offset || "" });
         var q = { summary: "1", offset: state.offset, count: COUNT };
         if (state.state) { q.state = state.state; }
         if (state.live) { q.live = state.live; }
         if (state.drift) { q.drift = "1"; }
+        if (state.outcome) { q.outcome = state.outcome; }
+        if (state.override) { q.override = "1"; }
         ucm.get("deployments", q).done(render).fail(function (err) {
             ucm.clear(root).appendChild(ucm.stateBox("error", "Could not load deployments.", err.message));
         });
@@ -80,19 +83,46 @@ function ucmViewMain($, ucm) {
         return el("div", { "class": "ucm-toolbar" }, button, status);
     }
 
+    function stage(label, key, value, filter, help) {
+        var active = ["state", "live", "drift", "outcome", "override"].every(function (k) { return (filter[k] || "") === (state[k] || ""); });
+        var c = card(label, value, active, function () {
+            state = { state: "", live: "", drift: "", outcome: "", override: "", offset: 0 };
+            Object.keys(filter).forEach(function (k) { state[k] = filter[k]; });
+            load();
+        });
+        if (help) { c.setAttribute("title", help); }
+        return c;
+    }
+
+    function pipeline(p) {
+        if (!p) { return null; }
+        return el("div", { id: "ucm-pipeline" },
+            el("h3", { text: "Pipeline" }),
+            el("div", { "class": "ucm-cards" },
+                stage("Draft", "draft", p.draft, { state: "draft" }, "Saved, not yet submitted."),
+                stage("Pending approval", "pending", p.pending_approval, { state: "pending_approval" }, "Waiting for a person other than the submitter."),
+                stage("Approved", "approved", p.approved, { state: "approved" }, "Approved, not deployed."),
+                stage("Deployed (disabled)", "deployed", p.deployed, { live: "disabled" }, "Written to Splunk, switched off."),
+                stage("Enabled", "enabled", p.enabled, { live: "enabled" }, "Running on its schedule.")),
+            el("h3", { text: "Needs attention" }),
+            el("div", { "class": "ucm-cards" },
+                stage("Needs tuning", "tuning", p.needs_tuning, { outcome: "needs_tuning" }, "Deployed and marked as producing results nobody can act on."),
+                stage("Waiting on data", "waiting", p.waiting_on_data, { outcome: "waiting_on_data" }, "Deployed and marked as waiting for the data it needs."),
+                stage("Override expired", "expired", p.override_expired, { override: "1" }, "Enabled past an override whose time ran out. Open the use case to decide."),
+                stage("Failed", "failed", p.failed, { state: "failed" }, "A deploy that did not verify."),
+                stage("Drift or missing", "drift", p.drifted, { drift: "1" }, "The saved search no longer matches what was approved.")));
+    }
+
     function render(data) {
         var s = data.summary || { by_state: {}, by_live: {}, total: 0, drifted: 0 };
         ucm.clear(root);
         root.appendChild(el("div", { "class": "ucm-header" }, el("h2", { text: "Deployments" }),
             el("div", { "class": "ucm-sub", text: "Searches are written disabled. Enable them from the use case page after review. Drift is checked by the background worker and on demand." })));
         root.appendChild(exportBox());
+        var flow = pipeline(s.pipeline);
+        if (flow) { root.appendChild(flow); }
         root.appendChild(el("div", { "class": "ucm-cards" },
-            card("All deployments", s.total, !state.state && !state.live && !state.drift, function () { state = { state: "", live: "", drift: "", offset: 0 }; load(); }),
-            card("Pending approval", s.by_state.pending_approval || 0, state.state === "pending_approval", function () { state = { state: "pending_approval", live: "", drift: "", offset: 0 }; load(); }),
-            card("Enabled searches", s.by_live.enabled || 0, state.live === "enabled", function () { state = { state: "", live: "enabled", drift: "", offset: 0 }; load(); }),
-            card("Disabled searches", s.by_live.disabled || 0, state.live === "disabled", function () { state = { state: "", live: "disabled", drift: "", offset: 0 }; load(); }),
-            card("Failed", s.by_state.failed || 0, state.state === "failed", function () { state = { state: "failed", live: "", drift: "", offset: 0 }; load(); }),
-            card("Drift or missing", s.drifted || 0, !!state.drift, function () { state = { state: "", live: "", drift: "1", offset: 0 }; load(); })));
+            card("All deployments", s.total, !state.state && !state.live && !state.drift && !state.outcome && !state.override, function () { state = { state: "", live: "", drift: "", outcome: "", override: "", offset: 0 }; load(); })));
         root.appendChild(el("div", { "class": "ucm-toolbar" },
             select(STATES, state.state, function (v) { state.state = v; state.offset = 0; load(); }, "Any workflow state"),
             select(LIVE, state.live, function (v) { state.live = v; state.offset = 0; load(); }, "Any saved-search status")));
@@ -114,7 +144,10 @@ function ucmViewMain($, ucm) {
                 el("td", { "class": "ucm-title" }, el("a", { href: "ucm_usecase?id=" + encodeURIComponent(d.content_id), text: d.title || d.content_id }),
                     el("div", { "class": "ucm-sub ucm-mono", text: (d.saved_search && d.saved_search.name) || "" }), ucm.criticalityBadge(d.criticality)),
                 el("td", {}, ucm.badge(d.state.replace("_", " "), STATE_KIND[d.state] || "neutral"),
-                    d.notify && d.notify.length ? ucm.badge("sends " + d.notify.join(" + "), "warn") : null),
+                    d.notify && d.notify.length ? ucm.badge("sends " + d.notify.join(" + "), "warn") : null,
+                    d.outcome ? ucm.badge(d.outcome.value.replace("_", " "), d.outcome.value === "needs_tuning" ? "warn" : "info") : null,
+                    d.override_status ? ucm.badge(d.override_status.expired ? "override expired" : "override", d.override_status.expired ? "error" : "warn") : null,
+                    d.enable_request_active ? ucm.badge("enable requested", "info") : null),
                 el("td", {}, ucm.badge(live, LIVE_KIND[live] || "neutral"), drift.length ? ucm.badge("drift: " + drift.map(function (x) { return x.field; }).join(", "), "warn") : null),
                 healthCell,
                 el("td", { text: "latest " + d.revision + (d.deployed_revision ? ", deployed " + d.deployed_revision : "") }),

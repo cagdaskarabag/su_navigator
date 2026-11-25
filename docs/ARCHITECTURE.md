@@ -154,7 +154,7 @@ All collections are app-scoped (`nobody` owner) and replicated in SHC.
 | `uc_content` | same | shared | sync | `raw_json` (verbatim record as JSON text; KV Store forbids `$`/`.` in keys, e.g. `$schema`), `provenance`, `normalizer_version`, `source_hash`. ~10–80 KB. |
 | `uc_categories` | `fenre_cat-01` | shared | sync | Category metadata, `tree_sha`, `selected`, counts, `last_synced_at`. |
 | `uc_sync_state` | `provider::fenre` / `job::<uuid>` | shared | REST (system token), worker | Provider state (pin, last-good commit/version, schema version) and job records (status, counts, errors). Retain last 200 jobs. |
-| `uc_audit` | uuid | shared (append) | all services | `time, actor, action, object_type, object_id, outcome, details`. Purged after `[retention] audit_days` (default 365, D-034). |
+| `uc_audit` | uuid | shared (append) | all services | `time, actor, action, object_type, object_id, outcome, details, prev_hash, hash` (hash chain, D-075). Purged after `[retention] audit_days` (default 365, D-034). |
 | `uc_environment_sources` | `src_<kind>_<hash>` | shared | discovery worker | Index, index/sourcetype pair, app (name, label, version, `package_id`) and data-model rows with window counts and data age; since 0.9.1 data-model rows also carry `populated` (`yes`, `no`, `unverified`), `populated_reason`, `populated_count`, `populated_window` and `populated_at` (additive, D-067). Missing sources are marked, never deleted. |
 | `uc_event_check` | `ev_<hash of sourcetype, field, value>` | shared | discovery worker | Per event type a detection reads: `index`, `sourcetype`, `field`, `value`, `count` (0 to 100), `window_days`, `evaluated_at`, `job_id`. A count only, no event value (D-073). |
 | `uc_external_matches` | `xm_<hash of app, search name>` | shared | discovery worker; REST (system token) for decisions | A saved search in another app proposed as an existing implementation of catalogue use cases: `app`, `name`, `owner`, `sharing`, `enabled`, `scheduled`, `spl_hash`, `mitre_ids`, `candidates[]` (`content_key`, `content_id`, `title`, `basis`), `state` (`proposed`, `accepted`, `rejected`), `content_key`, `decided_by`, `decided_at`, `status` (`active`, `missing`). The search text is never stored (D-074). |
@@ -164,7 +164,7 @@ All collections are app-scoped (`nobody` owner) and replicated in SHC.
 | `uc_selections` | `sel_<user>_<content_id>` | per-user rows, app-shared at KV level (D-061) | user | Bookmark / select / defer / reject. Sync never writes this collection. The API isolates users; the ACL does not. |
 | `uc_validation` | same as `uc_catalog` | shared | REST (system token) | Parser outcome, side-effects, advisory lint findings (`lint`, absent before 0.8.9), bounded preview metadata (no event payloads), field samples. |
 | `uc_control_fixtures` | `cf_<catalog key>` | shared | REST (system token), import only | Control-test fixture: sourcetype, host, `min_count`, raw positive and negative text, import `batch` (D-054). |
-| `uc_deployments` | `dep_<catalog key>` | shared | REST (system token), worker | Workflow `state`, `revisions[]` (frozen SPL, schedule, parse result, submitter, approver, deploy time), `deployed_revision`, `live` (status, drift, owner, next run), `history[]` (last 100), `version`. |
+| `uc_deployments` | `dep_<catalog key>` | shared | REST (system token), worker | Workflow `state`, `revisions[]` (frozen SPL, schedule, parse result, submitter, approver, deploy time), `deployed_revision`, `live` (status, drift, owner, next run), `history[]` (last 100), `override` (reason, by, at, expires_at, blocked_by, reminded_at), `override_active`, `enable_request`, `outcome` and `outcome_value`, `revision_log[]` (stubs of trimmed revisions), `version`. |
 | `uc_frameworks` | `fw_<id>_<version>` / `active_<id>` | shared | REST (system token) | Imported framework definitions (`ucm.framework/1`) and the active version per framework. Bundled versions are files, not documents. |
 | `uc_dashboards` | `dash_<view name>` | shared | REST (system token) | Generated view record: template, params, label, XML hash, created/updated by. |
 
@@ -220,6 +220,11 @@ Downgrades are not supported (D-033).
 | `GET ucm/provider/manifest` | `ucm_manage_content` | Resolve the remote manifest (optional `ref`) without importing. |
 | `GET ucm/platform` | read | Capability report. Since 0.9.1 also `security_content`: ES and ESCU `state` (`installed`, `disabled`, `not_installed`, `unverified`), version and reason (D-067). |
 | `GET ucm/audit` | `ucm_manage_content` or `ucm_admin` | Recent audit events (`limit`, `prefix`). |
+| `GET ucm/audit/verify` | `ucm_manage_content` or `ucm_admin` | Re-compute the audit hash chain: `ok`, counts of chained, legacy, modified, missing-predecessor and restart rows, `branches`, `head` (D-075). Audited as `audit.verified`. |
+| `GET ucm/deployment/diff` | read | Compare two revisions of one deployment (`id`, `from`, `to`): changed settings, action summary, SPL diff; or `available: false` with the reason (D-075). |
+| `POST ucm/deployment/withdraw` | `ucm_deploy` | Send an approved, not yet deployed revision back for review; `note` of at least 5 characters. |
+| `POST ucm/deployment/cancel_enable` | `ucm_deploy` | Cancel an open enable request (second-person mode). |
+| `POST ucm/deployment/outcome` | `ucm_deploy` | Record `outcome` (`needs_tuning`, `waiting_on_data`, `none`) and a `note` on a deployed use case. |
 | `GET ucm/inventory` | read | Filtered, paged environment sources (`kind, status, q, index, sourcetype, stale_hours, sort, offset, count`). |
 | `GET ucm/inventory/coverage` | read | Catalogue requirement values vs discovered sources. |
 | `GET ucm/environment/health` | read | Environment health from the last discovery: CIM add-on, data model summary states, CIM index macros, indexes without data, sources that stopped before the window, future-dated sources, unmapped sourcetypes (D-070). |

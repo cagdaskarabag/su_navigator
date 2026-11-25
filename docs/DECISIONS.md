@@ -2177,3 +2177,44 @@ as drift.
 * Evidence: `tests/unit/test_external_matches.py`, `test_coverage_grading.py`, `test_data_maturity.py`;
   `tests/js/test_external.js`, `test_coverage.js`, `test_catalogue_f20.js`, `test_resolution.js`; on the lab
   (`LiveExternalMatchTest`; a discovery run listed 2436 saved searches and matched 125 to the ESCU bundle by hash).
+
+## D-075 Lifecycle refinements and a tamper-evident audit trail (Sprint 18)
+
+*0.9.8 (Sprint 18).*
+
+* **Decision, the audit trail is a hash chain (finding F-15).** Each audit row carries `prev_hash` (the hash of the row
+  written before it) and `hash` (SHA-256 over the row's own fields and `prev_hash`). **Verify audit chain** (Content
+  administration, or `GET ucm/audit/verify`, `ucm_admin` or `ucm_manage_content`) re-computes every hash and reports:
+  rows whose content changed (*modified*), rows whose predecessor no longer exists (*deleted from the middle*), and places
+  where the chain restarts. Rows written before 0.9.8 are counted as *legacy* and are not failures. Two writers that read
+  the same head produce a *branch*; branches are counted and are not failures. The oldest chained row may lack a
+  predecessor, because the retention purge removes old rows. Each check is itself audited (`audit.verified`).
+  * What it cannot do: it cannot see the newest rows being deleted, or the whole collection being rewritten by someone who
+    can write it. It is evidence, not prevention. Record the reported `head` somewhere outside Splunk (a ticket, a
+    change record) to cover those cases. Reading is paged (5000 rows per request) because the KV Store refuses a query
+    for more than 50000 rows; the lab found this on the first live run.
+* **Decision, withdraw an approval.** An approved or failed revision that is not yet deployed can be sent back with a note
+  of at least 5 characters. The approval and the action acknowledgments are cleared; the revision goes back to
+  *pending approval* (or *draft* if no approval was needed). Audited as `deployment.withdraw`.
+* **Decision, optional second person to enable.** `[deployment] enable_second_person = true` turns *Enable* into a request
+  that a different person confirms within `enable_request_hours` (default 24). The requester can cancel. Off by default.
+* **Decision, an override has an end.** Enabling past a blocking readiness state needs a reason (D-050). It now also
+  stores who, when and an expiry (`override_days`, default 14, 0 means none). When it expires the app reminds once
+  (`deployment.override_expired`) or, with `override_expiry_action = disable`, switches the search off as
+  `system:override-expiry`. An override whose gate no longer applies is cleared (`deployment.override_cleared`). The check
+  runs in the verification worker and in *Verify all*.
+* **Decision, outcomes.** A deployed use case can be marked *needs tuning*, *waiting on data* or *none* with a note. It is
+  the owner's statement, not a measurement; it never changes levels or readiness. Retiring clears it.
+* **Decision, the Deployments page shows the pipeline.** Counts for draft, pending approval, approved, deployed
+  (disabled), enabled, and for needs tuning, waiting on data, override expired, failed and drift. Each is a filter
+  (`outcome=`, `override=1`).
+* **Decision, revision history and compare.** When the oldest revision is trimmed (`max_revisions`), a stub is kept
+  (revision, SPL hash, who created and approved it, times). `GET ucm/deployment/diff` compares two revisions: changed
+  settings, an action summary that never shows a webhook path, and a unified diff of the SPL (400 lines at most). If a
+  revision is only a stub, the answer says so and lists what remains.
+* **Decision, write then verify.** A deployment record is read back after every save; a different version means another
+  writer won, and the call fails with `concurrent_update_detected` instead of reporting success.
+* Not built: preventing deletion of audit rows (Splunk KV Store has no append-only mode), signing the head, an external
+  anchor, and an outcome measured from run results.
+* Evidence: `tests/unit/test_audit_chain.py`, `test_lifecycle_refinements.py`, `test_deployment.py`;
+  `tests/js/test_lifecycle.js`, `test_admin.js`; on the lab `LiveLifecycleRefinementsTest`.

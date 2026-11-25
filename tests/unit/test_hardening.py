@@ -27,7 +27,7 @@ EPOCH = NOW.timestamp()
 
 # POST routes any authenticated app user may call; everything else needs a capability.
 CALLER_SCOPED_POSTS = {"selections", "selections/delete", "dashboards/preview"}
-RESTRICTED_GETS = {"audit", "provider/manifest", "external"}
+RESTRICTED_GETS = {"audit", "audit/verify", "provider/manifest", "external"}
 
 
 def _load_worker_module():

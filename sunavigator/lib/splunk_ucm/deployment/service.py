@@ -15,6 +15,7 @@ Approved SPL is copied into the revision, so later upstream changes never
 alter what was approved.
 """
 
+import datetime
 from typing import Any, Callable, Dict, List, Optional, Sequence
 
 from ..audit import AuditService
@@ -32,8 +33,9 @@ from ..storage import collections as C
 from ..storage.collections import DOC_SCHEMA
 from ..storage.kvstore import DocumentStore
 from ..storage.repositories import CategoryRepository, ContentRepository
-from ..util import safe_key, utc_now_iso
+from ..util import safe_key, utc_now, utc_now_iso
 from . import actions as action_rules
+from . import revisions as revision_tools
 from .actions import ActionPolicy
 from .controltest import ControlTestRunner, bundle_hash, expectations, validate_bundle
 from .savedsearch import SavedSearchClient
@@ -49,6 +51,10 @@ LIVE_ABSENT, LIVE_DISABLED, LIVE_ENABLED, LIVE_MISSING, LIVE_UNMANAGED = (
 
 MAX_HISTORY = 100
 MIN_OVERRIDE_REASON = 10
+MIN_NOTE = 5
+OUTCOMES = ("needs_tuning", "waiting_on_data", "none")
+OVERRIDE_ACTIONS = ("remind", "disable")
+SYSTEM_ACTOR = "system:override-expiry"
 
 
 class DeploymentSettings:
@@ -57,7 +63,13 @@ class DeploymentSettings:
                  earliest: str = "-20m@m", latest: str = "-5m@m", alert_mode: str = "track",
                  max_revisions: int = 20, verify_interval_minutes: int = 60,
                  extra_safe_commands: Sequence[str] = (), schedule_window: str = "auto",
-                 scheduled_owner: str = "", cron_jitter: bool = False, actions: Optional[ActionPolicy] = None):
+                 scheduled_owner: str = "", cron_jitter: bool = False, actions: Optional[ActionPolicy] = None,
+                 enable_second_person: bool = False, enable_request_hours: int = 24, override_days: int = 14,
+                 override_expiry_action: str = "remind"):
+        self.enable_second_person = enable_second_person
+        self.enable_request_hours = enable_request_hours
+        self.override_days = override_days
+        self.override_expiry_action = override_expiry_action if override_expiry_action in OVERRIDE_ACTIONS else "remind"
         self.actions = actions or ActionPolicy()
         self.scheduled_owner = scheduled_owner
         self.cron_jitter = cron_jitter
@@ -106,7 +118,8 @@ class DeploymentService:
         return self._decorate(doc) if doc else None
 
     def list(self, states: Sequence[str] = (), live: Sequence[str] = (), offset: int = 0,
-             count: int = 50, drifted: bool = False) -> Dict[str, Any]:
+             count: int = 50, drifted: bool = False, outcomes: Sequence[str] = (),
+             override_active: bool = False) -> Dict[str, Any]:
         count = max(1, min(200, count))
         clauses: List[Dict[str, Any]] = []
         if states:
@@ -118,11 +131,19 @@ class DeploymentService:
             clauses.append({"$or": [{"live_status": s} for s in live]})
         if drifted:
             clauses.append({"live_drift": True})
+        if outcomes:
+            bad = [o for o in outcomes if o not in OUTCOMES[:2]]
+            if bad:
+                raise ValidationError("invalid outcome", {"allowed": list(OUTCOMES[:2])})
+            clauses.append({"$or": [{"outcome_value": o} for o in outcomes]})
+        if override_active:
+            clauses.append({"override_active": True})
         query = {"$and": clauses} if len(clauses) > 1 else (clauses[0] if clauses else None)
         rows = self.store.query(C.DEPLOYMENTS, query, sort=[("updated_at", -1)], skip=offset, limit=count + 1,
                                 fields=["content_id", "catalog_key", "title", "record_id", "state", "revision",
                                         "deployed_revision", "live", "live_status", "saved_search", "updated_at",
-                                        "updated_by", "last_error", "criticality", "notify"])
+                                        "updated_by", "last_error", "criticality", "notify", "outcome", "override",
+                                        "enable_request"])
         items = [self._decorate(r, summary=True) for r in rows[:count]]
         return {"items": items, "offset": offset, "count": len(items), "has_more": len(rows) > count}
 
@@ -136,7 +157,35 @@ class DeploymentService:
             by_live[r.get("live_status") or LIVE_ABSENT] = by_live.get(r.get("live_status") or LIVE_ABSENT, 0) + 1
         for r in self.store.query(C.DEPLOYMENTS, {"live_drift": True}, fields=["_key"]):
             drifted += 1
-        return {"total": len(rows), "by_state": by_state, "by_live": by_live, "drifted": drifted}
+        return {"total": len(rows), "by_state": by_state, "by_live": by_live, "drifted": drifted,
+                "pipeline": self.pipeline()}
+
+    def pipeline(self) -> Dict[str, int]:
+        """Where deployments stand, in the order work flows, and the ones that need a person's attention."""
+        rows = self.store.query(C.DEPLOYMENTS, None, fields=["state", "live_status", "live_drift", "outcome_value",
+                                                              "override", "enable_request", "deployed_revision"])
+        out = {"draft": 0, "pending_approval": 0, "approved": 0, "deployed": 0, "enabled": 0, "needs_tuning": 0,
+               "waiting_on_data": 0, "override_expired": 0, "override_active": 0, "enable_requested": 0, "failed": 0,
+               "rejected": 0, "drifted": 0}
+        now = utc_now_iso()
+        for r in rows:
+            state = r.get("state")
+            if state in ("draft", "pending_approval", "approved", "failed", "rejected"):
+                out[state] += 1
+            if state != RETIRED and r.get("deployed_revision"):
+                out["enabled" if r.get("live_status") == LIVE_ENABLED else "deployed"] += 1
+            if r.get("outcome_value") in ("needs_tuning", "waiting_on_data"):
+                out[r["outcome_value"]] += 1
+            override = r.get("override") or {}
+            if override:
+                out["override_active"] += 1
+                if override.get("expires_at") and override["expires_at"] <= now:
+                    out["override_expired"] += 1
+            if self._request_active(r, now):
+                out["enable_requested"] += 1
+            if r.get("live_drift"):
+                out["drifted"] += 1
+        return out
 
     def export(self, actor: str) -> Dict[str, Any]:
         bundle = build_bundle(self.store.query(C.DEPLOYMENTS, None))
@@ -165,14 +214,19 @@ class DeploymentService:
                 out.append("reject")
             if state in (APPROVED, FAILED) and latest.get("approved_by"):
                 out.append("deploy")
+                if doc.get("deployed_revision") != latest.get("rev"):
+                    out.append("withdraw")
             if doc.get("deployed_revision") and live in (LIVE_DISABLED, LIVE_ENABLED):
                 out.append("enable" if live == LIVE_DISABLED else "disable")
+                if live == LIVE_DISABLED and self._request_active(doc, utc_now_iso()):
+                    out.append("cancel_enable")
                 if self._previous_deployed(doc):
                     out.append("rollback")
             if state != RETIRED:
                 out.append("retire")
             if doc.get("deployed_revision"):
                 out.append("verify")
+                out.append("outcome")
                 if self.control_runner is not None:
                     out.append("controltest")
         elif can_propose and doc.get("deployed_revision"):
@@ -298,6 +352,33 @@ class DeploymentService:
         self._transition(doc, actor, "reject", REJECTED, note)
         return self._decorate(doc)
 
+    def withdraw(self, actor: str, content_id: str, note: str = "") -> Dict[str, Any]:
+        """Take back an approval before the revision is deployed. A withdrawn approval cannot be deployed (D-075)."""
+        doc = self._require(content_id)
+        self._expect(doc, (APPROVED, FAILED), "withdraw the approval of")
+        rev = self._latest(doc)
+        if not rev.get("approved_by"):
+            raise ConflictError("revision %d is not approved" % rev["rev"], {"code": "not_approved"})
+        if doc.get("deployed_revision") == rev["rev"]:
+            raise ConflictError("revision %d is already deployed; roll back or retire instead" % rev["rev"],
+                                {"code": "already_deployed"})
+        if len((note or "").strip()) < MIN_NOTE:
+            raise ValidationError("withdrawing an approval needs a reason (at least %d characters)" % MIN_NOTE)
+        was = rev.get("approval")
+        log = rev.setdefault("approval_withdrawn", [])
+        log.append({"by": actor, "at": utc_now_iso(), "approved_by": rev.get("approved_by"), "note": note.strip()[:500]})
+        del log[:-10]
+        for key in ("approved_by", "approved_at", "approval", "acknowledged_commands", "acknowledged_by",
+                    "actions_acknowledged_by", "actions_acknowledged_at", "actions_acknowledged_digest"):
+            rev.pop(key, None)
+        target = DRAFT if was == "not_required" else PENDING
+        if target == DRAFT:
+            for key in ("submitted_by", "submitted_at"):
+                rev.pop(key, None)
+        doc["last_error"] = ""
+        self._transition(doc, actor, "withdraw", target, note.strip(), {"withdrawn_approval_of": log[-1]["approved_by"]})
+        return self._decorate(doc)
+
     def deploy(self, actor: str, content_id: str, note: str = "") -> Dict[str, Any]:
         doc = self._require(content_id)
         self._expect(doc, (APPROVED, FAILED), "deploy")
@@ -359,11 +440,155 @@ class DeploymentService:
                                     % ("; ".join(blocked_by), MIN_OVERRIDE_REASON),
                                     {"code": code, "readiness": state, "scheduler_access": access["status"]})
             override = override_reason.strip()[:500]
+        request = None
+        if self.settings.enable_second_person:
+            request = doc.get("enable_request") if self._request_active(doc, utc_now_iso()) else None
+            if request is None:
+                doc["enable_request"] = {"by": actor, "at": utc_now_iso(), "revision": rev["rev"],
+                                         "expires_at": self._later_iso(self.settings.enable_request_hours),
+                                         "override_reason": override}
+                self._history(doc, actor, "enable_requested", doc["state"], doc["state"], rev["rev"], override)
+                self._save(doc, actor)
+                self.audit.record(actor, "deployment.enable_requested", "deployment", doc["content_id"],
+                                  details={"revision": rev["rev"], "blocked_by": blocked_by,
+                                           "override_reason": override,
+                                           "expires_at": doc["enable_request"]["expires_at"]})
+                return self._decorate(doc)
+            if request["by"] == actor and not self.settings.allow_self_approval:
+                raise ConflictError("a different person must confirm enabling this search; %s asked for it"
+                                    % request["by"], {"code": "second_person_required", "requested_by": request["by"]})
+            doc.pop("enable_request", None)
         catalog = self.store.get(C.CATALOG, doc["catalog_key"]) or {}
-        return self._set_enabled(doc, actor, rev, True, "enable", {
-            "readiness_state": state, "override_reason": override,
-            "scheduler_access": access["status"], "scheduler_access_code": access["code"],
-            "provider_status": catalog.get("provider_status")})
+        details = {"readiness_state": state, "override_reason": override,
+                   "scheduler_access": access["status"], "scheduler_access_code": access["code"],
+                   "provider_status": catalog.get("provider_status")}
+        if request:
+            details["requested_by"] = request["by"]
+        if override:
+            expires = self._later_iso(self.settings.override_days * 24) if self.settings.override_days else ""
+            doc["override"] = {"reason": override, "by": actor, "at": utc_now_iso(), "expires_at": expires,
+                               "blocked_by": blocked_by, "reminded_at": ""}
+            doc["override_active"] = True
+            details["override_expires_at"] = expires
+        return self._set_enabled(doc, actor, rev, True, "enable", details)
+
+    def cancel_enable(self, actor: str, content_id: str, note: str = "") -> Dict[str, Any]:
+        doc = self._require(content_id)
+        request = doc.get("enable_request")
+        if not request:
+            raise ConflictError("no request to enable this search is open", {"code": "no_enable_request"})
+        doc.pop("enable_request", None)
+        self._history(doc, actor, "enable_request_cancelled", doc["state"], doc["state"], request.get("revision"), note)
+        self._save(doc, actor)
+        self.audit.record(actor, "deployment.enable_request_cancelled", "deployment", doc["content_id"],
+                          details={"requested_by": request.get("by"), "note": (note or "")[:200]})
+        return self._decorate(doc)
+
+    def set_outcome(self, actor: str, content_id: str, outcome: str, note: str = "") -> Dict[str, Any]:
+        """Record what happened after deployment: needs tuning, waiting on data, or neither (D-075)."""
+        if outcome not in OUTCOMES:
+            raise ValidationError("invalid outcome", {"allowed": list(OUTCOMES)})
+        doc = self._require(content_id)
+        rev = self._deployed(doc)
+        if outcome == "none":
+            doc.pop("outcome", None)
+            doc["outcome_value"] = ""
+        else:
+            if len((note or "").strip()) < MIN_NOTE:
+                raise ValidationError("an outcome needs a note saying why (at least %d characters)" % MIN_NOTE)
+            doc["outcome"] = {"value": outcome, "note": note.strip()[:500], "set_by": actor, "set_at": utc_now_iso(),
+                              "revision": rev["rev"]}
+            doc["outcome_value"] = outcome
+        self._history(doc, actor, "outcome", doc["state"], doc["state"], rev["rev"], "%s: %s" % (outcome, note or ""))
+        self._save(doc, actor)
+        self.audit.record(actor, "deployment.outcome", "deployment", doc["content_id"],
+                          details={"outcome": outcome, "revision": rev["rev"], "note": (note or "")[:200]})
+        return self._decorate(doc)
+
+    def diff(self, content_id: str, from_rev: int, to_rev: int) -> Dict[str, Any]:
+        doc = self._require(content_id)
+        if from_rev == to_rev:
+            raise ValidationError("choose two different revisions")
+        missing = revision_tools.unavailable(doc, (from_rev, to_rev))
+        if missing is not None:
+            if any(part.get("missing") for part in missing["revisions"]):
+                raise NotFoundError("revision not found", {"from": from_rev, "to": to_rev})
+            return missing
+        older, newer = sorted((revision_tools.find(doc, from_rev)["full"], revision_tools.find(doc, to_rev)["full"]),
+                              key=lambda r: r["rev"])
+        return revision_tools.diff_revisions(older, newer)
+
+    # -- time-limited override and enable request -------------------------------
+
+    @staticmethod
+    def _later_iso(hours: float) -> str:
+        return (utc_now() + datetime.timedelta(hours=hours)).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+    @staticmethod
+    def _request_active(doc: Dict[str, Any], now: str) -> bool:
+        request = doc.get("enable_request") or {}
+        return bool(request) and str(request.get("expires_at") or "") > now \
+            and request.get("revision") == doc.get("deployed_revision")
+
+    def sweep_overrides(self, now: Optional[str] = None) -> Dict[str, int]:
+        """Remind (or disable) when an override has run out, and drop an override whose reason no longer holds."""
+        now = now or utc_now_iso()
+        totals = {"checked": 0, "cleared": 0, "expired": 0, "disabled": 0, "errors": 0}
+        for row in self.store.query(C.DEPLOYMENTS, {"override_active": True}, fields=["content_id"], limit=500):
+            try:
+                doc = self._require(row["content_id"])
+                override = doc.get("override")
+                if not override:
+                    doc["override_active"] = False
+                    self._save(doc, SYSTEM_ACTOR)
+                    continue
+                totals["checked"] += 1
+                rev = self._deployed(doc)
+                readiness = (self.store.get(C.READINESS, doc["catalog_key"]) or {}).get("state") or "not_assessed"
+                still = readiness in self.settings.block_enable_states or self.scheduler_access(rev)["status"] == NOT_MET
+                if not still:
+                    self._drop_override(doc)
+                    self._history(doc, SYSTEM_ACTOR, "override_cleared", doc["state"], doc["state"], rev["rev"],
+                                  "the reason for the override no longer applies")
+                    self._save(doc, SYSTEM_ACTOR)
+                    self.audit.record(SYSTEM_ACTOR, "deployment.override_cleared", "deployment", doc["content_id"],
+                                      details={"revision": rev["rev"], "reason": override.get("reason")})
+                    totals["cleared"] += 1
+                    continue
+                if override.get("expires_at") and override["expires_at"] <= now and not override.get("reminded_at"):
+                    override["reminded_at"] = now
+                    self._history(doc, SYSTEM_ACTOR, "override_expired", doc["state"], doc["state"], rev["rev"],
+                                  override.get("reason") or "")
+                    self._save(doc, SYSTEM_ACTOR)
+                    self.audit.record(SYSTEM_ACTOR, "deployment.override_expired", "deployment", doc["content_id"],
+                                      outcome="failure",
+                                      details={"revision": rev["rev"], "reason": override.get("reason"),
+                                               "enabled_by": override.get("by"), "expired_at": override["expires_at"],
+                                               "action": self.settings.override_expiry_action})
+                    totals["expired"] += 1
+                    if self.settings.override_expiry_action == "disable" and \
+                            (doc.get("live") or {}).get("status") == LIVE_ENABLED:
+                        self._set_enabled(doc, SYSTEM_ACTOR, rev, False, "disable",
+                                          {"note": "the override of %s expired" % override.get("by")})
+                        totals["disabled"] += 1
+            except UcmError:
+                totals["errors"] += 1
+        return totals
+
+    @staticmethod
+    def _drop_override(doc: Dict[str, Any]) -> None:
+        doc.pop("override", None)
+        doc["override_active"] = False
+
+    @staticmethod
+    def _override_status(doc: Dict[str, Any], now: str) -> Optional[Dict[str, Any]]:
+        override = doc.get("override")
+        if not override:
+            return None
+        expires = override.get("expires_at") or ""
+        return {"reason": override.get("reason"), "by": override.get("by"), "at": override.get("at"),
+                "expires_at": expires, "expired": bool(expires) and expires <= now,
+                "blocked_by": override.get("blocked_by") or []}
 
     def scheduler_access_for(self, doc: Optional[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
         """The check for the deployed revision, or the latest one before anything is deployed."""
@@ -409,6 +634,8 @@ class DeploymentService:
         observed = self.saved.get(name)
         problems = drift(prev, observed, True, self.settings.scheduled_owner) if observed else [{"field": "*", "detail": "not found after write"}]
         self._set_live(doc, observed, True, prev, problems)
+        self._drop_override(doc)
+        doc.pop("enable_request", None)
         doc["deployed_revision"] = prev["rev"]
         prev["rolled_back_at"] = utc_now_iso()
         target = DEPLOYED if doc["state"] in (DEPLOYED, FAILED) else doc["state"]
@@ -430,6 +657,10 @@ class DeploymentService:
                                         {"code": "unmanaged"})
                 removed = self.saved.delete(name)
         doc["deployed_revision"] = None
+        self._drop_override(doc)
+        for key in ("enable_request", "outcome"):
+            doc.pop(key, None)
+        doc["outcome_value"] = ""
         doc["live"] = {"status": LIVE_ABSENT, "verified_at": utc_now_iso(), "drift": []}
         self._transition(doc, actor, "retire", RETIRED, note, {"saved_search_removed": removed})
         return self._decorate(doc)
@@ -463,6 +694,9 @@ class DeploymentService:
                 totals["drifted"] += 1
             if doc["live"]["status"] in (LIVE_MISSING, LIVE_UNMANAGED):
                 totals["missing"] += 1
+        swept = self.sweep_overrides()
+        totals["overrides_expired"] = swept["expired"]
+        totals["overrides_cleared"] = swept["cleared"]
         return totals
 
     # -- control tests (D-054) -------------------------------------------------
@@ -524,6 +758,9 @@ class DeploymentService:
         observed = self.saved.get(name)
         problems = drift(rev, observed, not enabled, self.settings.scheduled_owner) if observed else [{"field": "*", "detail": "not found"}]
         self._set_live(doc, observed, not enabled, rev, problems)
+        if not enabled:
+            self._drop_override(doc)
+            doc.pop("enable_request", None)
         details = dict(details)
         details["drift"] = len(problems)
         self._history(doc, actor, action, doc["state"], doc["state"], rev["rev"],
@@ -689,7 +926,7 @@ class DeploymentService:
             "saved_search": {"name": saved_search_name(uc.provenance.provider_record_id, uc.title),
                              "app": self.saved.app},
             "live": {"status": LIVE_ABSENT, "drift": []}, "live_status": LIVE_ABSENT, "live_drift": False,
-            "created_by": actor, "created_at": utc_now_iso(), "version": 0, "last_error": "",
+            "override_active": False, "outcome_value": "", "created_by": actor, "created_at": utc_now_iso(), "version": 0, "last_error": "",
         }
 
     def _load(self, content_id: str) -> UseCase:
@@ -749,7 +986,9 @@ class DeploymentService:
         while len(revs) > self.settings.max_revisions:
             for i, rev in enumerate(revs):
                 if rev["rev"] not in keep:
-                    revs.pop(i)
+                    log = doc.setdefault("revision_log", [])
+                    log.append(revision_tools.stub(revs.pop(i), utc_now_iso()))
+                    del log[:-revision_tools.MAX_STUBS]
                     break
             else:
                 break
@@ -794,10 +1033,19 @@ class DeploymentService:
         doc["updated_at"] = utc_now_iso()
         doc["updated_by"] = actor
         self.store.upsert(C.DEPLOYMENTS, doc)
+        stored = self.store.get(C.DEPLOYMENTS, doc["_key"])
+        if stored is None or stored.get("version") != doc["version"]:
+            raise ConflictError("the deployment was changed by someone else while it was being saved; reload and "
+                                "check what it now says before retrying", {"code": "concurrent_update_detected"})
 
     def _decorate(self, doc: Dict[str, Any], summary: bool = False) -> Dict[str, Any]:
         out = dict(doc)
         out.pop("live_drift", None)
+        out.pop("override_active", None)
+        out.pop("outcome_value", None)
+        now = utc_now_iso()
+        out["override_status"] = self._override_status(doc, now)
+        out["enable_request_active"] = self._request_active(doc, now)
         if summary:
             return out
         latest = self._latest(doc)

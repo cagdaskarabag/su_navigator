@@ -491,12 +491,21 @@ function ucmViewMain($, ucm) {
 
     var ACTION_LABELS = { submit: "Submit for approval", approve: "Approve", reject: "Reject", deploy: "Deploy (disabled)",
         enable: "Enable", disable: "Disable", rollback: "Roll back", retire: "Retire", verify: "Verify now",
-        controltest: "Run control test" };
+        controltest: "Run control test", withdraw: "Withdraw approval", cancel_enable: "Cancel enable request", outcome: "Set outcome" };
+
+    function actionLabel(action, view) {
+        var dep = view && view.deployment;
+        var settings = (view && view.settings) || {};
+        if (action === "enable" && settings.enable_second_person) {
+            return dep && dep.enable_request_active ? "Confirm enable (asked by " + dep.enable_request.by + ")" : "Request enable";
+        }
+        return ACTION_LABELS[action] || action;
+    }
 
     function runAction(uc, dep, action) {
         var body = { id: uc.content_id };
         var settings = dep.settings || {};
-        var label = ACTION_LABELS[action] || action;
+        var label = actionLabel(action, dep);
         var revs = (dep.deployment && dep.deployment.revisions) || [];
         var review = (revs[revs.length - 1] || {}).review_commands || [];
         var decides = action === "approve" || (action === "submit" && settings.require_approval === false);
@@ -535,11 +544,22 @@ function ucmViewMain($, ucm) {
             if (readinessBlocked || access.status === "not_met") {
                 var why = (readinessBlocked ? "Readiness is " + rd + ". " : "") +
                     (access.status === "not_met" ? access.detail + " " : "") + "The override reason is audited.";
+                if (settings.override_days) { why += " The override expires after " + settings.override_days + " days; you are reminded then" +
+                    (settings.override_expiry_action === "disable" ? " and the search is disabled." : "."); }
                 ucm.askText("Override the enable gate", why,
-                    { label: "Override reason", minLength: 10, maxLength: 500, multiline: true }, "Enable",
+                    { label: "Override reason", minLength: 10, maxLength: 500, multiline: true }, label,
                     function (reason) { body.override_reason = reason; acknowledgeThenSend(); });
                 return;
             }
+        } else if (action === "withdraw") {
+            ucm.askText("Withdraw the approval?", "The revision goes back to waiting for approval and cannot be deployed until it is approved again. " +
+                "The reason is audited.", { label: "Reason", minLength: 5, maxLength: 500, multiline: true }, label,
+                function (note) { body.note = note; send(); });
+            return;
+        } else if (action === "cancel_enable") {
+            ucm.askText(label, "Optional note for the audit trail.", { label: "Note", maxLength: 500, multiline: true },
+                label, function (note) { body.note = note; send(); });
+            return;
         } else if (action === "retire") {
             ucm.confirmAction("Retire this deployment?", "The saved search is deleted from Splunk.", "Retire",
                 acknowledgeThenSend, true);
@@ -653,6 +673,91 @@ function ucmViewMain($, ucm) {
     var LIVE_KIND = { enabled: "ok", disabled: "info", missing: "error", unmanaged: "error", absent: "neutral" };
     var STATE_KIND = { draft: "neutral", pending_approval: "warn", approved: "info", rejected: "high",
         deployed: "ok", failed: "error", retired: "neutral" };
+    var OUTCOME_LABEL = { needs_tuning: "Needs tuning", waiting_on_data: "Waiting on data" };
+
+    function overrideBox(dep) {
+        var o = dep.override_status;
+        if (!o) { return null; }
+        var text = "Enabled by " + o.by + " with the reason: " + o.reason + (o.blocked_by.length ? " (the gate said: " + o.blocked_by.join("; ") + ")" : "") + ".";
+        if (o.expired) {
+            return ucm.stateBox("error", "The override expired at " + o.expires_at + " UTC", text + " The reason may no longer hold. Disable the search, fix what the gate asked for, or accept the risk again by disabling and enabling it.");
+        }
+        return ucm.stateBox("warn", "Enabled with an override" + (o.expires_at ? " until " + o.expires_at + " UTC" : " (no expiry)"), text);
+    }
+
+    function outcomeBox(uc, view, dep) {
+        var allowed = (view.allowed_actions || []).indexOf("outcome") >= 0;
+        var current = dep.outcome;
+        if (!allowed && !current) { return null; }
+        var box = el("div", { "class": "ucm-section", id: "ucm-outcome" }, el("h4", { text: "Outcome after deployment" }));
+        if (current) {
+            box.appendChild(el("div", {}, ucm.badge(OUTCOME_LABEL[current.value] || current.value, current.value === "needs_tuning" ? "warn" : "info"),
+                el("span", { "class": "ucm-sub", text: " " + current.note + " (" + current.set_by + ", " + current.set_at + " UTC)" })));
+        } else {
+            box.appendChild(el("div", { "class": "ucm-sub", text: "No outcome recorded." }));
+        }
+        if (!allowed) { return box; }
+        var choice = el("select", { id: "ucm-outcome-value", "class": "ucm-input" },
+            el("option", { value: "needs_tuning", text: OUTCOME_LABEL.needs_tuning }),
+            el("option", { value: "waiting_on_data", text: OUTCOME_LABEL.waiting_on_data }),
+            el("option", { value: "none", text: "Clear the outcome" }));
+        var note = el("input", { type: "text", id: "ucm-outcome-note", "class": "ucm-input", maxlength: 500, placeholder: "Why (at least 5 characters)" });
+        box.appendChild(el("div", { "class": "ucm-toolbar" }, choice, note,
+            el("button", { "class": "btn", type: "button", id: "ucm-outcome-save", text: "Save outcome", onclick: function () {
+                ucm.post("deployment/outcome", { id: uc.content_id, outcome: choice.value, note: note.value }).done(load)
+                    .fail(function (err) { ucm.notify(err.message); });
+            } })));
+        box.appendChild(el("div", { "class": "ucm-sub", text: "Needs tuning: it runs but produces results nobody can act on. Waiting on data: it is deployed and the data it needs is not there yet. Both show on the Deployments page." }));
+        return box;
+    }
+
+    function diffView(d) {
+        if (!d.available) {
+            return ucm.stateBox("info", "Cannot compare these revisions", d.reason + " " + (d.revisions || []).map(function (r) {
+                return "Revision " + r.rev + (r.spl_hash ? " has hash " + String(r.spl_hash).substring(0, 12) : " is unknown") + (r.approved_by ? ", approved by " + r.approved_by : "") + ".";
+            }).join(" "));
+        }
+        var out = el("div", {}, el("div", { "class": "ucm-sub", text: "Revision " + d.from.rev + " (" + (d.from.created_by || "") + ") to revision " + d.to.rev + " (" + (d.to.created_by || "") + ")." }));
+        if (d.fields.length) {
+            out.appendChild(el("table", { "class": "ucm-table" }, el("thead", {}, el("tr", {}, ["Setting", "Before", "After"].map(function (h) { return el("th", { text: h }); }))),
+                el("tbody", {}, d.fields.map(function (f) {
+                    return el("tr", {}, el("td", { text: f.field }), el("td", { "class": "ucm-mono", text: typeof f.from === "object" ? JSON.stringify(f.from) : String(f.from) }),
+                        el("td", { "class": "ucm-mono", text: typeof f.to === "object" ? JSON.stringify(f.to) : String(f.to) }));
+                }))));
+        } else {
+            out.appendChild(el("div", { "class": "ucm-sub", text: "No setting changed." }));
+        }
+        out.appendChild(el("div", { "class": "ucm-sub", text: d.spl.changed ? "SPL: " + d.spl.added + " line(s) added, " + d.spl.removed + " removed." : "The SPL is identical." }));
+        if (d.spl.lines.length) {
+            out.appendChild(el("pre", { "class": "ucm-spl ucm-diff", text: d.spl.lines.join("\n") }));
+            if (d.spl.truncated) { out.appendChild(el("div", { "class": "ucm-sub", text: "The diff is cut at 400 lines." })); }
+        }
+        return out;
+    }
+
+    function revisionCompare(uc, dep) {
+        var revs = dep.revisions || [];
+        var trimmed = dep.revision_log || [];
+        if (revs.length < 2 && !trimmed.length) { return null; }
+        var numbers = revs.map(function (r) { return r.rev; });
+        var opts = function (selected) {
+            return numbers.map(function (n) { return el("option", { value: String(n), text: "Revision " + n, selected: n === selected ? "selected" : null }); });
+        };
+        var from = el("select", { id: "ucm-diff-from", "class": "ucm-input" }, opts(numbers.length > 1 ? numbers[numbers.length - 2] : numbers[0]));
+        var to = el("select", { id: "ucm-diff-to", "class": "ucm-input" }, opts(numbers[numbers.length - 1]));
+        var result = el("div", { id: "ucm-diff-result" });
+        var box = el("details", { "class": "ucm-details" }, el("summary", { text: "Compare revisions" }));
+        box.appendChild(el("div", { "class": "ucm-toolbar" }, from, to, el("button", { "class": "btn", type: "button", id: "ucm-diff-go", text: "Compare", onclick: function () {
+            ucm.get("deployment/diff", { id: uc.content_id, from: from.value, to: to.value }).done(function (d) { ucm.clear(result).appendChild(diffView(d)); })
+                .fail(function (err) { ucm.clear(result).appendChild(ucm.stateBox("error", "Could not compare.", err.message)); });
+        } })));
+        box.appendChild(result);
+        if (trimmed.length) {
+            box.appendChild(el("div", { "class": "ucm-sub", text: trimmed.length + " older revision(s) were trimmed after max_revisions. Their records remain: " +
+                trimmed.slice(-8).map(function (t) { return t.rev + " (hash " + String(t.spl_hash || "").substring(0, 8) + (t.approved_by ? ", approved by " + t.approved_by : "") + ")"; }).join("; ") + "." }));
+        }
+        return box;
+    }
 
     function deploymentBox(uc) {
         var view = uc.deployment || { deployment: null, allowed_actions: [] };
@@ -711,16 +816,25 @@ function ucmViewMain($, ucm) {
         var accessNote = ucm.accessBox(view.scheduler_access);
         if (accessNote) { card.appendChild(accessNote); }
         if (dep.last_error) { card.appendChild(ucm.stateBox("error", "Last error", dep.last_error)); }
+        var overrideNote = overrideBox(dep);
+        if (overrideNote) { card.appendChild(overrideNote); }
+        if (dep.enable_request_active && dep.enable_request) {
+            card.appendChild(ucm.stateBox("info", "Waiting for a second person to confirm enabling",
+                dep.enable_request.by + " asked to enable this search at " + dep.enable_request.at + " UTC (revision " + dep.enable_request.revision +
+                "). The request ends at " + dep.enable_request.expires_at + " UTC. A different person with ucm_deploy confirms it with " + "Confirm enable."));
+        }
         if (dep.control_test) { card.appendChild(controlTestBox(dep.control_test)); }
         var drift = (dep.live && dep.live.drift) || [];
         if (drift.length) {
             card.appendChild(ucm.stateBox("warn", "Drift detected (" + (dep.live.verified_at || "") + " UTC)",
                 drift.map(function (d) { return d.field + (d.detail ? ": " + d.detail : (" expected " + d.expected + ", observed " + d.observed)); }).join("; ")));
         }
-        card.appendChild(el("div", { "class": "ucm-actions" }, allowed.filter(function (a) { return a !== "draft"; }).map(function (a) {
+        card.appendChild(el("div", { "class": "ucm-actions" }, allowed.filter(function (a) { return a !== "draft" && a !== "outcome"; }).map(function (a) {
             return el("button", { "class": "btn" + (a === "deploy" || a === "approve" || a === "submit" ? " btn-primary" : ""),
-                type: "button", text: ACTION_LABELS[a] || a, onclick: function () { runAction(uc, view, a); } });
+                type: "button", text: actionLabel(a, view), onclick: function () { runAction(uc, view, a); } });
         })));
+        var outcome = outcomeBox(uc, view, dep);
+        if (outcome) { card.appendChild(outcome); }
         card.appendChild(unavailableActions(view));
         if (allowed.indexOf("draft") >= 0) {
             card.appendChild(el("details", { "class": "ucm-details" }, el("summary", { text: dep.state === "draft" ? "Edit draft" : "Start a new revision" }),
@@ -728,6 +842,8 @@ function ucmViewMain($, ucm) {
         }
         var spl = latest.spl ? el("details", { "class": "ucm-details" }, el("summary", { text: "Revision " + latest.rev + " SPL" }),
             el("pre", { "class": "ucm-spl", text: latest.spl })) : null;
+        var compare = revisionCompare(uc, dep);
+        if (compare) { card.appendChild(compare); }
         var hist = el("tbody", {});
         (dep.history || []).slice(-10).reverse().forEach(function (h) {
             hist.appendChild(el("tr", {}, el("td", { text: h.at }), el("td", { text: h.actor }), el("td", { text: h.action }),
@@ -743,7 +859,7 @@ function ucmViewMain($, ucm) {
         return card;
     }
 
-    var ACTION_ORDER = ["draft", "submit", "approve", "reject", "deploy", "enable", "disable", "rollback", "retire", "verify", "controltest"];
+    var ACTION_ORDER = ["draft", "submit", "approve", "reject", "withdraw", "deploy", "enable", "cancel_enable", "disable", "rollback", "retire", "verify", "controltest", "outcome"];
 
     /* Why an action is not offered, from the documented workflow (deployment/service.py allowed_actions). */
     function whyNot(action, dep, view) {
@@ -765,6 +881,12 @@ function ucmViewMain($, ucm) {
             return action === "approve" && !settings.allow_self_approval
                 ? "Needs the ucm_deploy capability and a person other than the one who submitted it (self-approval is off)."
                 : capability;
+        case "withdraw":
+            return "Needs an approved revision that is not deployed yet, and the ucm_deploy capability.";
+        case "cancel_enable":
+            return "Only while a request to enable is open and the search is disabled.";
+        case "outcome":
+            return deployed ? capability : "Nothing is deployed yet.";
         case "deploy":
             if (!dep) { return "Nothing to deploy yet: save a draft, submit it and have it approved."; }
             if (state !== "approved" && state !== "failed") { return "Needs an approved revision (state: " + shown + ")."; }
@@ -797,7 +919,7 @@ function ucmViewMain($, ucm) {
         return el("details", { "class": "ucm-details ucm-unavailable" },
             el("summary", { text: "Actions not available to you right now (" + missing.length + ")" }),
             el("dl", { "class": "ucm-kv" }, missing.map(function (a) {
-                return [el("dt", { text: a === "draft" ? "Save draft" : (ACTION_LABELS[a] || a) }), el("dd", { text: whyNot(a, dep, view) })];
+                return [el("dt", { text: a === "draft" ? "Save draft" : actionLabel(a, view) }), el("dd", { text: whyNot(a, dep, view) })];
             })));
     }
 
@@ -1319,7 +1441,7 @@ function ucmViewMain($, ucm) {
         var sel = uc.selection;
         var drift = dep && dep.live && dep.live.drift ? dep.live.drift.length : 0;
         var can = (view.allowed_actions || []).filter(function (a) { return a !== "draft"; })
-            .map(function (a) { return ACTION_LABELS[a] || a; });
+            .map(function (a) { return actionLabel(a, view); });
         var status = el("div", { "class": "ucm-plan-status" },
             planItem("Selection", sel ? ucm.badge(sel.intent, sel.intent === "select" ? "ok" : "info") : ucm.badge("not selected", "neutral")),
             planItem("Readiness", rd ? ucm.readinessBadge(rd.state) : ucm.badge("not assessed", "neutral")),
