@@ -23,7 +23,7 @@ from unit.test_recommend import DISCOVERY, uc
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 
-def model(name, app="Splunk_SA_CIM", accelerated=True, disabled=False):
+def model(name, app="Splunk_SA_CIM", accelerated=False, disabled=False):
     return {"name": name, "app": app, "disabled": disabled, "display_name": name, "objects": [name],
             "accelerated": accelerated}
 

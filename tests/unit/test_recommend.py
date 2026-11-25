@@ -374,7 +374,7 @@ class ApiTest(unittest.TestCase):
         self.assertEqual(ids(body), ["fenre:UC-2"])
         status, body = call(make_ctx(self.store, [], user="bob"), "GET", "readiness/recommendations", query={"user": "alice"})
         self.assertEqual(ids(body), ["fenre:UC-1", "fenre:UC-2"])
-        self.assertEqual(body["formula"]["version"], "ucm.recommend/1")
+        self.assertEqual(body["formula"]["version"], "ucm.recommend/2")
 
     def test_count_is_bounded_and_validated(self):
         status, body = call(make_ctx(self.store, [], user="bob"), "GET", "readiness/recommendations", query={"count": "1"})

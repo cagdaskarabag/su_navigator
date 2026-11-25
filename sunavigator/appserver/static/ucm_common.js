@@ -175,6 +175,7 @@ define(["jquery", "splunk.util"], function ($, splunkUtil) {
         ["ready", "partially_ready", "not_ready", "blocked", "insufficient_evidence"].forEach(function (s) { assessed += by[s] || 0; });
         var ready = by.ready || 0;
         var partial = by.partially_ready || 0;
+        var dataSeen = ((summary && summary.by_data_state) || {}).seen || 0;
         var known = activeTotal !== null && activeTotal !== undefined;
         return [
             { label: "Assessed", value: known ? percent(assessed, activeTotal) : null,
@@ -189,7 +190,11 @@ define(["jquery", "splunk.util"], function ($, splunkUtil) {
             { label: "Not ready, blocked or insufficient evidence",
                 value: percent(assessed - ready - partial, assessed),
                 detail: (assessed - ready - partial) + " of " + assessed + " assessed",
-                how: "Assessed use cases that are neither ready nor partially ready ÷ assessed use cases." }
+                how: "Assessed use cases that are neither ready nor partially ready ÷ assessed use cases." },
+            { label: "Data seen", value: summary && summary.by_data_state ? percent(dataSeen, assessed) : null,
+                detail: summary && summary.by_data_state ? dataSeen + " of " + assessed + " assessed" : "re-assess to compute",
+                how: "Assessed use cases whose data evidence is seen ÷ assessed use cases. Readiness says the content can run; " +
+                    "data seen says the events, populated data models and fields it reads were observed (D-070)." }
         ];
     }
 
@@ -248,6 +253,27 @@ define(["jquery", "splunk.util"], function ($, splunkUtil) {
             "SPL not parsed, internal indexes that discovery did not scan, or index access that could not be fully verified). Left out of score and coverage. It is not a failure and does not mean the data is absent.",
         not_applicable: "Does not apply to this deployment. Left out of score and coverage."
     };
+
+    /* Keys match splunk_ucm.readiness.evidence.DATA_STATES (checked by a unit test, D-070). */
+    var DATA_STATES = ["seen", "partial", "none", "unverified", "not_applicable"];
+    var DATA_LABELS = { seen: ["Data seen", "ok"], partial: ["Data partly seen", "warn"], none: ["No data seen", "error"],
+        unverified: ["Data not verified", "info"], not_applicable: ["No data requirement", "neutral"] };
+    var DATA_HELP = {
+        seen: "Every data requirement that could be checked had data: the sourcetype or index had events in the discovery " +
+            "window, the data model was populated at discovery, and sampled fields were present.",
+        partial: "Some data requirements had data and some were checked and had none (or only data older than the freshness threshold).",
+        none: "Data requirements were checked and none had data. The content may still be ready to install; the search would find nothing.",
+        unverified: "No data requirement could be checked either way, for example a data model whose populated check did not run " +
+            "and fields that were not sampled. Not a failure.",
+        not_applicable: "The use case names no sourcetype, index, data model or field requirement."
+    };
+
+    function dataBadge(value) {
+        var l = DATA_LABELS[value] || ["data: not assessed", "neutral"];
+        var b = badge(l[0], l[1]);
+        if (DATA_HELP[value]) { b.setAttribute("title", DATA_HELP[value]); }
+        return b;
+    }
 
     function readinessBadge(value) {
         var l = READINESS_LABELS[value] || [value || "not assessed", "neutral"];
@@ -822,6 +848,9 @@ define(["jquery", "splunk.util"], function ($, splunkUtil) {
         INDIRECT_COMMANDS: INDIRECT_COMMANDS, HIDDEN_SPL_COMMANDS: HIDDEN_SPL_COMMANDS, READINESS_HELP: READINESS_HELP, STATUS_HELP: STATUS_HELP,
         STATUSES: ["met", "partial", "not_met", "unknown", "unverified", "not_applicable"],
         READINESS_STATES: ["ready", "partially_ready", "not_ready", "blocked", "insufficient_evidence"],
+        DATA_STATES: DATA_STATES,
+        DATA_HELP: DATA_HELP,
+        dataBadge: dataBadge,
         DOMAINS: ["security", "infrastructure", "network", "application", "database", "cloud", "endpoint",
             "identity", "ot_ics", "observability", "compliance", "business", "other"],
         CRITICALITY: ["critical", "high", "medium", "low", "unknown"],

@@ -1969,3 +1969,51 @@ as drift.
   revision, so jittered searches do not report drift.
 * Not done: health for searches deployed outside SUNavigator, and alerting on a health change
   (both need a product decision on notification channels).
+
+## D-070 Data evidence beside readiness, 30-day freshness, the environment health panel and the summary check
+
+*0.9.4 (Sprint 15 of the 2026-11 roadmap; research findings F-04, F-06, F-08, F-19 part).*
+* Context: readiness answers "is what the content needs installed and configured". It did not say
+  whether the data the search reads was ever seen: a use case whose data model is installed but
+  empty, or whose sourcetype stopped a month ago, read as ready. Research on the lab also showed
+  that a data model can be accelerated with its summary built and still answer `summariesonly=t`
+  searches with nothing when the summary is empty (the summary entry does not exist until the first
+  build, which the old check never looked at).
+* **Decision, data evidence (`readiness/evidence.py`).** A separate dimension, stored with each
+  assessment as `data_state` and `data_evidence`: `seen`, `partial`, `none`, `unverified`,
+  `not_applicable`. Built from the stored requirement results only (no search). Sourcetype and index
+  requirements count as seen when present, missing when not found, stale when partial; a data
+  model counts as seen only when its populated check says `yes`, missing when `no`; sampled fields
+  count as seen or missing. Informational requirements, collapsed any-of members and non-data
+  types are left out. It never changes a readiness state, score or coverage. The engine version is
+  `ucm.readiness/5`, so every stored assessment is recomputed once (the worker queues it).
+  The recommender leaves out use cases whose data state is `none` (`excluded.no_data_seen`) and
+  its reasons say what data it found. Recommender formula `ucm.recommend/2`.
+* **Decision, freshness (F-08).** Discovery runs two more bounded tstats passes over the indexes it
+  already searched: events per pair over `[discovery] freshness_days` (default 30, `0` disables),
+  and events stamped more than five minutes in the future (`earliest=+5m latest=+10y`). A pair seen
+  only in the longer window is stored `stale_from_start` with `window_count` 0, so readiness reads
+  the source as stale instead of not found. Index and pair documents gain `volume_30d`,
+  `future_count`, `future_last_time`. A failed pass is counted in the totals and does not make the
+  job partial. The pass adds at most two searches per index group of 40.
+* **Decision, summary check (populated.py).** For an accelerated model whose populated check says
+  `yes`, discovery runs `| tstats summariesonly=t count ... earliest=-24h` and stores
+  `summary_count`. Measured on the lab (10.2.9, a temporary accelerated model created and deleted):
+  the summary-only count was 318,485 against 319,119 for the full count, so the summary was built;
+  a model whose summary is empty answers 0. The environment health panel reads
+  `summary_built`, `summary_partial`, `summary_not_built`, `no_data`, `summary_unverified` or
+  `not_accelerated`. A failed summary search leaves the count unset (unverified), never zero.
+* **Decision, environment health (`discovery/health.py`, `GET ucm/environment/health`).** A read-only
+  panel built from the last discovery: CIM add-on version and accelerated models, data-model summary
+  states, CIM index macros (their definition is now stored, only for `cim_*_indexes` macros, and an
+  unconstrained one is flagged), enabled indexes without data, sources that stopped before the
+  window, future-dated sources, and active sourcetypes that no requirement and no mapping names
+  (the review list for unmapped sourcetypes). Every list is capped at 50 and says so. Readable by
+  every app user, like the other read routes; it reads no raw events.
+* Not done in 0.9.4 (scoped out of this release, and listed as open): the field-profile job
+  (`uc_field_profile`, fill and placeholder rates, `missing_fields`; F-07), the "open in search" link
+  with resolution hints (F-19), and the CIM field reference. They need a scheduled job with its own
+  index-access and cost cap and a new collection, which this release does not add.
+* Evidence: `tests/unit/test_data_evidence.py`, `test_freshness.py`, `test_environment_health.py`,
+  `test_populated.py` (summary search); the lab check above. The field profile is the largest gap
+  left in the data-evidence dimension.

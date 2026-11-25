@@ -219,13 +219,14 @@ Downgrades are not supported (D-033).
 | `GET ucm/audit` | `ucm_manage_content` or `ucm_admin` | Recent audit events (`limit`, `prefix`). |
 | `GET ucm/inventory` | read | Filtered, paged environment sources (`kind, status, q, index, sourcetype, stale_hours, sort, offset, count`). |
 | `GET ucm/inventory/coverage` | read | Catalogue requirement values vs discovered sources. |
+| `GET ucm/environment/health` | read | Environment health from the last discovery: CIM add-on, data model summary states, CIM index macros, indexes without data, sources that stopped before the window, future-dated sources, unmapped sourcetypes (D-070). |
 | `GET ucm/discovery` | read | Discovery state and recent jobs. |
 | `POST ucm/discovery` | `ucm_run_discovery` | Queue a bounded discovery job (`include_internal`, `earliest`, `latest`). |
 | `GET ucm/mappings` | read | Source mappings. |
 | `POST ucm/mappings` | `ucm_run_discovery` | Create or update a **local** mapping. |
 | `POST ucm/mappings/delete` | `ucm_run_discovery` | Delete a local mapping (auto mappings cannot be deleted). |
-| `GET ucm/readiness` | read | Filtered, paged readiness (`state, domain, criticality, category, q, sort, offset, count`). Each item carries the stored per-status `counts` and `unverified` (shown as requirement results, D-061). |
-| `GET ucm/readiness/summary` | read | Counts by state, most common unmet requirements, jobs, settings, and `scheduler` (the scheduled owner's role and index-access summary, D-063). |
+| `GET ucm/readiness` | read | Filtered, paged readiness (`state, data_state, domain, criticality, category, q, sort, offset, count`). Each item carries the stored per-status `counts` and `unverified` (shown as requirement results, D-061), and `data_state` / `data_evidence` (D-070). |
+| `GET ucm/readiness/summary` | read | Counts by state and by data state (`by_data_state`, D-070), most common unmet requirements, jobs, settings, and `scheduler` (the scheduled owner's role and index-access summary, D-063). |
 | `GET ucm/readiness/usecase?id=` | read | Full readiness document with staleness. Also embedded in `GET ucm/usecase` as `readiness`. |
 | `POST ucm/readiness` | `ucm_run_discovery` | Queue a full re-assessment. |
 | `POST ucm/readiness/assess` | `ucm_run_discovery` | Assess one use case synchronously (`{"id": ...}`). |

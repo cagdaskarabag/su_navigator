@@ -6,11 +6,14 @@ metadata (docs/DECISIONS.md D-020).
 """
 
 import json
+import re
 from typing import Any, Dict, List
 
 from ..errors import StorageError, UnsupportedOperation
 from ..storage.transport import SplunkdTransport
 from .apps import package_id
+
+_CIM_INDEX_MACRO = re.compile(r"^cim_.+_indexes$", re.I)
 
 
 def _entries(data: Any) -> List[Dict[str, Any]]:
@@ -104,6 +107,8 @@ class SplunkInventory:
                     "disabled": bool(content.get("disabled")),
                     "lookup_type": str(content.get("type") or ("file" if path.endswith("files") else "")),
                 })
+                if kind == "macro" and _CIM_INDEX_MACRO.match(name):
+                    out[-1]["definition"] = str(content.get("definition") or "")[:1000]
         return out
 
     def list_datamodels(self) -> List[Dict[str, Any]]:

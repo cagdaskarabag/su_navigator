@@ -51,3 +51,25 @@ def tstats_searches(indexes: Sequence[str], earliest: str, latest: str,
                     chunk: int = CHUNK) -> List[Tuple[List[str], str]]:
     return [(group, tstats_by_index_sourcetype(group, earliest, latest))
             for group in chunk_indexes(indexes, chunk)]
+
+
+FUTURE_EARLIEST = "+5m"
+FUTURE_LATEST = "+10y"
+
+
+def tstats_volume(indexes: Sequence[str], days: int) -> str:
+    """Events per pair over the last ``days`` days, with first and last event time (D-070)."""
+    if not indexes or not 1 <= int(days) <= 365:
+        raise ValidationError("volume search needs indexes and 1 to 365 days")
+    clause = " OR ".join("index=%s" % validate_index_name(n) for n in indexes)
+    return ("| tstats count min(_time) as first_time max(_time) as last_time "
+            "where (%s) earliest=-%dd latest=now by index, sourcetype" % (clause, int(days)))
+
+
+def tstats_future(indexes: Sequence[str]) -> str:
+    """Events time-stamped more than five minutes in the future, per pair (D-070)."""
+    if not indexes:
+        raise ValidationError("future search needs indexes")
+    clause = " OR ".join("index=%s" % validate_index_name(n) for n in indexes)
+    return ("| tstats count max(_time) as last_time where (%s) earliest=%s latest=%s by index, sourcetype"
+            % (clause, FUTURE_EARLIEST, FUTURE_LATEST))

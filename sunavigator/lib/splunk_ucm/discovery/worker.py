@@ -35,6 +35,7 @@ def settings_from_config(config: AppConfig) -> DiscoverySettings:
         include_internal=config.get_bool("discovery", "include_internal", False),
         max_pairs=config.get_int("discovery", "max_pairs", 5000, 100, 20000),
         search_timeout=config.get_int("discovery", "search_timeout_seconds", 120, 15, 600),
+        freshness_days=config.get_int("discovery", "freshness_days", 30, 0, 365),
         job_timeout_seconds=job_timeout,
         populated=PopulatedSettings(
             enabled=config.get_bool("discovery", "populated_check", True),

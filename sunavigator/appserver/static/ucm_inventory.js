@@ -38,6 +38,69 @@ function ucmViewMain($, ucm) {
         return wrap;
     }
 
+    var SUMMARY_TEXT = { not_accelerated: ["not accelerated", "neutral"], no_data: ["accelerated, no events", "info"],
+        summary_unverified: ["accelerated, summary not checked", "info"], summary_not_built: ["summary not built", "error"],
+        summary_partial: ["summary partly built", "warn"], summary_built: ["summary built", "ok"] };
+
+    function listCard(title, help, block, row) {
+        var card = el("div", { "class": "ucm-card" }, el("h3", { text: title + " (" + block.total + ")" }),
+            el("div", { "class": "ucm-sub", text: help }));
+        if (!block.total) {
+            card.appendChild(el("div", { "class": "ucm-sub", text: "None." }));
+            return card;
+        }
+        card.appendChild(el("table", { "class": "ucm-table" }, el("tbody", {}, block.items.slice(0, 12).map(row))));
+        if (block.total > 12) { card.appendChild(el("div", { "class": "ucm-sub", text: "First 12 of " + block.total + " shown." })); }
+        return card;
+    }
+
+    function renderHealth(h) {
+        if (!h.discovered) { return ucm.stateBox("info", "Environment health", "Run discovery to see the environment health panel."); }
+        var models = h.datamodels.items.filter(function (m) { return m.app === "Splunk_SA_CIM" || m.accelerated; });
+        var fresh = h.freshness || {};
+        return el("div", { "class": "ucm-section" },
+            el("h3", { text: "Environment health (from discovery " + (h.discovery_at || "") + " UTC)" }),
+            el("div", { "class": "ucm-cards" },
+                el("div", { "class": "ucm-card" }, el("h3", { text: "CIM add-on" }),
+                    h.cim.installed ? ucm.badge("installed " + h.cim.version, "ok") : ucm.badge("not installed", "error"),
+                    el("div", { "class": "ucm-sub", text: h.cim.installed ? h.cim.accelerated + " of " + h.cim.models + " CIM data models accelerated." :
+                        "Searches that use CIM data models need the Splunk Common Information Model add-on." })),
+                listCard("Data model summaries", "What a summariesonly=t search would see over the last 24 h. \"Summary not built\" means " +
+                    "the model has events but its acceleration summary is empty, so such searches return nothing.",
+                    { total: models.length, items: models }, function (m) {
+                        var s = SUMMARY_TEXT[m.summary_state] || [m.summary_state, "neutral"];
+                        return el("tr", {}, el("td", { "class": "ucm-mono", text: m.name }), el("td", {}, ucm.badge(s[0], s[1])),
+                            el("td", { "class": "ucm-sub", text: m.accelerated && m.acceleration_earliest ? "range " + m.acceleration_earliest : "" }));
+                    }),
+                listCard("CIM index macros", "cim_<model>_indexes macros. An empty definition searches every index the account may read, " +
+                    "which is slower; constrain it to the indexes that hold the model's data.", h.cim_index_macros, function (m) {
+                        return el("tr", {}, el("td", { "class": "ucm-mono", text: m.name }),
+                            el("td", { "class": "ucm-mono", text: m.definition || "(empty)" }),
+                            el("td", {}, m.constrained ? ucm.badge("constrained", "ok") : ucm.badge("all indexes", "warn")));
+                    })),
+            el("div", { "class": "ucm-cards" },
+                listCard("Indexes without data", "Enabled event indexes with no events in the discovery window" +
+                    (fresh.enabled ? " or the last " + fresh.days + " days." : "."), h.indexes_without_data, function (i) {
+                        return el("tr", {}, el("td", { "class": "ucm-mono", text: i.name }),
+                            el("td", { "class": "ucm-sub", text: i.max_time ? "newest event " + i.max_time : "never had events" }));
+                    }),
+                listCard("Stopped before the window", fresh.enabled ? "Seen in the last " + fresh.days + " days but not in the discovery " +
+                    "window. Readiness reads them as stale, not as missing." : "Switched off ([discovery] freshness_days = 0).",
+                    fresh.stale_from_start || { total: 0, items: [] }, function (p) {
+                        return el("tr", {}, el("td", { "class": "ucm-mono", text: p.index + " / " + p.sourcetype }),
+                            el("td", { text: (p.volume_30d || 0) + " events" }), el("td", { "class": "ucm-sub", text: ageLabel(p.age_seconds) + " old" }));
+                    }),
+                listCard("Future time stamps", "Events stamped more than five minutes ahead. Usually a time zone or parsing problem; " +
+                    "searches over recent time miss them.", fresh.future_dated || { total: 0, items: [] }, function (p) {
+                        return el("tr", {}, el("td", { "class": "ucm-mono", text: p.index + " / " + p.sourcetype }),
+                            el("td", { text: p.future_count + " events" }));
+                    }),
+                listCard("Sourcetypes no use case names", "Active sourcetypes that no catalogue requirement and no mapping refers to. " +
+                    "Map them on this page if they carry data a use case expects.", h.unmapped_sourcetypes, function (st) {
+                        return el("tr", {}, el("td", { "class": "ucm-mono", text: st }));
+                    })));
+    }
+
     function renderJobs(data) {
         var s = data.state || {};
         var jobs = data.jobs || [];
@@ -258,6 +321,16 @@ function ucmViewMain($, ucm) {
         });
     }
 
+    function loadHealth() {
+        ucm.get("environment/health").done(function (h) {
+            var node = document.getElementById("ucm-health-wrap");
+            if (node) { ucm.clear(node).appendChild(renderHealth(h)); }
+        }).fail(function (err) {
+            var node = document.getElementById("ucm-health-wrap");
+            if (node) { ucm.clear(node).appendChild(ucm.stateBox("error", "Could not load environment health.", err.message)); }
+        });
+    }
+
     function loadMappings() {
         ucm.get("mappings", { count: 100 }).done(function (data) {
             var node = document.getElementById("ucm-map-wrap");
@@ -270,12 +343,14 @@ function ucmViewMain($, ucm) {
             el("div", { "class": "ucm-header" }, el("h2", { text: "Data Inventory" })),
             el("div", { id: "ucm-disc-wrap" }, el("div", { "class": "ucm-loading", text: "Loading discovery status…" })),
             el("div", { id: "ucm-cov-wrap" }),
+            el("div", { id: "ucm-health-wrap" }),
             toolbar(),
             el("div", { id: "ucm-table-wrap" }, el("div", { "class": "ucm-loading", text: "Loading sources…" })),
             el("div", { id: "ucm-map-wrap" })));
         bindToolbar();
         poll();
         loadCoverage();
+        loadHealth();
         loadTable();
         loadMappings();
     }

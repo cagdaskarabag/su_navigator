@@ -8,6 +8,11 @@ informational ``populated`` value stored next to the data model in the discovery
 * ``no``: it ran to completion and returned zero;
 * ``unverified``: it did not run or did not finish, with a reason code (never a guess).
 
+For an accelerated model that holds events a second search, ``summariesonly=t``, counts what
+the acceleration summary holds over the same window (``summary_count``, D-070); zero means the
+summary is not built and ``summariesonly=t`` searches find nothing. It is skipped for models that
+are not accelerated or hold no events, and its failure leaves ``summary_count`` unset.
+
 The check never raises, never changes a readiness status or score, and is bounded four ways: a
 cap on models, a time limit per search, a total time budget, and a stop after repeated failures.
 """
@@ -69,6 +74,12 @@ def populated_search(model: str) -> str:
     return "| tstats count from datamodel=%s where earliest=%s" % (model, WINDOW)
 
 
+def summary_search(model: str) -> str:
+    if not isinstance(model, str) or not MODEL_NAME.match(model):
+        raise ValidationError("invalid data model name", {"value": str(model)[:80]})
+    return "| tstats summariesonly=t count from datamodel=%s where earliest=%s" % (model, WINDOW)
+
+
 def _outcome(populated: str, reason: str = "", count: Optional[int] = None) -> Dict[str, Any]:
     return {"populated": populated, "reason": reason, "count": count}
 
@@ -118,6 +129,7 @@ def check_models(search: Any, models: Sequence[Dict[str, Any]], referenced: Iter
         if name not in chosen_set:
             out[name] = _outcome(UNVERIFIED, REASON_NOT_SELECTED)
     apps = {m["name"]: str(m.get("app") or "") for m in models if m.get("name")}
+    accelerated = {m["name"] for m in models if m.get("name") and m.get("accelerated")}
     started = clock()
     failures = 0
     for position, name in enumerate(chosen):
@@ -129,6 +141,8 @@ def check_models(search: Any, models: Sequence[Dict[str, Any]], referenced: Iter
             out[name] = _outcome(UNVERIFIED, REASON_BUDGET)
         else:
             out[name] = _check_one(search, name, apps.get(name, ""), settings)
+            if name in accelerated and out[name]["populated"] == YES:
+                out[name]["summary_count"] = _summary_count(search, name, apps.get(name, ""), settings)
             failures = failures + 1 if out[name]["reason"] in (REASON_FAILED, REASON_TIMEOUT,
                                                                 REASON_UNAVAILABLE) else 0
     return out
@@ -155,6 +169,19 @@ def _check_one(search: Any, name: str, app: str, settings: PopulatedSettings) ->
     if _finalized(result.messages):
         return _outcome(UNVERIFIED, REASON_TIMEOUT, 0)
     return _outcome(NO, "", 0)
+
+
+def _summary_count(search: Any, name: str, app: str, settings: PopulatedSettings) -> Optional[int]:
+    try:
+        result = search.oneshot(summary_search(name), timeout=float(settings.timeout_seconds), max_count=1,
+                                max_time=int(settings.timeout_seconds), app=app if _APP.match(app) else "")
+    except Exception as exc:
+        log.info("data model summary check failed", extra={"model": name, "error": str(exc)[:200]})
+        return None
+    if _finalized(result.messages):
+        return None
+    count = _count(result.rows)
+    return 0 if count is None else count
 
 
 def summarize(outcomes: Dict[str, Dict[str, Any]], enabled: bool) -> Dict[str, Any]:
