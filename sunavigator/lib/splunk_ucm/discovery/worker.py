@@ -14,6 +14,7 @@ from ..storage.transport import SplunkdTransport
 from ..util import utc_now
 from .inventory import SplunkInventory
 from .populated import PopulatedSettings
+from .profile import ProfileSettings, parse_placeholders
 from .service import (JOB_FAILED, JOB_RUNNING, DiscoveryService, DiscoverySettings,
                       new_job)
 
@@ -36,6 +37,14 @@ def settings_from_config(config: AppConfig) -> DiscoverySettings:
         max_pairs=config.get_int("discovery", "max_pairs", 5000, 100, 20000),
         search_timeout=config.get_int("discovery", "search_timeout_seconds", 120, 15, 600),
         freshness_days=config.get_int("discovery", "freshness_days", 30, 0, 365),
+        profile=ProfileSettings(
+            enabled=config.get_bool("discovery", "field_profile", True),
+            max_sourcetypes=config.get_int("discovery", "profile_max_sourcetypes", 20, 0, 200),
+            max_fields=config.get_int("discovery", "profile_max_fields", 60, 1, 200),
+            sample_events=config.get_int("discovery", "profile_sample_events", 1000, 100, 10000),
+            timeout_seconds=config.get_int("discovery", "profile_timeout_seconds", 60, 10, 600),
+            budget_seconds=config.get_int("discovery", "profile_budget_seconds", 300, 30, 3600),
+            placeholders=parse_placeholders(config.get("discovery", "profile_placeholders", ""))),
         job_timeout_seconds=job_timeout,
         populated=PopulatedSettings(
             enabled=config.get_bool("discovery", "populated_check", True),

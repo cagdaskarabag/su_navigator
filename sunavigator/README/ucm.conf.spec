@@ -75,6 +75,23 @@ schedule_interval_hours = <integer>
 * 0 disables scheduled discovery.
 freshness_days = <integer 0-365>
 * Discovery also counts events per index and sourcetype over this many days and the events time-stamped more than five minutes in the future (two tstats searches per index group). A pair seen in that period but not in the discovery window is kept as stale instead of not found. 0 disables. Default 30. D-070.
+field_profile = <boolean>
+* Profile field fill and placeholder rates for the fields the active catalogue
+* requires, one search per sourcetype over the last 24 hours (D-070). Readiness
+* uses the stored rates to tell a present field from an empty one. Default true.
+profile_max_sourcetypes = <integer 0-200>
+* Sourcetypes profiled per job, most used by the catalogue first. Default 20.
+profile_max_fields = <integer 1-200>
+* Fields profiled per sourcetype. Default 60.
+profile_sample_events = <integer 100-10000>
+* Events sampled per sourcetype (head of the 24-hour window). Default 1000.
+profile_timeout_seconds = <integer 10-600>
+* Timeout for each profile search. Default 60.
+profile_budget_seconds = <integer 30-3600>
+* Total time one job may spend profiling. Remaining sourcetypes are reported as skipped. Default 300.
+profile_placeholders = <comma-separated strings>
+* Values treated as placeholders (for example "-", "N/A") when computing placeholder rates.
+* Empty uses the built-in list: -, N/A, n/a, null, NULL, unknown, none, 0.0.0.0.
 populated_check = <boolean>
 * Check whether installed data models hold events (issue #13). For each selected model
 * discovery runs one `| tstats count from datamodel=<model> where earliest=-24h` with the

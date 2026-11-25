@@ -2010,13 +2010,24 @@ as drift.
   window, future-dated sources, and active sourcetypes that no requirement and no mapping names
   (the review list for unmapped sourcetypes). Every list is capped at 50 and says so. Readable by
   every app user, like the other read routes; it reads no raw events.
-* Not done in 0.9.4 (scoped out of this release, and listed as open): the field-profile job
-  (`uc_field_profile`, fill and placeholder rates, `missing_fields`; F-07), the "open in search" link
-  with resolution hints (F-19), and the CIM field reference. They need a scheduled job with its own
-  index-access and cost cap and a new collection, which this release does not add.
+* **Decision, field profile (`discovery/profile.py`, collection `uc_field_profile`; F-07).** Discovery
+  profiles the fields that active use cases require, one search per sourcetype, against the index that
+  holds most of its events in the discovery window. Each search takes the newest `profile_sample_events`
+  (default 1000) events of the last 24 hours and counts, per field, the events where the field is
+  present and non-blank (fill rate) and where it holds a placeholder (`-`, `N/A`, `0.0.0.0`, ... configurable).
+  Only counts, rates and the sample size are stored; no event value leaves the search. Bounds:
+  `profile_max_sourcetypes` (busiest first), `profile_max_fields`, `profile_timeout_seconds` per search and
+  `profile_budget_seconds` per job; anything beyond a bound is counted as skipped in the job totals
+  (`field_profile`). `field_profile = false` turns it off.
+* Readiness uses the stored rates as field evidence: a field with a fill rate below 0.5, or a placeholder
+  rate above 0.2, is treated as missing data and listed in `missing_fields`. A field that was never
+  profiled stays unverified. Readiness reads the last profile; it does not run a search.
+* Not done in 0.9.4 (listed as open): the "open in search" link with resolution hints (F-19) and the CIM
+  field reference. They need their own review of what the drilldown may run.
 * Evidence: `tests/unit/test_data_evidence.py`, `test_freshness.py`, `test_environment_health.py`,
-  `test_populated.py` (summary search); the lab check above. The field profile is the largest gap
-  left in the data-evidence dimension.
+  `test_populated.py` (summary search), `test_field_profile.py`; the lab check above, which ran the
+  profile search against `_internal` `splunkd` on Splunk 10.2.9 (`tests/live/test_live_splunk.py`
+  `LiveFieldProfileTest`).
 
 ## D-071 Licence: Apache License 2.0 for SUNavigator's own code, content and documentation
 
