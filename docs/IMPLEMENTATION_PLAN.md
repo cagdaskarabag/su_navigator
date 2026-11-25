@@ -235,11 +235,11 @@ Not built in WP9, with the reason (details in `docs/FINAL_REPORT.md`):
 | ES / ESCU hand-off (0.9.1) | ✅ mocked app lists and stanza states (ES present, ES disabled, 403, unreadable, non-admin, renamed stanza), name mapping, cache, draft record | ✅ ESCU 6.11.1 without ES: version, real stanza state, schedule, actions, not-found, viewer view | ⬜ | ⬜ |
 | ES installed (0.9.1) | ✅ mocked only | ⬜ no ES lab; not planned (D-078) | ⬜ | ⬜ |
 | CIM data model populated check (0.9.1) | ✅ yes, no, timeout, failure, cap, budget, setting off, invalid name | ✅ temporary models: yes, no, not referenced, setting off; the lab has no CIM add-on, so no real CIM model was checked | ⬜ | ⬜ |
-| Sprints 13 to 20 (0.9.2 to 0.10.0), all areas | ✅ 1026 unit tests, 11+ Node suites | ✅ full lab live suite: 77 tests OK, 2 skipped (Splunk 10.2.9) | ⬜ not planned | ⬜ not planned |
+| Sprints 13 to 21 (0.9.2 to 0.11.0), all areas | ✅ 1074 unit tests, 11+ Node suites | ✅ full lab live suite: 78 tests OK, 2 skipped (Splunk 10.2.9) | ⬜ not planned | ⬜ not planned |
 | Operational health, data evidence, freshness (0.9.3, 0.9.4) | ✅ | ✅ `LiveDispatchHealthTest`, `LiveFieldProfileTest` (profile search on `_internal`), `LivePopulatedTest` | ⬜ | ⬜ |
 | ESCU enrichment, event-level check (0.9.6) | ✅ | ✅ `LiveSecurityContentTest`, `LiveEventCheckTest` (ESCU 6.11.1 is the only add-on on the lab) | ⬜ | ⬜ |
 | Brownfield matching, graded coverage (0.9.7) | ✅ | ✅ `LiveExternalMatchTest` | ⬜ | ⬜ |
 | Audit chain, lifecycle refinements (0.9.8) | ✅ | ✅ `LiveLifecycleRefinementsTest` | ⬜ | ⬜ |
 | Control catalogues (0.9.9) | ✅ builder and validation | ✅ `LiveControlCatalogueTest` | ⬜ | ⬜ |
 | Assessments, POA&M, snapshots (0.10.0) | ✅ 42 unit tests, 10 Node tests | ✅ `LiveAssessmentTest` (6 tests): record, derive status, POA&M, snapshot integrity, RBAC | ⬜ | ⬜ |
-| Packaging (0.10.0) | n/a | ✅ AppInspect `cloud` tag: 0 errors, 0 failures, 4 warnings | n/a | ⬜ vetting not planned |
+| Packaging (0.11.0) | n/a | ✅ AppInspect `cloud` tag: 0 errors, 0 failures, 4 warnings | n/a | ⬜ vetting not planned |

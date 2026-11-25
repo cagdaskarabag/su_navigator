@@ -1,17 +1,17 @@
-# Final report: Sprints 13 to 20 (0.9.2 to 0.10.0)
+# Final report: Sprints 13 to 21 (0.9.2 to 0.11.0)
 
-*Status at 0.10.0, build 22, 2026-11-25. Everything below was checked against `main` and the lab results
+*Status at 0.11.0, build 23, 2026-11-25. Everything below was checked against `main` and the lab results
 recorded in `docs/IMPLEMENTATION_PLAN.md`.*
 
 ## 1. State of the repository
 
 | Item | State |
 |---|---|
-| `main` | version 0.10.0, build 22 (`app.conf` and `app.manifest` agree); every remote feature branch is merged |
-| Unit tests | 1026 passed (mocked, plus Node tests of the browser modules) |
-| Lab live suite | 77 tests OK, 2 skipped, Splunk Enterprise 10.2.9, single instance |
+| `main` | version 0.11.0, build 23 (`app.conf` and `app.manifest` agree); every remote feature branch is merged |
+| Unit tests | 1074 passed (mocked, plus Node tests of the browser modules) |
+| Lab live suite | 78 tests OK, 2 skipped, Splunk Enterprise 10.2.9, single instance |
 | AppInspect (`cloud` tag, precert) | 0 errors, 0 failures, 4 warnings |
-| Release tag | `v0.10.0` (earlier tags stop at `v0.7.3`; `0.8.0` to `0.9.9` were not tagged) |
+| Release tag | `v0.11.0` (`v0.10.0` before it; earlier tags stop at `v0.7.3`, and `0.8.0` to `0.9.9` were not tagged) |
 | Licence | Apache License 2.0 for SUNavigator's own code, content and documentation (D-071); third-party notices in `THIRD_PARTY_NOTICES.md` |
 
 The README version badge showed `0.9.x` after the release because it was a hand-written static badge that no
