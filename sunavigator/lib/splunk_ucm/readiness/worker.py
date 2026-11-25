@@ -10,6 +10,7 @@ from ..storage.jobs import job_problem, reject
 from ..storage.kvstore import DocumentStore
 from ..storage.transport import SplunkdTransport
 from ..util import utc_now
+from . import ENGINE_VERSION
 from .principal import read_principal
 from .evaluators import EvaluationSettings
 from .scoring import ScoringSettings
@@ -70,7 +71,8 @@ class ReadinessWorker:
         if state.get("last_attempt_status") == JOB_FAILED and state.get("last_attempt_at", "") >= max(
                 disc.get("last_completed_at", ""), content_at):
             return None
-        if state.get("discovery_at") == disc.get("last_completed_at") and state.get("content_at", "") >= content_at:
+        if (state.get("discovery_at") == disc.get("last_completed_at") and state.get("content_at", "") >= content_at
+                and state.get("engine_version") == ENGINE_VERSION):
             return None
         if self.service.next_queued() or self.service.jobs(JOB_RUNNING, 1):
             return None

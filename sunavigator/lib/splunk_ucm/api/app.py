@@ -22,6 +22,7 @@ from ..content.fenre.provider import check_ref_name, parse_allowed_refs
 from ..content.registry import remote_provider
 from ..content.reindex import ReindexService
 from ..content.sync import SyncService, SyncSettings, new_job
+from ..discovery.health import environment_health
 from ..discovery.inventory import SplunkInventory
 from ..discovery.mapping import MappingService
 from ..discovery.overlay import attach_environment
@@ -404,6 +405,10 @@ def get_inventory_coverage(ctx: Context, req: Request) -> Response:
     return Response(200, coverage(ctx.store))
 
 
+def get_environment_health(ctx: Context, req: Request) -> Response:
+    return Response(200, environment_health(ctx.store))
+
+
 def get_discovery(ctx: Context, req: Request) -> Response:
     svc = ctx.discovery_service()
     return Response(200, {
@@ -465,7 +470,7 @@ def post_mappings_delete(ctx: Context, req: Request) -> Response:
 
 def get_readiness(ctx: Context, req: Request) -> Response:
     f = ReadinessFilter(
-        states=req.args("state"), domains=req.args("domain"), criticality=req.args("criticality"),
+        states=req.args("state"), data_states=req.args("data_state"), domains=req.args("domain"), criticality=req.args("criticality"),
         category_keys=req.args("category"), q=req.arg("q").strip(), sort=req.arg("sort", "score"),
         offset=_int(req.arg("offset"), 0, "offset"), count=_int(req.arg("count"), 25, "count"),
         with_total=req.arg("total", "1") != "0")
@@ -804,6 +809,7 @@ def build_router() -> Router:
     router.add("GET", "audit", get_audit)
     router.add("GET", "inventory", get_inventory)
     router.add("GET", "inventory/coverage", get_inventory_coverage)
+    router.add("GET", "environment/health", get_environment_health)
     router.add("GET", "discovery", get_discovery)
     router.add("POST", "discovery", post_discovery)
     router.add("GET", "mappings", get_mappings)

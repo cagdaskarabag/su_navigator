@@ -17,6 +17,7 @@ from ..storage.repositories import CategoryRepository, ContentRepository
 from ..util import new_id, utc_now_iso
 from . import ENGINE_VERSION
 from .evaluators import EvaluationSettings, evaluate
+from .evidence import data_evidence
 from .principal import PRINCIPAL_NO_OWNER, PRINCIPAL_UNREADABLE, PrincipalAccess, scan_spl
 from .scoring import ScoringSettings, score
 from .snapshot import EnvironmentSnapshot
@@ -78,6 +79,7 @@ def assess_use_case(uc: UseCase, snap: EnvironmentSnapshot, settings: ReadinessS
             row["any_of"] = list(req.attributes["any_of"])
         results.append(row)
     summary = score(results, settings.scoring)
+    evidence = data_evidence(results)
     return {
         "_key": uc.key, "doc_schema": DOC_SCHEMA, "content_id": uc.content_id,
         "record_id": uc.provenance.provider_record_id, "title": uc.title,
@@ -88,6 +90,7 @@ def assess_use_case(uc: UseCase, snap: EnvironmentSnapshot, settings: ReadinessS
         "coverage": summary["coverage"], "blockers": summary["blockers"], "gaps": summary["gaps"],
         "counts": summary["counts"], "unverified": summary["unverified"],
         "requirement_count": len(results), "results": results,
+        "data_state": evidence["state"], "data_evidence": evidence,
         "engine_version": ENGINE_VERSION, "evaluated_at": utc_now_iso(),
         "discovery_at": snap.discovered_at, "discovery_job_id": snap.discovery.get("last_completed_job_id"),
         "source_hash": uc.provenance.source_hash,
@@ -205,7 +208,7 @@ class ReadinessService:
         state.update({"last_attempt_at": job["finished_at"], "last_attempt_status": job["status"],
                       "totals": job.get("totals")})
         if job["status"] == JOB_SUCCEEDED:
-            state.update({"last_success_at": job["finished_at"],
+            state.update({"last_success_at": job["finished_at"], "engine_version": ENGINE_VERSION,
                           "discovery_at": job.get("discovery_at"),
                           "content_at": job.get("content_at")})
         self._save_state(state)

@@ -17,7 +17,7 @@ from .keys import source_key
 from .mapping import MappingService
 from .populated import WINDOW, PopulatedSettings, check_models, summarize
 from .repositories import DiscoveryStateRepository, SourceRepository
-from .spl import tstats_searches, validate_index_name, validate_time
+from .spl import chunk_indexes, tstats_future, tstats_searches, tstats_volume, validate_index_name, validate_time
 
 log = get_logger(__name__)
 
@@ -35,6 +35,7 @@ class DiscoverySettings:
     max_pairs: int = 5000
     search_timeout: int = 120
     job_timeout_seconds: int = 600
+    freshness_days: int = 30
     populated: PopulatedSettings = dataclasses.field(default_factory=PopulatedSettings)
 
 
@@ -117,6 +118,7 @@ class DiscoveryService:
             validate_index_name(name)
 
         pairs, truncated, search_errors, searched = self._tstats(event_indexes, earliest, latest)
+        freshness = self._freshness(event_indexes, pairs, searched)
         populated = check_models(self.search, models, self._referenced_models(), self.settings.populated)
         imported = utc_now_iso()
         now = self.now_epoch()
@@ -156,6 +158,7 @@ class DiscoveryService:
             "knowledge_objects": len(knowledge),
             "populated": summarize(populated, self.settings.populated.enabled),
             "missing": missing, "truncated": truncated, "auto_mappings": auto,
+            "freshness": freshness,
         }
         job["totals"] = totals
         job["results"] = {"eligible_indexes": event_indexes[:200]}
@@ -192,6 +195,54 @@ class DiscoveryService:
         except Exception as exc:
             log.warning("referenced data models could not be read", extra={"error": str(exc)[:200]})
         return sorted(names)
+
+    def _freshness(self, indexes: Sequence[str], pairs: List[Dict[str, Any]], searched: set) -> Dict[str, Any]:
+        """Add 30-day volume and future-dated counts to ``pairs``; append pairs seen only before the window.
+
+        Pairs found only by the longer pass are kept with ``window_count`` 0 and ``stale_from_start``,
+        so a source that stopped before the window reads as stale instead of not found. A failed
+        pass changes nothing and is reported in the totals; it never makes the job partial.
+        """
+        days = int(self.settings.freshness_days or 0)
+        out: Dict[str, Any] = {"enabled": days > 0, "days": days, "stale_from_start": 0, "future_dated": 0,
+                               "future_only": [], "errors": 0}
+        if days <= 0 or not indexes:
+            return out
+        by_pair = {(p["index"], p["sourcetype"]): p for p in pairs}
+        volume: Dict[tuple, Dict[str, Any]] = {}
+        future: Dict[tuple, Dict[str, Any]] = {}
+        for group in chunk_indexes([i for i in indexes if i in searched]):
+            for target, spl in ((volume, tstats_volume(group, days)), (future, tstats_future(group))):
+                try:
+                    result = self.search.oneshot(spl, timeout=float(self.settings.search_timeout),
+                                                 max_count=self.settings.max_pairs)
+                except UcmError:
+                    out["errors"] += 1
+                    continue
+                for row in result.rows:
+                    parsed = _parse_tstats_row(row)
+                    if parsed:
+                        target[(parsed["index"], parsed["sourcetype"])] = parsed
+        for key, row in volume.items():
+            pair = by_pair.get(key)
+            if pair is None:
+                if len(pairs) >= self.settings.max_pairs:
+                    continue
+                pair = dict(row, window_count=0, stale_from_start=True)
+                pairs.append(pair)
+                by_pair[key] = pair
+                out["stale_from_start"] += 1
+            pair["volume_30d"] = row["window_count"]
+        for key, row in future.items():
+            pair = by_pair.get(key)
+            if pair is None:
+                if len(out["future_only"]) < 20:
+                    out["future_only"].append({"index": key[0], "sourcetype": key[1], "count": row["window_count"]})
+                continue
+            pair["future_count"] = row["window_count"]
+            pair["future_last_time"] = row["last_time"]
+            out["future_dated"] += 1
+        return out
 
     def _tstats(self, indexes: Sequence[str], earliest: str, latest: str):
         pairs: List[Dict[str, Any]] = []
@@ -268,8 +319,12 @@ def _age(last_time: Optional[int], now: float) -> Optional[int]:
 def _index_docs(indexes, pairs, now, imported, job_id) -> List[Dict[str, Any]]:
     window = {}
     last = {}
+    volume: Dict[str, int] = {}
+    future: Dict[str, int] = {}
     for p in pairs:
         window[p["index"]] = window.get(p["index"], 0) + p["window_count"]
+        volume[p["index"]] = volume.get(p["index"], 0) + int(p.get("volume_30d") or 0)
+        future[p["index"]] = future.get(p["index"], 0) + int(p.get("future_count") or 0)
         prev = last.get(p["index"])
         if p["last_time"] is not None and (prev is None or p["last_time"] > prev):
             last[p["index"]] = p["last_time"]
@@ -282,7 +337,8 @@ def _index_docs(indexes, pairs, now, imported, job_id) -> List[Dict[str, Any]]:
             extra={"datatype": idx.get("datatype"), "is_internal": idx.get("is_internal"),
                    "disabled": idx.get("disabled"), "is_ready": idx.get("is_ready"),
                    "total_event_count": idx.get("total_event_count"),
-                   "min_time": idx.get("min_time"), "max_time": idx.get("max_time")},
+                   "min_time": idx.get("min_time"), "max_time": idx.get("max_time"),
+                   "volume_30d": volume.get(name, 0), "future_count": future.get(name, 0)},
             window_count=window.get(name, 0), last_time=last_time, now=now,
             imported=imported, job_id=job_id, identity=(name,)))
     return docs
@@ -293,7 +349,10 @@ def _pair_docs(pairs, now, imported, job_id) -> List[Dict[str, Any]]:
     for p in pairs:
         docs.append(_doc(
             kind="pair", name="%s / %s" % (p["index"], p["sourcetype"]),
-            index=p["index"], sourcetype=p["sourcetype"], extra={},
+            index=p["index"], sourcetype=p["sourcetype"],
+            extra={"volume_30d": p.get("volume_30d"), "future_count": p.get("future_count") or 0,
+                   "future_last_time": p.get("future_last_time"),
+                   "stale_from_start": bool(p.get("stale_from_start"))},
             window_count=p["window_count"], last_time=p["last_time"], first_time=p["first_time"],
             now=now, imported=imported, job_id=job_id, identity=(p["index"], p["sourcetype"])))
     return docs
@@ -330,6 +389,8 @@ def _model_docs(models, imported, job_id, populated=None) -> List[Dict[str, Any]
             doc.update({"populated": outcome["populated"], "populated_reason": outcome["reason"],
                         "populated_count": outcome["count"], "populated_window": WINDOW,
                         "populated_at": imported})
+            if "summary_count" in outcome:
+                doc["summary_count"] = outcome["summary_count"]
         docs.append(doc)
     return docs
 
@@ -342,7 +403,7 @@ def _knowledge_docs(objects, imported, job_id) -> List[Dict[str, Any]]:
         doc = _doc(
             kind=obj["kind"], name=obj["name"], index="", sourcetype="",
             extra={"app": obj.get("app"), "sharing": obj.get("sharing"),
-                   "lookup_type": obj.get("lookup_type") or None},
+                   "lookup_type": obj.get("lookup_type") or None, "definition": obj.get("definition")},
             window_count=0, last_time=None, now=0, imported=imported, job_id=job_id,
             identity=(obj["name"], obj.get("app") or ""))
         docs[doc["_key"]] = doc

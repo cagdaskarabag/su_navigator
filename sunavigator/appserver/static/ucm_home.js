@@ -202,7 +202,8 @@ function ucmViewMain($, ucm) {
     var FLAG_LABEL = { in_backlog: "In your backlog", deferred: "You deferred this", bookmarked: "You bookmarked this" };
     var EXCLUDED_LABEL = { not_in_active_catalogue: "not in the active catalogue", already_deployed: "already deployed",
         rejected_by_you: "rejected by you", blocked: "blocked", not_ready: "not ready", insufficient_evidence: "insufficient evidence",
-        has_blockers: "with unmet critical requirements", quality_flagged: "left out by the review-quality option" };
+        has_blockers: "with unmet critical requirements", quality_flagged: "left out by the review-quality option",
+        no_data_seen: "with no data seen for what they read" };
     var QUALITY_OPTION = ["ai_reviewed", "unreviewed"];
     var PART_LABEL = [["readiness", "readiness score"], ["criticality", "criticality"], ["mitre_gain", "new MITRE coverage"],
         ["coverage", "requirement coverage"]];

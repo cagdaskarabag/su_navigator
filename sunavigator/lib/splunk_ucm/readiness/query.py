@@ -8,11 +8,12 @@ from ..errors import ValidationError
 from ..model.canonical import CRITICALITY_RANK, DOMAINS
 from ..storage import collections as C
 from ..storage.kvstore import DocumentStore
+from .evidence import DATA_STATES
 from .scoring import STATES
 
 LIST_FIELDS = ("_key", "content_id", "record_id", "title", "category_key", "category_name", "domains",
                "criticality", "state", "score", "coverage", "blockers", "gaps", "counts", "unverified",
-               "requirement_count", "evaluated_at", "discovery_at", "engine_version", "source_hash")
+               "requirement_count", "data_state", "data_evidence", "evaluated_at", "discovery_at", "engine_version", "source_hash")
 SORTS = {
     "score": [("score_sort", -1), ("criticality_rank", -1), ("_key", 1)],
     "score_asc": [("score_sort", 1), ("criticality_rank", -1), ("_key", 1)],
@@ -26,6 +27,7 @@ _TOKEN_RE = re.compile(r"^[^\x00-\x1f]{1,200}$")
 @dataclasses.dataclass
 class ReadinessFilter:
     states: Sequence[str] = ()
+    data_states: Sequence[str] = ()
     domains: Sequence[str] = ()
     criticality: Sequence[str] = ()
     category_keys: Sequence[str] = ()
@@ -49,6 +51,11 @@ def build_query(f: ReadinessFilter) -> Dict[str, Any]:
             raise ValidationError("invalid state", {"allowed": list(STATES)})
     if f.states:
         clauses.append(_in("state", list(f.states)))
+    for value in f.data_states:
+        if value not in DATA_STATES:
+            raise ValidationError("invalid data state", {"allowed": list(DATA_STATES)})
+    if f.data_states:
+        clauses.append(_in("data_state", list(f.data_states)))
     for value in f.domains:
         if value not in DOMAINS:
             raise ValidationError("invalid domain")
@@ -96,6 +103,7 @@ class ReadinessQueryService:
 
     def summary(self) -> Dict[str, Any]:
         by_state = {s: self.store.count(C.READINESS, {"state": s}) for s in STATES}
+        by_data_state = {s: self.store.count(C.READINESS, {"data_state": s}) for s in DATA_STATES}
         blockers: Dict[str, int] = {}
         gaps: Dict[str, int] = {}
         for row in self.store.query(C.READINESS, {"$or": [{"state": "blocked"}, {"state": "not_ready"},
@@ -109,6 +117,6 @@ class ReadinessQueryService:
                 gaps[k] = gaps.get(k, 0) + 1
         top_gaps = sorted(gaps.items(), key=lambda kv: (-kv[1], kv[0]))[:15]
         top_blockers = sorted(blockers.items(), key=lambda kv: (-kv[1], kv[0]))[:15]
-        return {"by_state": by_state, "total": sum(by_state.values()),
+        return {"by_state": by_state, "total": sum(by_state.values()), "by_data_state": by_data_state,
                 "top_gaps": [{"requirement": k, "use_cases": v} for k, v in top_gaps],
                 "top_blockers": [{"requirement": k, "use_cases": v} for k, v in top_blockers]}

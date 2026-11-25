@@ -5,8 +5,8 @@ records: the readiness result, the catalogue entry, the deployments and the call
 own selections. Nothing is estimated, nothing is learned and nothing is written.
 
 Eligible: an active catalogue entry with a ``uc_readiness`` row whose state is ``ready`` or
-``partially_ready`` without blockers, that the calling user has not rejected and that is not
-already deployed. "Deployed" is decided by ``CoverageService.use_case_levels`` (a
+``partially_ready`` without blockers, that the calling user has not rejected, that is not
+already deployed and whose data evidence is not ``none`` (D-070: checked and not seen). "Deployed" is decided by ``CoverageService.use_case_levels`` (a
 ``uc_deployments`` row with ``deployed_revision >= 1``, enabled or not), so this list and the
 coverage matrix cannot disagree.
 
@@ -24,9 +24,10 @@ from ..frameworks.coverage import CoverageService
 from ..model.canonical import CRITICALITY_RANK
 from ..storage import collections as C
 from ..storage.kvstore import DocumentStore
+from .evidence import DATA_NONE, summary_line
 from .scoring import STATE_BLOCKED, STATE_INSUFFICIENT, STATE_NOT_READY, STATE_PARTIAL, STATE_READY
 
-FORMULA_VERSION = "ucm.recommend/1"
+FORMULA_VERSION = "ucm.recommend/2"
 WEIGHTS = {"readiness": 0.40, "criticality": 0.25, "mitre_gain": 0.20, "coverage": 0.15}
 MAX_ITEMS = 10
 DEPLOYED_LEVELS = ("deployed", "enabled", "operational")
@@ -34,7 +35,8 @@ IN_PROGRESS = ("draft", "pending_approval", "approved")
 MAX_MITRE_LISTED = 5
 _PAGE = 5000
 _READINESS_FIELDS = ["_key", "content_id", "record_id", "title", "state", "score", "coverage", "blockers", "gaps",
-                     "counts", "unverified", "requirement_count", "criticality", "criticality_rank", "domains"]
+                     "counts", "unverified", "requirement_count", "criticality", "criticality_rank", "domains",
+                     "data_state", "data_evidence"]
 
 EMPTY_NO_CATALOGUE = "no_catalogue"
 EMPTY_NO_DISCOVERY = "no_discovery"
@@ -128,7 +130,8 @@ class RecommendationService:
         deployments = self._deployment_states()
         covered = self._covered_techniques(levels)
         excluded = {"not_in_active_catalogue": 0, "already_deployed": 0, "rejected_by_you": 0,
-                    "blocked": 0, "not_ready": 0, "insufficient_evidence": 0, "has_blockers": 0, "quality_flagged": 0}
+                    "blocked": 0, "not_ready": 0, "insufficient_evidence": 0, "has_blockers": 0, "quality_flagged": 0,
+                    "no_data_seen": 0}
         candidates: List[Dict[str, Any]] = []
         for key, state in assessed.items():
             if key not in levels:
@@ -156,6 +159,9 @@ class RecommendationService:
                 continue
             if key in flagged:
                 excluded["quality_flagged"] += 1
+                continue
+            if row.get("data_state") == DATA_NONE:
+                excluded["no_data_seen"] += 1
                 continue
             candidates.append(self._candidate(row, level, mine.get(key), deployments.get(key), covered))
         candidates.sort(key=lambda c: (0 if c["state"] == STATE_READY else 1, -c["draft_score"],
@@ -221,6 +227,7 @@ class RecommendationService:
             "requirements": row.get("requirement_count") or 0, "met": (row.get("counts") or {}).get("met", 0),
             "gaps": [{"type": g.get("type"), "value": g.get("value")} for g in (row.get("gaps") or [])[:3]],
             "flags": flags, "deployment_state": deployment_state, "_key": row["_key"],
+            "data_state": row.get("data_state"), "data_evidence": row.get("data_evidence"),
         }
 
     def _with_reasons(self, c: Dict[str, Any]) -> Dict[str, Any]:
@@ -248,6 +255,8 @@ class RecommendationService:
             reasons.append("No requirements are left unverified.")
         if c["gaps"]:
             reasons.append("Unmet required: %s." % ", ".join("%s %s" % (g["type"], g["value"]) for g in c["gaps"]))
+        if c.get("data_evidence"):
+            reasons.append(summary_line(c["data_evidence"]))
         reasons.extend(_data_model_reasons(doc.get("results") or []))
         c["reasons"] = reasons
         return c

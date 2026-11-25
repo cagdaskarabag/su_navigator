@@ -73,6 +73,8 @@ search_timeout_seconds = <integer>
 job_timeout_seconds = <integer>
 schedule_interval_hours = <integer>
 * 0 disables scheduled discovery.
+freshness_days = <integer 0-365>
+* Discovery also counts events per index and sourcetype over this many days and the events time-stamped more than five minutes in the future (two tstats searches per index group). A pair seen in that period but not in the discovery window is kept as stale instead of not found. 0 disables. Default 30. D-070.
 populated_check = <boolean>
 * Check whether installed data models hold events (issue #13). For each selected model
 * discovery runs one `| tstats count from datamodel=<model> where earliest=-24h` with the

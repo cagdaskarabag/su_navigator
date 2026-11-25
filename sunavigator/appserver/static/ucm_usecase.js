@@ -221,6 +221,13 @@ function ucmViewMain($, ucm) {
             el("div", { "class": "ucm-sub", text: ucm.resultSummary(counts, rd.unverified) +
                 ". Evaluated " + rd.evaluated_at + " UTC against discovery " +
                 (rd.discovery_at || "–") + "." }),
+            rd.data_evidence ? el("div", { "class": "ucm-readiness-head" },
+                el("strong", { text: "Data" }), ucm.dataBadge(rd.data_state),
+                el("span", { "class": "ucm-sub", text: rd.data_evidence.seen + " seen, " +
+                    (rd.data_evidence.missing_count + rd.data_evidence.stale_count) + " missing or stale, " +
+                    rd.data_evidence.unverified + " not verified" +
+                    ((rd.data_evidence.missing || []).length ? ": " + rd.data_evidence.missing.slice(0, 3).map(function (m) {
+                        return m.type + " " + m.value; }).join(", ") : "") + ". Does not change the readiness state or score." })) : null,
             rd.blockers && rd.blockers.length ? el("div", {}, el("strong", { text: "Blocked by critical requirement: " }),
                 rd.blockers.map(function (b) { return ucm.badge(b.type + ": " + b.value, "critical"); })) : null,
             rd.gaps && rd.gaps.length ? el("div", {}, el("strong", { text: "Unmet required: " }),

@@ -17,13 +17,15 @@ function ucmViewMain($, ucm) {
     var root = document.getElementById("ucm-readiness");
     var PAGE = 25;
     var params = ucm.queryParams();
-    var state = { state: params.state || "", domain: params.domain || "", criticality: params.criticality || "",
+    var state = { state: params.state || "", data_state: params.data_state || "", domain: params.domain || "", criticality: params.criticality || "",
         q: params.q || "", sort: params.sort || "score", offset: parseInt(params.offset || "0", 10) || 0 };
     var pollTimer = null;
     var activeTotal = null;
     var COLUMNS = [
         ["Use case"], ["Criticality"],
         ["State", "Overall readiness from the requirement checks. Hover a state badge for its rule."],
+        ["Data", "Whether the data the search reads was observed: events for its sourcetypes and indexes, populated data " +
+            "models, sampled fields. Separate from readiness; it never changes the state or score (D-070)."],
         ["Score", "Weighted share of the decided requirements: met counts 1, partial 0.5, not met and unknown 0. " +
             "Weight is the requirement level (critical 3, required 2, recommended 1) times its confidence. " +
             "Not verified and n/a requirements are left out."],
@@ -39,6 +41,7 @@ function ucmViewMain($, ucm) {
     function howToRead() {
         return el("div", { "class": "ucm-section" },
             ucm.legend("How to read this page: readiness states", ucm.READINESS_STATES, ucm.readinessBadge, ucm.READINESS_HELP),
+            ucm.legend("How to read this page: data evidence", ucm.DATA_STATES, ucm.dataBadge, ucm.DATA_HELP),
             ucm.legend("How to read this page: requirement statuses", ucm.STATUSES, ucm.statusBadge, ucm.STATUS_HELP));
     }
 
@@ -118,6 +121,7 @@ function ucmViewMain($, ucm) {
                     el("div", { "class": "ucm-sub ucm-mono", text: it.content_id })),
                 el("td", {}, ucm.criticalityBadge(it.criticality)),
                 el("td", {}, ucm.readinessBadge(it.state)),
+                el("td", {}, ucm.dataBadge(it.data_state)),
                 el("td", {}, scoreCell(it)),
                 el("td", { text: Math.round((it.coverage || 0) * 100) + "%" }),
                 el("td", { "class": "ucm-sub" }, unmet.slice(0, 3).map(function (u) {
@@ -146,6 +150,7 @@ function ucmViewMain($, ucm) {
             el("div", { "class": "ucm-field" }, el("label", { text: "Search" }),
                 el("input", { "class": "ucm-search", id: "rd-q", type: "search", value: state.q, placeholder: "id or title" })),
             select("rd-state", "State", ucm.READINESS_STATES, state.state),
+            select("rd-data", "Data", ucm.DATA_STATES, state.data_state),
             select("rd-domain", "Domain", ucm.DOMAINS, state.domain),
             select("rd-crit", "Criticality", ucm.CRITICALITY, state.criticality),
             el("div", { "class": "ucm-field" }, el("label", { text: "Sort" }),
@@ -157,8 +162,9 @@ function ucmViewMain($, ucm) {
 
     function bindToolbar() {
         $("#rd-q").on("input", ucm.debounce(function () { state.q = $("#rd-q").val(); state.offset = 0; loadTable(); }, 300));
-        $("#rd-state, #rd-domain, #rd-crit, #rd-sort").on("change", function () {
+        $("#rd-state, #rd-data, #rd-domain, #rd-crit, #rd-sort").on("change", function () {
             state.state = $("#rd-state").val();
+            state.data_state = $("#rd-data").val();
             state.domain = $("#rd-domain").val();
             state.criticality = $("#rd-crit").val();
             state.sort = $("#rd-sort").val();
@@ -169,7 +175,7 @@ function ucmViewMain($, ucm) {
 
     function loadTable() {
         var p = { sort: state.sort, offset: state.offset, count: PAGE };
-        ["state", "domain", "criticality", "q"].forEach(function (k) { if (state[k]) { p[k] = state[k]; } });
+        ["state", "data_state", "domain", "criticality", "q"].forEach(function (k) { if (state[k]) { p[k] = state[k]; } });
         ucm.setQueryParams(state);
         var box = document.getElementById("rd-table");
         ucm.get("readiness", p).done(function (data) {
