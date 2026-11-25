@@ -23,6 +23,8 @@ _REG_ID = re.compile(r"^[a-z0-9][a-z0-9\-]{0,63}$")
 _CONTROL_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._()\-]{0,47}$")
 _NIST53 = re.compile(r"^([A-Z]{2})-0*(\d+)(?:[(.]0*(\d+)\)?)?$")
 MAX_UNMATCHED = 300
+MAX_OBJECTIVES = 200
+_OBJECTIVE_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._\-\[\]]{0,63}$")
 
 
 def canonical(clause: str, rule: str) -> str:
@@ -84,8 +86,23 @@ def validate_controls_definition(doc: Dict[str, Any]) -> Dict[str, Any]:
                                  "parent": parent, "kind": kind}
         if item.get("withdrawn") is True:
             entry["withdrawn"] = True
+        if item.get("objectives") is not None:
+            entry["objectives"] = _objectives(ident, item["objectives"])
+        if item.get("weight") is not None:
+            weight = item["weight"]
+            if isinstance(weight, bool) or not isinstance(weight, int) or not 0 <= weight <= 10:
+                raise ValidationError("control %s has an invalid weight" % ident)
+            entry["weight"] = weight
+            partial = item.get("partial_weight")
+            if partial is not None:
+                if isinstance(partial, bool) or not isinstance(partial, int) or not 0 < partial < weight:
+                    raise ValidationError("control %s has an invalid partial_weight" % ident)
+                entry["partial_weight"] = partial
+            if item.get("precondition") is True:
+                entry["precondition"] = True
         controls.append(entry)
-    return {
+    scoring = _scoring(doc.get("scoring"), controls)
+    out = {
         "format": FORMAT_V2, "kind": "controls", "framework_id": fw_id,
         "framework": str(doc.get("framework") or fw_id)[:64], "name": _text(doc.get("name"), "name", 200),
         "regulation_ids": [str(r) for r in regs], "version": ".".join(str(n) for n in sort_key),
@@ -94,6 +111,37 @@ def validate_controls_definition(doc: Dict[str, Any]) -> Dict[str, Any]:
         "source": str(doc.get("source") or "")[:500], "source_sha256": str(doc.get("source_sha256") or "")[:64],
         "attribution": str(doc.get("attribution") or "")[:1000], "controls": controls,
     }
+    if scoring:
+        out["scoring"] = scoring
+    return out
+
+
+def _objectives(ident: str, items: Any) -> List[Dict[str, str]]:
+    if not isinstance(items, list) or len(items) > MAX_OBJECTIVES:
+        raise ValidationError("control %s has an invalid objectives list" % ident)
+    out, seen = [], set()
+    for item in items:
+        if not isinstance(item, dict) or not _OBJECTIVE_ID.match(str(item.get("id") or "")) or item["id"] in seen:
+            raise ValidationError("control %s has an invalid or repeated objective id" % ident)
+        seen.add(item["id"])
+        out.append({"id": item["id"], "text": _text(item.get("text"), "objective text", 1000)})
+    return out
+
+
+def _scoring(raw: Any, controls: List[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+    if raw is None:
+        return None
+    if not isinstance(raw, dict) or not isinstance(raw.get("start"), int) or isinstance(raw.get("start"), bool) \
+            or not 0 < raw["start"] <= 10000:
+        raise ValidationError("scoring needs a whole number start")
+    if not any("weight" in c for c in controls):
+        raise ValidationError("scoring needs controls with weights")
+    return {"method": _text(raw.get("method"), "scoring method", 60), "start": raw["start"],
+            "note": str(raw.get("note") or "")[:1000]}
+
+
+def assessable(control: Dict[str, Any]) -> bool:
+    return control["kind"] in ASSESSED and not control.get("withdrawn")
 
 
 def catalogue_coverage(definition: Dict[str, Any], levels: Dict[str, Dict[str, Any]]) -> Dict[str, Any]:
@@ -130,6 +178,10 @@ def catalogue_coverage(definition: Dict[str, Any], levels: Dict[str, Dict[str, A
                "use_cases": e["use_cases"], "clauses": e["clauses"], "mapped": e["counts"]["catalogue"] > 0,
                "gap": (c["kind"] in ASSESSED and not c.get("withdrawn") and _RANK[e["level"] or "catalogue"] < _RANK["ready"]),
                "below": {"controls": 0, "mapped": 0, "ready": 0, "enabled": 0}}
+        if c.get("objectives"):
+            row["objective_count"] = len(c["objectives"])
+        if "weight" in c:
+            row["weight"] = c["weight"]
         rows.append(row)
         by_id[c["id"]] = row
     totals = {"controls": 0, "mapped": 0, "unmapped": 0, "ready": 0, "deployed": 0, "enabled": 0,

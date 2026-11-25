@@ -1,8 +1,9 @@
 """Reduce a NIST OSCAL catalogue to the app's control-catalogue format (``ucm.framework/2``).
 
 Input: an OSCAL catalogue JSON from https://github.com/usnistgov/oscal-content (SP 800-53 Rev 5, SP 800-171 Rev 3,
-CSF 2.0). Output: identifiers, titles, hierarchy and a withdrawn flag only. No control prose is copied, apart from the
-one-sentence CSF subcategory statement that serves as its title. Usage:
+CSF 2.0). Output: identifiers, titles, hierarchy and a withdrawn flag. No control prose is copied, apart from the
+one-sentence CSF subcategory statement that serves as its title and, for SP 800-171, the assessment objectives of each
+requirement (SP 800-171A), which the assessment feature needs. Usage:
 
     python3 tools/control_catalogue_builder.py nist-800-53 NIST_SP-800-53_rev5_catalog.json out/ [source-url]
 """
@@ -10,6 +11,7 @@ one-sentence CSF subcategory statement that serves as its title. Usage:
 import hashlib
 import json
 import os
+import re
 import sys
 from typing import Any, Dict, List, Optional
 
@@ -24,7 +26,7 @@ SPECS: Dict[str, Dict[str, Any]] = {
     "nist-800-171": {
         "framework": "NIST SP 800-171", "name": "NIST SP 800-171 Protecting Controlled Unclassified Information in "
         "Nonfederal Systems and Organizations", "version_label": "Rev. 3", "sort_key": [3], "kinds": ["family", "requirement"],
-        "match": "exact"},
+        "match": "exact", "objectives": True},
     "nist-csf": {
         "framework": "NIST CSF", "name": "NIST Cybersecurity Framework", "version_label": "2.0", "sort_key": [2, 0],
         "kinds": ["function", "category", "subcategory"], "match": "exact"},
@@ -43,6 +45,22 @@ def _statement(node: Dict[str, Any]) -> str:
         if part.get("name") == "statement" and isinstance(part.get("prose"), str):
             return part["prose"].strip()
     return ""
+
+
+_PARAM = re.compile(r"\{\{\s*insert:\s*param,\s*[^}]*\}\}")
+
+
+def objectives(node: Dict[str, Any]) -> List[Dict[str, str]]:
+    """Assessment objectives (SP 800-171A) of a requirement: id and the objective sentence, nothing else."""
+    out = []
+    for part in node.get("parts") or []:
+        if part.get("name") != "assessment-objective" or not isinstance(part.get("prose"), str):
+            continue
+        ident = str(part.get("id") or "").replace("assessment-objective_DS-", "").replace("assessment-objective_", "")
+        text = _PARAM.sub("[organization-defined value]", part["prose"]).strip()
+        if ident and text:
+            out.append({"id": ident, "text": text})
+    return sorted(out, key=lambda o: [int(x) if x.isdigit() else x for x in re.split(r"[.]", o["id"])])
 
 
 def display_id(framework_id: str, node: Dict[str, Any], depth: int) -> str:
@@ -69,6 +87,8 @@ def build(framework_id: str, catalog: Dict[str, Any], source: str = "", sha256: 
         entry: Dict[str, Any] = {"id": ident, "title": title, "parent": parent, "kind": kind}
         if _prop(node, "status") == "withdrawn":
             entry["withdrawn"] = True
+        if spec.get("objectives") and kind == "requirement" and objectives(node):
+            entry["objectives"] = objectives(node)
         out.append(entry)
         for child in sorted(node.get("controls") or [], key=lambda c: _prop(c, "sort-id") or str(c.get("id"))):
             visit(child, ident, depth + 1)
