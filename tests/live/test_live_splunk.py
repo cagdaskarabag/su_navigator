@@ -2076,3 +2076,54 @@ class LiveLifecycleRefinementsTest(unittest.TestCase):
         status, verify = api(self.admin, "GET", "audit/verify")
         self.assertTrue(verify["ok"], verify)
         self.act(self.operator, "retire")
+
+
+@unittest.skipUnless(LIVE, "set UCM_LIVE_SPLUNK=1 to run against a real Splunk instance")
+class LiveControlCatalogueTest(unittest.TestCase):
+    """D-076: bundled NIST catalogues are served from the installed app; an imported v2 definition round-trips the KV Store."""
+
+    FW = "ucm-live-catalogue"
+
+    @classmethod
+    def setUpClass(cls):
+        cls.admin = transport()
+        cls.kv = KVStore(cls.admin)
+
+    @classmethod
+    def tearDownClass(cls):
+        from splunk_ucm.frameworks.registry import definition_key
+        from splunk_ucm.util import safe_key
+        for version in ("98", "99"):
+            cls.kv.delete(C.FRAMEWORKS, definition_key(cls.FW, version))
+        cls.kv.delete(C.FRAMEWORKS, safe_key("active", cls.FW))
+
+    def test_bundled_catalogues_are_installed_and_served(self):
+        status, body = api(self.admin, "GET", "frameworks")
+        self.assertEqual(status, 200, body)
+        controls = {d["framework_id"]: d for d in body["definitions"] if d.get("kind") == "controls"}
+        self.assertTrue({"nist-800-53", "nist-800-171", "nist-csf"} <= set(controls), list(controls))
+        for fw, minimum in (("nist-800-53", 700), ("nist-800-171", 90), ("nist-csf", 100)):
+            status, cat = api(self.admin, "GET", "frameworks/catalogue", {"framework_id": fw})
+            self.assertEqual(status, 200, cat)
+            self.assertGreaterEqual(cat["totals"]["controls"], minimum, cat["totals"])
+            self.assertEqual(cat["totals"]["mapped"] + cat["totals"]["unmapped"], cat["totals"]["controls"])
+            self.assertIn("NIST", cat["catalogue"]["attribution"])
+        self.assertEqual(api(self.admin, "GET", "frameworks/matrix", {"framework_id": "nist-csf"})[0], 400)
+
+    def test_imported_definition_round_trips_and_orders_by_sort_key(self):
+        def definition(label, key):
+            return {"format": "ucm.framework/2", "kind": "controls", "framework_id": self.FW, "framework": "Live", "name": "Live catalogue",
+                    "regulation_ids": ["ucm-live"], "version_label": label, "sort_key": key, "match": "exact",
+                    "controls": [{"id": "A", "title": "Family A", "parent": None, "kind": "family"},
+                                 {"id": "A.1", "title": "First", "parent": "A", "kind": "control"}]}
+        for label, key in (("Edition ten", [99]), ("Edition nine", [98])):
+            status, body = api(self.admin, "POST", "frameworks/import", raw=json.dumps(definition(label, key)).encode("utf-8"))
+            self.assertEqual(status, 200, body)
+        status, body = api(self.admin, "GET", "frameworks/catalogue", {"framework_id": self.FW})
+        self.assertEqual((status, body["catalogue"]["version_label"], body["active_version"]), (200, "Edition ten", "99"), body)
+        self.assertEqual([v["label"] for v in body["versions"]], ["Edition nine", "Edition ten"])
+        self.assertEqual(body["totals"]["unmapped"], 1)
+        status, body = api(self.admin, "POST", "frameworks/activate", body={"framework_id": self.FW, "version": "98"})
+        self.assertEqual(status, 200, body)
+        status, body = api(self.admin, "GET", "frameworks/catalogue", {"framework_id": self.FW})
+        self.assertEqual(body["catalogue"]["version_label"], "Edition nine")

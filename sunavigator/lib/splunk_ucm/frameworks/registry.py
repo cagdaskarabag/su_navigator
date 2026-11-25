@@ -18,6 +18,7 @@ from ..storage import collections as C
 from ..storage.collections import DOC_SCHEMA
 from ..storage.kvstore import DocumentStore
 from ..util import safe_key, sha256_json, utc_now_iso
+from .controls import FORMAT_V2, validate_controls_definition
 
 DATA_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data")
 FORMAT = "ucm.framework/1"
@@ -40,8 +41,10 @@ def _text(value: Any, name: str, limit: int) -> str:
 
 def validate_definition(doc: Any) -> Dict[str, Any]:
     """Return a cleaned copy containing only known fields; raise on anything malformed."""
+    if isinstance(doc, dict) and doc.get("format") == FORMAT_V2:
+        return validate_controls_definition(doc)
     if not isinstance(doc, dict) or doc.get("format") != FORMAT:
-        raise ValidationError("definition must be a JSON object with format %s" % FORMAT)
+        raise ValidationError("definition must be a JSON object with format %s or %s" % (FORMAT, FORMAT_V2))
     fw_id = str(doc.get("framework_id") or "")
     if not _FW_ID.match(fw_id):
         raise ValidationError("invalid framework_id")
@@ -106,8 +109,14 @@ def definition_key(framework_id: str, version: str) -> str:
 
 
 def _summary(defn: Dict[str, Any], origin: str) -> Dict[str, Any]:
+    if defn.get("format") == FORMAT_V2:
+        return {"framework_id": defn["framework_id"], "framework": defn["framework"], "domain": "", "kind": "controls",
+                "name": defn["name"], "version": defn["version"], "version_label": defn["version_label"],
+                "modified": defn.get("modified", ""), "origin": origin, "controls": len(defn["controls"]),
+                "regulation_ids": defn["regulation_ids"], "attribution": defn.get("attribution", ""),
+                "tactics": 0, "techniques": 0}
     return {"framework_id": defn["framework_id"], "framework": defn["framework"], "domain": defn["domain"],
-            "name": defn["name"], "version": defn["version"], "modified": defn.get("modified", ""),
+            "name": defn["name"], "version": defn["version"], "modified": defn.get("modified", ""), "kind": "attack",
             "origin": origin, "tactics": len(defn["tactics"]), "techniques": len(defn["techniques"]),
             "attribution": defn.get("attribution", "")}
 
@@ -122,9 +131,12 @@ class FrameworkRegistry:
     def bundled(self) -> Dict[Tuple[str, str], Dict[str, Any]]:
         if self.data_dir != DATA_DIR or FrameworkRegistry._bundled_cache is None:
             out: Dict[Tuple[str, str], Dict[str, Any]] = {}
-            for name in sorted(os.listdir(self.data_dir)) if os.path.isdir(self.data_dir) else []:
-                if not name.endswith(".json"):
-                    continue
+            names = []
+            for folder in ("", "controls"):
+                path = os.path.join(self.data_dir, folder)
+                if os.path.isdir(path):
+                    names.extend(os.path.join(folder, n) for n in sorted(os.listdir(path)) if n.endswith(".json"))
+            for name in names:
                 with open(os.path.join(self.data_dir, name), "r", encoding="utf-8") as handle:
                     defn = validate_definition(json.load(handle))
                 out[(defn["framework_id"], defn["version"])] = defn

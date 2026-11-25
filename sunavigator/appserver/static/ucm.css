@@ -144,3 +144,10 @@ textarea.ucm-modal-input { min-height: 72px; resize: vertical; }
 .ucm-lineage { margin: 8px 0; }
 .ucm-lineage li { margin: 3px 0; }
 .ucm-infostrip { background: #f3f7fb; border-left: 3px solid #9db4cc; padding: 6px 10px; margin: 6px 0; }
+
+.ucm-catalogue td.ucm-catalogue-id { white-space: nowrap; }
+.ucm-catalogue tr.ucm-depth-1 td:first-child { padding-left: 22px; }
+.ucm-catalogue tr.ucm-depth-2 td:first-child { padding-left: 40px; }
+.ucm-catalogue tr.ucm-depth-3 td:first-child { padding-left: 58px; }
+.ucm-catalogue tr.ucm-group-row td { font-weight: 600; }
+.ucm-attribution { margin-top: 12px; }

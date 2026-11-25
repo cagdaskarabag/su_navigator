@@ -40,6 +40,7 @@ from ..errors import PermissionDenied, UcmError, UnsupportedOperation, Validatio
 from ..frameworks.coverage import CoverageService
 from ..frameworks.evidence import EvidenceService
 from ..frameworks.operations import OperationsService
+from ..frameworks.controls import catalogue_coverage
 from ..frameworks.registry import FrameworkRegistry
 from ..platform.search import SearchClient
 from ..readiness.principal import SchedulerAccess, read_principal
@@ -731,9 +732,32 @@ def get_frameworks(ctx: Context, req: Request) -> Response:
                           "use_cases": len(levels)})
 
 
+def _attack_definition(registry: FrameworkRegistry, req: Request) -> Dict[str, Any]:
+    definition = registry.get(req.arg("framework_id", "mitre_attack_enterprise"), req.arg("version"))
+    if definition.get("kind") == "controls":
+        raise ValidationError("this is a control catalogue, not an ATT&CK matrix; use frameworks/catalogue")
+    return definition
+
+
+def get_framework_catalogue(ctx: Context, req: Request) -> Response:
+    registry = FrameworkRegistry(ctx.records())
+    framework_id = req.arg("framework_id")
+    if not framework_id:
+        raise ValidationError("framework_id is required")
+    definition = registry.get(framework_id, req.arg("version"))
+    if definition.get("kind") != "controls":
+        raise ValidationError("this framework has no control catalogue")
+    levels, _ = _levels(ctx, req)
+    out = catalogue_coverage(definition, levels)
+    out["versions"] = [{"version": v, "label": registry.get(framework_id, v).get("version_label", v)}
+                       for v in registry.versions(framework_id)]
+    out["active_version"] = registry.active_versions().get(framework_id)
+    return Response(200, out)
+
+
 def get_framework_matrix(ctx: Context, req: Request) -> Response:
     registry = FrameworkRegistry(ctx.records())
-    definition = registry.get(req.arg("framework_id", "mitre_attack_enterprise"), req.arg("version"))
+    definition = _attack_definition(registry, req)
     levels, health = _levels(ctx, req)
     out = CoverageService(ctx.store).attack_matrix(definition, levels)
     out["versions"] = registry.versions(definition["framework_id"])
@@ -745,7 +769,7 @@ def get_framework_matrix(ctx: Context, req: Request) -> Response:
 
 def get_framework_navigator(ctx: Context, req: Request) -> Response:
     registry = FrameworkRegistry(ctx.records())
-    definition = registry.get(req.arg("framework_id", "mitre_attack_enterprise"), req.arg("version"))
+    definition = _attack_definition(registry, req)
     levels, health = _levels(ctx, req)
     cov = CoverageService(ctx.store)
     layer = cov.navigator_layer(cov.attack_matrix(definition, levels), bool(health and health["available"]))
@@ -755,7 +779,7 @@ def get_framework_navigator(ctx: Context, req: Request) -> Response:
 
 def get_framework_technique(ctx: Context, req: Request) -> Response:
     registry = FrameworkRegistry(ctx.records())
-    definition = registry.get(req.arg("framework_id", "mitre_attack_enterprise"), req.arg("version"))
+    definition = _attack_definition(registry, req)
     tid = req.arg("id")
     if not any(t["id"] == tid for t in definition["techniques"]):
         raise ValidationError("unknown technique for this framework version")
@@ -801,7 +825,8 @@ def post_framework_import(ctx: Context, req: Request) -> Response:
     ctx.require(CAP_MANAGE_CONTENT)
     summary = FrameworkRegistry(ctx.records()).import_definition(req.body, ctx.user)
     ctx.audit.record(ctx.user, "framework.imported", "framework", summary["framework_id"],
-                     details={"version": summary["version"], "techniques": summary["techniques"]})
+                     details={"version": summary["version"], "techniques": summary["techniques"],
+                                "controls": summary.get("controls", 0)})
     return Response(200, {"definition": summary})
 
 
@@ -899,6 +924,7 @@ def build_router() -> Router:
     router.add("GET", "frameworks/technique", get_framework_technique)
     router.add("GET", "frameworks/navigator", get_framework_navigator)
     router.add("GET", "frameworks/controls", get_framework_controls)
+    router.add("GET", "frameworks/catalogue", get_framework_catalogue)
     router.add("GET", "frameworks/clause", get_framework_clause)
     router.add("GET", "frameworks/evidence", get_framework_evidence)
     router.add("POST", "frameworks/import", post_framework_import)

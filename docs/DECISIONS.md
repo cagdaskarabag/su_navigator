@@ -2218,3 +2218,41 @@ as drift.
   anchor, and an outcome measured from run results.
 * Evidence: `tests/unit/test_audit_chain.py`, `test_lifecycle_refinements.py`, `test_deployment.py`;
   `tests/js/test_lifecycle.js`, `test_admin.js`; on the lab `LiveLifecycleRefinementsTest`.
+
+## D-076 Control catalogues: `ucm.framework/2`, three public NIST catalogues, unmapped controls made visible (Sprint 19)
+
+*0.9.9 (Sprint 19).*
+
+* **Context (finding F-16).** The regulation view lists only clauses that some use case maps to (D-031). A control that
+  nobody mapped does not appear at all, so a gap in the standard looks like a smaller standard.
+* **Decision, a second definition format.** `ucm.framework/2` (`kind: "controls"`) describes a control framework as a
+  list of `{id, title, parent, kind, withdrawn}` in tree order (parents before children), with `regulation_ids` (the
+  `regulation:<id>` frameworks of the content provider it applies to) and a `match` rule. `ucm.framework/1` (ATT&CK) is
+  unchanged and still validated the same way; the registry accepts both, bundled or imported
+  (`POST ucm/frameworks/import`, `ucm_manage_content`). The matrix, navigator and technique endpoints refuse a catalogue
+  with a clear error.
+* **Decision, the version has a label and a sort key.** `version_label` is text for people ("Rev. 5.2.0", "2.0",
+  "Edition ten"); `sort_key` is one to four whole numbers that order versions and form the stored version
+  (`[5,2,0]` becomes `5.2.0`). The newest by sort key is active until a content manager chooses another.
+* **Decision, bundled catalogues.** NIST SP 800-53 Rev. 5.2.0 (1216 entries, 182 withdrawn), SP 800-171 Rev. 3 (147, 33
+  withdrawn) and CSF 2.0 (225, of which 91 are CSF 1.1 subcategories marked withdrawn, leaving the 106 of 2.0), reduced from
+  the public OSCAL content at a pinned commit by `tools/control_catalogue_builder.py`. Only identifiers, titles, hierarchy
+  and the withdrawn flag are kept; the file records its source URL and the SHA-256 of what was read. Attribution is in
+  every file, on the Coverage page and in `THIRD_PARTY_NOTICES.md`. No ISO, CIS or CMMC catalogue is shipped: those are
+  not public in a form we may redistribute (CMMC is built on 800-171 and is handled in Sprint 20).
+* **Decision, matching.** A mapping `regulation:<id>#<clause>` meets a control when the two have the same canonical
+  spelling: with the `nist-800-53` rule `ac-2.1`, `AC-02(01)` and `AC-2(1)` are one control; with `exact` only case and
+  spaces are ignored (`3.1.1` is not `03.01.01`; the rule is deliberately narrow because the two numberings differ between
+  revisions). The summary of a catalogue row does not store the mapping's version, so matching ignores it: a mapping in an
+  older numbering simply does not match.
+* **Decision, what is shown.** Every control, with its best level, use cases and a roll-up per ancestor (controls,
+  mapped, data ready or better, enabled); totals of controls, mapped, unmapped, ready, deployed and enabled; **controls
+  with no mapped use case are listed and filterable**; a withdrawn control is hidden and not counted unless a use case maps
+  to it, and the page says how many; clauses a use case maps that match no control are listed under *not in this
+  catalogue* and are not counted. A mapped control opens the same use-case list as before.
+* **Decision, wording.** "Mapped" is the content provider's mapping. It is not an assessment of the control; that is
+  Sprint 20.
+* Not built: control text, parameters or guidance; baselines (low, moderate, high); crosswalks between catalogues; a
+  catalogue for a regulation whose clauses have no public identifiers.
+* Evidence: `tests/unit/test_control_catalogues.py` (22), `tests/js/test_catalogue_controls.js`; on the lab
+  (`LiveControlCatalogueTest`). Real upstream mappings sampled (`nist-800-53` `AU-2`, `nist-csf` `DE.CM-04`) match.

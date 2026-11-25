@@ -58,7 +58,30 @@ adds facts from it (data sources, supported add-ons and their Splunkbase links, 
 test data, macro definitions, status). Those fields are Splunk's, under the same licence. SUNavigator ships none of
 them and downloads none of the test data.
 
-## 3. Other applications studied
+## 3. NIST control catalogues (public, U.S. Government work)
+
+Source: the OSCAL content of the National Institute of Standards and Technology,
+<https://github.com/usnistgov/oscal-content>, at commit `f0de6d8d8c059d374f15e0ae07508d82e370fc1d`.
+
+| Path | What | Shipped in the app package |
+|---|---|---|
+| `sunavigator/lib/splunk_ucm/frameworks/data/controls/nist-800-53-5.2.0.json` | SP 800-53 Rev. 5.2.0: identifiers, titles, hierarchy, withdrawn flag | yes |
+| `sunavigator/lib/splunk_ucm/frameworks/data/controls/nist-800-171-3.json` | SP 800-171 Rev. 3: the same fields | yes |
+| `sunavigator/lib/splunk_ucm/frameworks/data/controls/nist-csf-2.0.json` | Cybersecurity Framework 2.0: the same fields, plus the one-sentence subcategory statement as its title | yes |
+| `tools/control_catalogue_builder.py` | reduces an OSCAL catalogue to those fields; each file records the source URL and the SHA-256 of what was read | no |
+
+NIST publications are works of the U.S. Government and are not subject to copyright in the United States; NIST asks that
+they be attributed. No control text, guidance or assessment procedure is copied. Each file carries its attribution, and the
+Coverage page shows it. SUNavigator is not endorsed by NIST, and a use case mapped to a control is not an assessment.
+
+## 4. MITRE ATT&CK
+
+`sunavigator/lib/splunk_ucm/frameworks/data/mitre_attack_*.json` are reduced copies of MITRE ATT&CK (identifiers, names,
+tactic membership). MITRE ATT&CK®. © The MITRE Corporation. This work is reproduced and distributed with the
+permission of The MITRE Corporation, under <https://attack.mitre.org/resources/legal-and-branding/terms-of-use/>. Each
+file carries this attribution.
+
+## 5. Other applications studied
 
 The 2026-11 product research looked at other Splunk apps (Security Essentials, Compliance Essentials, DataSense
 Navigator, DIA, DDA, TrackUC, SA-DetectionInsights, Attack Path Intelligence and others). Several are
