@@ -68,11 +68,19 @@ Source: the OSCAL content of the National Institute of Standards and Technology,
 | `sunavigator/lib/splunk_ucm/frameworks/data/controls/nist-800-53-5.2.0.json` | SP 800-53 Rev. 5.2.0: identifiers, titles, hierarchy, withdrawn flag | yes |
 | `sunavigator/lib/splunk_ucm/frameworks/data/controls/nist-800-171-3.json` | SP 800-171 Rev. 3: the same fields | yes |
 | `sunavigator/lib/splunk_ucm/frameworks/data/controls/nist-csf-2.0.json` | Cybersecurity Framework 2.0: the same fields, plus the one-sentence subcategory statement as its title | yes |
+| `sunavigator/lib/splunk_ucm/frameworks/data/controls/cmmc-l2-2.0.json` | CMMC 2.0 Level 2: the 110 requirements of SP 800-171 Rev. 2 (identifiers, titles) with the point values and partial-credit rules of the DoD assessment methodology (below) | yes |
+| `tools/cmmc_catalogue_builder.py` | builds that file from the methodology's annex and cross-checks it against the methodology's own lists | no |
 | `tools/control_catalogue_builder.py` | reduces an OSCAL catalogue to those fields; each file records the source URL and the SHA-256 of what was read | no |
 
 NIST publications are works of the U.S. Government and are not subject to copyright in the United States; NIST asks that
 they be attributed. No control text, guidance or assessment procedure is copied. Each file carries its attribution, and the
 Coverage page shows it. SUNavigator is not endorsed by NIST, and a use case mapped to a control is not an assessment.
+
+The 422 assessment objectives of SP 800-171 Rev. 3 are the objective identifiers and determination statements of the same
+OSCAL file. The CMMC Level 2 point values and partial-credit rules are from the *NIST SP 800-171 DoD Assessment
+Methodology, Version 1.2.1* (U.S. Department of Defense, June 24, 2020), a U.S. Government publication, read from the Web
+Archive copy named in the data file (`source`, with the SHA-256 of what was read). SUNavigator is not endorsed by NIST or
+the Department of Defense; its score follows that methodology and is not a CMMC certification.
 
 ## 4. MITRE ATT&CK
 

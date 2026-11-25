@@ -26,6 +26,7 @@ Status: 0.9.1 (catalogue, discovery, readiness, selection, SPL validation, deplo
 | `ucm_manage_content` | Remote sync, provider manifest check, offline import, catalogue reindex, audit read, framework import and activation. |
 | `ucm_run_discovery` | Queue discovery jobs; create and delete **local** source mappings; run readiness assessments (full or single). |
 | `ucm_deploy` | Approve, reject, deploy, enable, disable, roll back, retire and control-test deployments; create and delete generated dashboards. Drafting and submitting also accept `ucm_run_discovery`. |
+| `ucm_assess` | Read and write assessments, plan items (POA&M) and evidence snapshots; reading them needs it too (D-077). |
 | `ucm_admin` | Audit read; app administration in later WPs. |
 
 | Role | Imports | Capabilities |
@@ -34,6 +35,7 @@ Status: 0.9.1 (catalogue, discovery, readiness, selection, SPL validation, deplo
 | `ucm_analyst` | `ucm_viewer` | `ucm_run_discovery` |
 | `ucm_content_manager` | `ucm_analyst` | `ucm_manage_content` |
 | `ucm_deployment_operator` | `ucm_analyst` | `ucm_deploy` |
+| `ucm_compliance_assessor` | `ucm_viewer` | `ucm_assess` |
 | `ucm_scheduler` | none | `search`, `schedule_search`, `get_metadata`, `input_file`, `list_metrics_catalog`, `run_custom_command`; `run_collect` and `run_mcollect` disabled; no `output_file`, `run_dump`, `run_sendalert`; indexes `*`, default `main` (D-068). Owner of deployed searches only; assign it to one account and set `scheduled_owner` (D-051). |
 | `ucm_admin` | content manager + deployment operator | all |
 
