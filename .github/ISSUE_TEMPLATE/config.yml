@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Feature status and what is not built
+    url: https://github.com/cagdaskarabag/su_navigator/blob/main/docs/FEATURE_STATUS.md
+    about: See what works, what does not and what is planned before you report something.
+  - name: Security issue
+    url: https://github.com/cagdaskarabag/su_navigator/blob/main/docs/SECURITY.md
+    about: Read the security notes first. Do not post exploit details in a public issue.

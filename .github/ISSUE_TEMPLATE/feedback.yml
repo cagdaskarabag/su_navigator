@@ -1,0 +1,72 @@
+name: SUNavigator feedback
+description: Tell us what works, what does not, and what you would like next.
+title: "[feedback] "
+labels: ["feedback"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thank you. Please do not include real index names, host names, IP addresses, user names or data.
+        The feature list this refers to is docs/FEATURE_STATUS.md.
+  - type: input
+    id: version
+    attributes:
+      label: SUNavigator version
+      placeholder: "0.11.0"
+    validations:
+      required: true
+  - type: input
+    id: splunk
+    attributes:
+      label: Splunk version and edition
+      placeholder: "Splunk Enterprise 10.2.9, single instance"
+    validations:
+      required: true
+  - type: dropdown
+    id: role
+    attributes:
+      label: Role you used
+      options:
+        - Viewer
+        - Analyst
+        - Content manager
+        - Deployment operator
+        - Compliance assessor
+        - Administrator
+        - Other
+    validations:
+      required: true
+  - type: dropdown
+    id: kind
+    attributes:
+      label: Kind of feedback
+      options:
+        - Works well
+        - Does not work
+        - Confusing or hard to find
+        - Nice to have
+        - Question
+    validations:
+      required: true
+  - type: input
+    id: page
+    attributes:
+      label: Page or feature
+      description: For example Catalogue, Use-case page, Deployments, Coverage, Assessments, POA&M.
+  - type: textarea
+    id: details
+    attributes:
+      label: What happened, or what you would like
+      description: For a defect, give the steps, what you expected and what you saw, including any exact message.
+    validations:
+      required: true
+  - type: dropdown
+    id: blocking
+    attributes:
+      label: Does this stop you from using the app?
+      options:
+        - "No"
+        - "Partly"
+        - "Yes"
+    validations:
+      required: true
