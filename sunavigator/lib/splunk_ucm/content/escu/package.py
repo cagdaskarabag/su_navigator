@@ -16,7 +16,7 @@ import io
 import json
 import os
 import tarfile
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from ...errors import ValidationError
 from ...util import git_blob_sha
@@ -154,7 +154,9 @@ def _record(stanza: str, settings: Dict[str, str], domain_slug: str) -> Tuple[Op
     return raw, ""
 
 
-def build_bundle(source: str) -> Tuple[Dict[str, Any], Dict[str, Any]]:
+def build_bundle(source: str, enricher: Optional[Callable[[Dict[str, Any]], Dict[str, Any]]] = None,
+                 extra_ref: str = "") -> Tuple[Dict[str, Any], Dict[str, Any]]:
+    """``enricher`` adds optional fields to each record (see ``enrich.py``); ``extra_ref`` is appended to ``source_ref``."""
     package = read_package(source)
     files = package["files"]
     stanzas = parse_conf(files["default/savedsearches.conf"])
@@ -174,6 +176,8 @@ def build_bundle(source: str) -> Tuple[Dict[str, Any], Dict[str, Any]]:
             skipped["duplicate_detection_id"] += 1
             continue
         seen_ids.add(raw["id"])
+        if enricher is not None:
+            raw = enricher(raw)
         content = json.dumps(raw, sort_keys=True, indent=2, ensure_ascii=False) + "\n"
         cat_id = CATEGORY_BY_SLUG[slug][0]
         records[(cat_id, raw["id"])] = {
@@ -192,7 +196,8 @@ def build_bundle(source: str) -> Tuple[Dict[str, Any], Dict[str, Any]]:
                            "metadata": {"name": name, "description": note, "useCaseCount": counts[cid]}})
     bundle = {
         "format": bundle_format.BUNDLE_FORMAT, "format_version": bundle_format.BUNDLE_VERSION,
-        "provider": PROVIDER, "provider_version": _version(files), "source_ref": package["source_ref"],
+        "provider": PROVIDER, "provider_version": _version(files),
+        "source_ref": package["source_ref"] + (("+" + extra_ref) if extra_ref else ""),
         "schema": ESCU_SCHEMA, "categories": categories, "records": ordered,
     }
     report = {"provider_version": bundle["provider_version"], "source_ref": bundle["source_ref"],

@@ -13,11 +13,13 @@ from ...model.canonical import DOMAINS, Category, FrameworkMapping, Provenance, 
 from ...spl.analysis import SplAnalysis, analyze
 from ...util import dedupe, safe_key, sha256_json
 from ..provider import Normalizer, ProviderCategory, ProviderManifest, ProviderRecord
-from ..requirements import derive_requirements
+from ...model.canonical import Requirement
+from ..requirements import derive_requirements, req_id
+from .enrich import macro_sourcetype
 from ..validation import FieldContract, ValidationPolicy
 
 PROVIDER = "escu"
-NORMALIZER_VERSION = "escu-1.1.0"
+NORMALIZER_VERSION = "escu-1.2.0"
 _MITRE_TECHNIQUE = re.compile(r"^T(\d{4})(\.\d{3})?$")
 ID_PATTERN = r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
 SCHEMA_VERSION = "1.0"
@@ -44,7 +46,11 @@ CONSUMED_FIELDS = (
     FieldContract("dataSources", "array", "string"), FieldContract("mitreAttack", "array", "string"),
     FieldContract("cis20", "array", "string"), FieldContract("nist", "array", "string"),
     FieldContract("cve", "array", "string"), FieldContract("killChainPhases", "array", "string"),
-    FieldContract("schedule", "object"),
+    FieldContract("schedule", "object"), FieldContract("status", "string"),
+    FieldContract("dataSourceDetails", "array", "object"), FieldContract("supportedTA", "array", "object"),
+    FieldContract("drilldowns", "array", "object"), FieldContract("riskEntities", "array", "object"),
+    FieldContract("tests", "array", "object"), FieldContract("macroDefinitions", "object"),
+    FieldContract("howToImplement", "string"), FieldContract("knownFalsePositives", "string"),
 )
 
 ESCU_SCHEMA: Dict[str, Any] = {
@@ -62,6 +68,14 @@ ESCU_SCHEMA: Dict[str, Any] = {
         "dataSources": {"type": "array", "items": {"type": "string"}},
         "mitreAttack": {"type": "array", "items": {"type": "string"}},
         "schedule": {"type": "object"},
+        "status": {"type": "string", "enum": ["production", "experimental", "deprecated"]},
+        "dataSourceDetails": {"type": "array", "items": {"type": "object"}},
+        "supportedTA": {"type": "array", "items": {"type": "object"}},
+        "drilldowns": {"type": "array", "items": {"type": "object"}},
+        "riskEntities": {"type": "array", "items": {"type": "object"}},
+        "tests": {"type": "array", "items": {"type": "object"}},
+        "macroDefinitions": {"type": "object"},
+        "howToImplement": {"type": "string"}, "knownFalsePositives": {"type": "string"},
     },
 }
 
@@ -134,12 +148,64 @@ class EscuNormalizer(Normalizer):
                              "detectionType": _s(raw.get("detectionType")), "cis20": _strs(raw.get("cis20")),
                              "nist": _strs(raw.get("nist")), "cve": _strs(raw.get("cve")),
                              "killChainPhases": _strs(raw.get("killChainPhases")),
-                             "securityDomain": _s(raw.get("securityDomain"))},
+                             "securityDomain": _s(raw.get("securityDomain")),
+                             **self._extras(raw)},
         )
+        uc.instructions = _s(raw.get("howToImplement"))
+        uc.known_false_positives = _s(raw.get("knownFalsePositives"))
         uc.requirements = derive_requirements(uc, analysis, "")
-        uc.quality_flags = ordered_flags(["unbounded_index"] if analysis is not None and analysis.unbounded_index
-                                         else [])
+        self._data_requirements(uc, raw)
+        flags = ["unbounded_index"] if analysis is not None and analysis.unbounded_index else []
+        if _s(raw.get("status")) == "deprecated":
+            flags.append("deprecated_upstream")
+        uc.quality_flags = ordered_flags(flags)
         return uc
+
+    @staticmethod
+    def _extras(raw: Dict[str, Any]) -> Dict[str, Any]:
+        """Optional security_content fields (Sprint 16); absent from records built without it."""
+        out: Dict[str, Any] = {}
+        for key in ("status", "howToImplement", "knownFalsePositives"):
+            if _s(raw.get(key)):
+                out[key] = _s(raw[key])
+        for key in ("supportedTA", "dataSourceDetails", "drilldowns", "riskEntities", "tests"):
+            if isinstance(raw.get(key), list) and raw[key]:
+                out[key] = [v for v in raw[key] if isinstance(v, dict)]
+        if isinstance(raw.get("macroDefinitions"), dict) and raw["macroDefinitions"]:
+            out["macroDefinitions"] = {k: v for k, v in raw["macroDefinitions"].items()
+                                       if isinstance(k, str) and isinstance(v, str)}
+        return out
+
+    @staticmethod
+    def _data_requirements(uc: UseCase, raw: Dict[str, Any]) -> None:
+        """Sourcetypes and event types the data sources and macro definitions name (recommended, not required)."""
+        have = {r.req_id for r in uc.requirements}
+
+        def add(req: Requirement) -> None:
+            if req.req_id not in have:
+                have.add(req.req_id)
+                uc.requirements.append(req)
+
+        for src in raw.get("dataSourceDetails") or []:
+            if not isinstance(src, dict):
+                continue
+            sourcetype = _s(src.get("sourcetype"))
+            if not sourcetype:
+                continue
+            add(Requirement(req_id("sourcetype", sourcetype), "sourcetype", sourcetype, "recommended",
+                            "provider_structured", "medium", "data source: %s" % _s(src.get("name"))))
+            field, value = _s(src.get("separator")), _s(src.get("separatorValue"))
+            if field and value:
+                add(Requirement(req_id("event_condition", "%s|%s=%s" % (sourcetype, field, value)),
+                                "event_condition", "%s=%s" % (field, value), "recommended", "provider_structured",
+                                "low", "events of this type in %s (data source: %s)" % (sourcetype, _s(src.get("name"))),
+                                {"sourcetype": sourcetype, "field": field, "value": value}))
+        definitions = raw.get("macroDefinitions") if isinstance(raw.get("macroDefinitions"), dict) else {}
+        for name in sorted(definitions):
+            sourcetype = macro_sourcetype(definitions[name]) if isinstance(definitions[name], str) else ""
+            if sourcetype:
+                add(Requirement(req_id("sourcetype", sourcetype), "sourcetype", sourcetype, "recommended",
+                                "provider_structured", "medium", "macro `%s` is defined as sourcetype=%s" % (name, sourcetype)))
 
     @staticmethod
     def _frameworks(raw: Dict[str, Any]) -> List[FrameworkMapping]:

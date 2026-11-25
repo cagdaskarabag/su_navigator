@@ -52,7 +52,11 @@ What SUNavigator contains: **no ESCU content**. The ESCU provider (`sunavigator/
 SUNavigator code that reads an ESCU package the operator supplies; the test fixtures in `tests/fixtures/escu/` are
 written for SUNavigator (version `6.11.1-fixture`) and are not copies of ESCU files. Offline bundles built with
 `tools/ucm_cli.py build-escu-bundle` contain ESCU detections and remain under the Apache
-License 2.0; when you redistribute such a bundle, include that licence and keep Splunk's notices.
+License 2.0; when you redistribute such a bundle, include that licence and keep Splunk's notices. With
+`--security-content` the build also reads a checkout of the `security_content` repository on the build machine and
+adds facts from it (data sources, supported add-ons and their Splunkbase links, drilldowns, risk entities, links to
+test data, macro definitions, status). Those fields are Splunk's, under the same licence. SUNavigator ships none of
+them and downloads none of the test data.
 
 ## 3. Other applications studied
 

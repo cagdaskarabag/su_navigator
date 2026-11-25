@@ -17,6 +17,7 @@ QUALITY_FLAGS = {
     "es_required": "Requires Splunk Enterprise Security",
     "duplicate_spl": "Primary SPL is identical to another use case",
     "provider_twin": "Primary SPL is identical to a use case from another provider",
+    "deprecated_upstream": "The provider has marked this detection deprecated",
 }
 FLAG_ORDER = tuple(QUALITY_FLAGS)
 # Flags that need the whole catalogue; the post-pass sets and clears exactly these.

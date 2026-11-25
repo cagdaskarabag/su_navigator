@@ -15,5 +15,6 @@ CONTROL_FIXTURES = "uc_control_fixtures"
 FRAMEWORKS = "uc_frameworks"
 DASHBOARDS = "uc_dashboards"
 FIELD_PROFILE = "uc_field_profile"
+EVENT_CHECK = "uc_event_check"
 
 DOC_SCHEMA = 1

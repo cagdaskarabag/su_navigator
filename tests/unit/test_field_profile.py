@@ -17,7 +17,7 @@ from unit.test_discovery import loaded_catalog
 class SplTest(unittest.TestCase):
     def test_counts_filled_and_placeholder_events_per_field(self):
         spl = profile_spl("wineventlog", "WinEventLog:Security", ["EventCode", "src_ip"], ["-", "0.0.0.0"], 500)
-        self.assertTrue(spl.startswith('search index=wineventlog sourcetype="WinEventLog:Security" earliest=-24h '
+        self.assertTrue(spl.startswith('| search index=wineventlog sourcetype="WinEventLog:Security" earliest=-24h '
                                        'latest=now | head 500 | stats count as sun_events'))
         self.assertIn("sum(eval(if(isnotnull('EventCode') AND trim('EventCode')!=\"\",1,0))) as f0_filled", spl)
         self.assertIn("trim('src_ip')=\"0.0.0.0\"", spl)

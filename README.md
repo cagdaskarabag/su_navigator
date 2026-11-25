@@ -3,7 +3,7 @@
 [![Version](https://img.shields.io/badge/version-0.9.x-blue.svg)](docs/OPERATOR_GUIDE.md#what-changed-in-09x)
 [![Splunk Compatibility](https://img.shields.io/badge/splunk-Enterprise%2010.x%20%7C%20Cloud%3A%20not%20validated-orange.svg)](docs/OPERATOR_GUIDE.md#2-requirements)
 [![Python Support](https://img.shields.io/badge/python-3.9%20%7C%203.13-brightgreen.svg)](docs/DECISIONS.md#d-005-stdlib-only-python-compatible-with-39313)
-[![Tests](https://img.shields.io/badge/unit%20tests-854%20passed-success.svg)](tests/)
+[![Tests](https://img.shields.io/badge/unit%20tests-881%20passed-success.svg)](tests/)
 [![AppInspect](https://img.shields.io/badge/Splunk%20AppInspect-Clean-brightgreen.svg)](docs/DECISIONS.md#d-019-packaging-constraints-from-appinspect)
 
 **SUNavigator** is a native Splunk application for Splunk Enterprise (Splunk Cloud: the package passes AppInspect, but runtime on a Cloud stack is not validated yet) that bridges the gap between external security detection catalogues and live production environments. It empowers SOC and detection engineering teams to **discover**, **assess**, **backlog**, **validate**, and **safely deploy** monitoring use cases with built-in four-eyes governance.
@@ -127,7 +127,7 @@ Package the production `.tar.gz` bundle from this repository:
 git clone https://github.com/cagdaskarabag/sun_navigator.git
 cd sun_navigator
 ./tools/package.sh
-# Output: dist/sunavigator-0.9.5.tar.gz
+# Output: dist/sunavigator-0.9.6.tar.gz
 ```
 
 ### CLI Installation (Recommended)
@@ -135,7 +135,7 @@ cd sun_navigator
 Splunk Web's UI upload times out on packages over standard browser HTTP limits. Install via the Splunk CLI:
 
 ```bash
-$SPLUNK_HOME/bin/splunk install app dist/sunavigator-0.9.5.tar.gz \
+$SPLUNK_HOME/bin/splunk install app dist/sunavigator-0.9.6.tar.gz \
   -auth "$SPLUNK_USER:$SPLUNK_PASSWORD"
 
 $SPLUNK_HOME/bin/splunk restart
@@ -182,6 +182,8 @@ Splunk ES Content Update detections can be imported the same way as a second pro
 ```bash
 python3 tools/ucm_cli.py build-escu-bundle --package DA-ESS-ContentUpdate-latest.tar.gz --output escu.json
 ```
+
+With `--security-content <checkout of github.com/splunk/security_content>` the ESCU bundle also carries each detection's data sources, supported add-ons, event types, drilldowns, risk entities, test-data links, macro definitions and upstream status (0.9.6, D-073); discovery then checks whether those event types exist in your data.
 
 After a deployment, a control test can replay the Fenre sample events through the deployed search. Build the fixtures with `python3 tools/ucm_cli.py build-control-fixtures --samples <fenre>/samples --output fixtures.json`, import them as a content manager, then use **Run control test** on the deployment (see the operator guide, §6.6a). Since 0.8.8 the test window follows the sample's timestamps, the manifest's `max_count` and `fields` checks are applied, and a search that errors on the test data is reported as `content_error` (D-064). `tools/controltest_campaign.py` runs all fixtures on a lab; the results for the 94 Fenre fixtures and the findings for the content owner are in `docs/upstream/`.
 
@@ -245,7 +247,7 @@ sun_navigator/
 │   └── appserver/static/         # Simple XML JS modules and styles
 ├── tools/                        # Development, packaging, and bundle CLI tools
 ├── tests/                        # Automated test suites
-│   ├── unit/                     # 854 mocked unit tests (runs without Splunk)
+│   ├── unit/                     # 881 mocked unit tests (runs without Splunk)
 │   ├── js/                       # Node tests of the browser modules (run by the unit suite when Node is present)
 │   ├── fixtures/readiness/       # Readiness regression corpus and its baseline
 │   └── live/                     # Integration tests against live Splunk instances
