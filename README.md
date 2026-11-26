@@ -1,4 +1,8 @@
-# SUNavigator (Splunk Use Case Navigator)
+# SUNavigator
+
+> **Beta.** SUNavigator 0.11.0 is released for public testing. It is validated on Splunk Enterprise 10.2.9 and was walked through on 10.4.3 (see the [User Guide](docs/USER_GUIDE.md)). Expect rough edges: the known issues are listed in [FEATURE_STATUS.md](docs/FEATURE_STATUS.md), the open work in [ROADMAP.md](docs/ROADMAP.md). Send feedback with the [feedback form](https://github.com/cagdaskarabag/su_navigator/issues/new?template=feedback.yml).
+>
+> SUNavigator is an aid for your own review. Its readiness, coverage, assessment and POA&M results are not an audit and not a CMMC status determination. See the [Trademark notice](#trademark-notice) and [Licence](#licence-and-third-party-attributions).
 
 [![Version](https://img.shields.io/badge/version-0.11.x-blue.svg)](docs/OPERATOR_GUIDE.md#what-changed-in-09x-to-011)
 [![Splunk Compatibility](https://img.shields.io/badge/splunk-Enterprise%2010.x%20%7C%20Cloud%2C%20SHC%2C%20ES%3A%20not%20validated-orange.svg)](docs/OPERATOR_GUIDE.md#2-requirements)
@@ -116,7 +120,7 @@ SUNavigator follows strict enterprise architectural constraints documented in [d
 
 ### Prerequisites
 
-- **Splunk Enterprise 10.2+** or **10.4+** (Single instance or distributed Search Head).
+- **Splunk Enterprise 10.2+** or **10.4+**, single instance. Other topologies are not validated; see the [Support statement](#support-statement).
 - **KV Store status**: `ready` (`$SPLUNK_HOME/bin/splunk show kvstore-status`).
   - *macOS Note*: If KV Store is stuck on `starting` with `CSSMERR_TP_CERT_SUSPENDED`, add `[kvstore] ocspValidation = false` to `server.conf` (see [Operator Guide §9.2](docs/OPERATOR_GUIDE.md#92-administration-kvstorestatus-unavailable--kv-get-failed)).
 
@@ -125,8 +129,8 @@ SUNavigator follows strict enterprise architectural constraints documented in [d
 Package the production `.tar.gz` bundle from this repository:
 
 ```bash
-git clone https://github.com/cagdaskarabag/sun_navigator.git
-cd sun_navigator
+git clone https://github.com/cagdaskarabag/su_navigator.git
+cd su_navigator
 ./tools/package.sh
 # Output: dist/sunavigator-0.11.0.tar.gz
 ```
@@ -261,7 +265,7 @@ If you run SUNavigator on one of these, treat it as untested and check the resul
 ## Repository Layout
 
 ```
-sun_navigator/
+su_navigator/
 ├── sunavigator/                   # The packaged Splunk App
 │   ├── app.manifest              # App packaging manifest
 │   ├── default/                  # Default Splunk configurations (app, restmap, collections, etc.)
@@ -337,6 +341,10 @@ SPLUNK_HOME=/opt/splunk ./tools/dev_deploy.sh --restart
 - **Credential Storage**: External API keys and tokens are stored solely in Splunk's native `storage/passwords` encrypted endpoint.
 
 ---
+
+## Trademark notice
+
+SUNavigator is an independent project. It is not made, sponsored or endorsed by Splunk, and the name SUNavigator does not contain a Splunk trademark. Splunk, Splunk>, and Turn Data Into Doing are trademarks or registered trademarks of Splunk LLC in the United States and other countries. All other brand names, product names, or trademarks belong to their respective owners. © 2023 Splunk LLC. All rights reserved.
 
 ## Licence and Third-Party Attributions
 

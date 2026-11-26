@@ -732,3 +732,15 @@ Filed from the user guide run, as backlog. None is scheduled (see `docs/FEATURE_
 | #40 | Control-test fixtures can only be imported through the REST API |
 | #41 | Unconfirmed: Splunk Web and the management API stopped answering during a discovery run (Splunk 10.4.3) |
 | #42 | Run the live test suite on Splunk 10.4.x |
+
+## 5. Issues filed in the beta review (26 Nov 2026)
+
+| Issue | Title | Status |
+|---|---|---|
+| #43 | Run search stays disabled after a search returns zero rows | Fix planned; documented as a known issue in the user guide |
+| #44 | Remove the Splunk trademark from the product name in app metadata and the export header | Docs fixed; code change needed |
+| #45 | POA&M banner says the threshold is met while the system security plan is missing | Code change needed; wording only |
+| #46 | Refusal audit limits as a checklist item for the human security review (#32) | Open; checklist |
+| #47 | Maintainer checklist before the beta announcement | Manual repository settings |
+
+Closed by documentation in this beta: the README clone URL and prerequisites, the Splunk trademark notice (README and NOTICE), the beta label (README and FEATURE_STATUS), the user guide notes for #43 and #45.
