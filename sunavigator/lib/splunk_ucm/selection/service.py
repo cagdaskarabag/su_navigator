@@ -16,6 +16,7 @@ from ..util import safe_key, utc_now_iso
 
 INTENTS = ("bookmark", "select", "defer", "reject")
 BACKLOG = ("select", "defer")
+MAX_COUNT = 500
 
 
 def selection_key(user: str, content_id: str) -> str:
@@ -32,6 +33,8 @@ class SelectionService:
 
     def list_for(self, user: str, intent: Optional[str] = None, offset: int = 0,
                  count: int = 50) -> Dict[str, Any]:
+        offset = max(0, offset)
+        count = max(1, min(MAX_COUNT, count))
         query: Dict[str, Any] = {"user": user}
         if intent:
             if intent == "backlog":

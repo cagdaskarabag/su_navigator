@@ -372,5 +372,31 @@ class CsvGuardTest(unittest.TestCase):
         self.assertIn("' =HYPERLINK(1)", text)
 
 
+class SelectionsClampTest(unittest.TestCase):
+    def test_item_11_count_is_clamped(self):
+        from splunk_ucm.selection.service import MAX_COUNT
+        from unit.test_discovery import loaded_catalog
+        store = loaded_catalog()
+        ctx = make_ctx(store, [])
+        for asked, expected in (("100000", MAX_COUNT), ("0", 1), ("-5", 1), ("25", 25)):
+            status, body = call(ctx, "GET", "selections", {"count": asked})
+            self.assertEqual(status, 200, body)
+            seen = []
+            real = store.query
+
+            def spy(collection, query=None, **kw):
+                seen.append(kw.get("limit"))
+                return real(collection, query, **kw)
+            store.query = spy
+            call(ctx, "GET", "selections", {"count": asked})
+            store.query = real
+            self.assertEqual(seen[-1], expected + 1, (asked, seen))
+
+    def test_item_11_a_negative_offset_is_treated_as_zero(self):
+        from unit.test_discovery import loaded_catalog
+        status, body = call(make_ctx(loaded_catalog(), []), "GET", "selections", {"offset": "-3"})
+        self.assertEqual((status, body["offset"]), (200, 0))
+
+
 if __name__ == "__main__":
     unittest.main()
