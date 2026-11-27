@@ -140,17 +140,32 @@ _WORD = re.compile(r"\s*([A-Za-z_][A-Za-z0-9_]*)")
 _COMPARISON = re.compile(r"\s*(?:!=|[=<>])")
 
 
+def _backtick_end(text: str, i: int) -> Optional[int]:
+    """Where the macro (`` `name` ``) or comment (three backticks each side) that opens at ``i`` ends.
+
+    None when it never closes. The caller then reads the backtick as an ordinary character, so every command after it
+    stays visible: an unpaired backtick must not hide what follows (issue #51, item 6).
+    """
+    if text.startswith("```", i):
+        close = text.find("```", i + 3)
+        return close + 3 if close >= 0 else None
+    close = text.find("`", i + 1)
+    return close + 1 if close >= 0 else None
+
+
 def _split_pipeline(masked: str) -> Tuple[List[Tuple[int, int, str]], bool]:
     """Return ``(start, end, kind)`` for top-level and subsearch segments."""
     segments: List[Tuple[int, int, str]] = []
     has_sub = False
     starts: List[Tuple[int, str]] = [(0, _LEVEL_START)]
-    in_macro = False
-    for i, ch in enumerate(masked):
+    i = 0
+    while i < len(masked):
+        ch = masked[i]
         if ch == "`":
-            in_macro = not in_macro
-        elif in_macro:
-            continue
+            end = _backtick_end(masked, i)
+            if end is not None:
+                i = end
+                continue
         elif ch == "[":
             has_sub = True
             segments.append((starts[-1][0], i, starts[-1][1]))
@@ -163,6 +178,7 @@ def _split_pipeline(masked: str) -> Tuple[List[Tuple[int, int, str]], bool]:
         elif ch == "|":
             segments.append((starts[-1][0], i, starts[-1][1]))
             starts[-1] = (i + 1, _PIPE_START)
+        i += 1
     segments.append((starts[-1][0], len(masked), starts[-1][1]))
     return [seg for seg in segments if masked[seg[0]:seg[1]].strip()], has_sub
 

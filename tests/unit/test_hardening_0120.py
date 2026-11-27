@@ -169,5 +169,30 @@ class WildcardAndChainTest(unittest.TestCase):
         self.assertEqual(clean.verify_chain()["branch_rows"], [])
 
 
+class SplSplitTest(unittest.TestCase):
+    def side_effects(self, spl):
+        from splunk_ucm.spl.analysis import analyze
+        return analyze(spl).side_effect_commands
+
+    def test_item_6_a_backtick_inside_a_comment_does_not_hide_a_later_command(self):
+        spl = "index=a [ ```a`b``` | makeresults | outputlookup x.csv ]"
+        self.assertIn("outputlookup", self.side_effects(spl))
+
+    def test_item_6_an_unpaired_backtick_hides_nothing(self):
+        self.assertIn("outputlookup", self.side_effects("index=a ` | outputlookup x.csv"))
+        self.assertIn("collect", self.side_effects("index=a | stats count ` | collect index=x"))
+        self.assertIn("outputlookup", self.side_effects("index=a ```never closed | outputlookup x.csv"))
+
+    def test_item_6_a_closed_comment_and_closed_macros_are_still_skipped(self):
+        self.assertEqual(self.side_effects("index=a ```| outputlookup x``` | stats count"), [])
+        self.assertEqual(self.side_effects("index=a `m` ``` note ``` `n(1)` | stats count"), [])
+        self.assertIn("outputlookup", self.side_effects("index=a ```note``` | `m` | outputlookup x.csv"))
+
+    def test_item_6_the_policy_refuses_the_case_from_the_review(self):
+        from splunk_ucm.spl.policy import classify
+        verdict = classify("index=a [ ```a`b``` | makeresults | outputlookup x.csv ]")
+        self.assertIn("outputlookup", verdict.side_effects)
+
+
 if __name__ == "__main__":
     unittest.main()

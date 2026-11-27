@@ -47,6 +47,11 @@ EXTRA = [
     "index=a | mapper search=\"x | collect\"", 'index=a | map search="search index=b" | map search="search index=c | sendemail to=x"', "[| outputlookup z] index=a", "index=a [search index=b | delete]",
     "| tstats count where index=x by host | where count>1 | script python x", "index=a | run foo",
     "| makeresults | eval x=\"a`b\" | outputcsv y", "index=a\n|\n  outputlookup\n  z",
+    # Issue #51, item 6: an unpaired backtick or a backtick inside a triple-backtick comment hides nothing after it.
+    "index=a ` | outputlookup x.csv", "index=a | stats count ` | collect index=x",
+    "index=a [ ```a`b``` | makeresults | outputlookup x.csv ]", "index=a [ ```a`b``` | makeresults ] | stats count",
+    "index=a ```| outputlookup x``` | stats count", "index=a ```never closed | outputlookup x.csv",
+    "index=a ```note``` | `m` | outputlookup x.csv", "index=a `m` ``` note ``` `n(1)` | stats count",
 ] + [
     # D-068: a side-effect command as the first command of a bracket, an unprefixed search or a map string.
     "| makeresults | appendpipe [ collect index=x ]", "| makeresults | appendpipe [collect index=x]",

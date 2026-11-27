@@ -566,18 +566,28 @@ define(["jquery", "splunk.util"], function ($, splunkUtil) {
 
     function uniq(list) { return list.filter(function (c, i) { return list.indexOf(c) === i; }); }
 
+    /* Where the macro or the three-backtick comment that opens at i ends, or -1 when it never closes (analysis._backtick_end). */
+    function backtickEnd(text, i) {
+        var close;
+        if (text.substring(i, i + 3) === "```") {
+            close = text.indexOf("```", i + 3);
+            return close >= 0 ? close + 3 : -1;
+        }
+        close = text.indexOf("`", i + 1);
+        return close >= 0 ? close + 1 : -1;
+    }
+
     /* [start, end, kind] per segment, the way analysis._split_pipeline cuts them. */
     function splitSegments(masked) {
         var segments = [];
         var starts = [[0, "level"]];
-        var inMacro = false;
-        var i, ch, top;
-        for (i = 0; i < masked.length; i++) {
+        var i = 0;
+        var ch, top, end;
+        while (i < masked.length) {
             ch = masked.charAt(i);
             if (ch === "`") {
-                inMacro = !inMacro;
-            } else if (inMacro) {
-                continue;
+                end = backtickEnd(masked, i);
+                if (end >= 0) { i = end; continue; }
             } else if (ch === "[") {
                 top = starts[starts.length - 1];
                 segments.push([top[0], i, top[1]]);
@@ -592,6 +602,7 @@ define(["jquery", "splunk.util"], function ($, splunkUtil) {
                 segments.push([top[0], i, top[1]]);
                 starts[starts.length - 1] = [i + 1, "pipe"];
             }
+            i += 1;
         }
         top = starts[starts.length - 1];
         segments.push([top[0], masked.length, top[1]]);
