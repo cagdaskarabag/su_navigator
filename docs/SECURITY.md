@@ -245,6 +245,12 @@ The enable gate for a search the scheduler cannot read uses the existing audited
 override reason (at least 10 characters) and the existing `ucm_deploy` capability. It
 adds a refusal; it removes none.
 
+A wildcard index in the SPL (`index=web*`) counts as searchable when the scheduler
+account can search at least one of the matching indexes known from discovery. If it can
+search only some of them, the check still reports the pattern as searchable, and the
+scheduled search silently skips the others. Check the role's index list for wildcard
+searches.
+
 ## The system token reads ES and ESCU state (D-067)
 
 Since 0.9.1 the REST handler's system token makes read-only requests so that the app can say
@@ -367,6 +373,17 @@ write wins and the earlier caller is told it succeeded. Both actions are still
 in `uc_audit`.
 
 Drift covers the search text, owner, cron, time range, schedule window, suppression, the list of actions, email recipients, subject and attachment flags, the webhook URL, `is_scheduled` and `disabled`. It does not yet cover the alert trigger (`alert_type`, `alert_comparator`, `alert_threshold`, `alert.track`, `alert.severity`) or the email message and results-link flag, so an edit to those is not reported (issue #48).
+
+If writing an audit row fails (for example the KV Store is unavailable), the action
+itself still completes. The failure is logged as `audit write failed` in
+`$SPLUNK_HOME/var/log/splunk/sunavigator.log`, and the next row links to the last row
+that was written, so **Verify audit chain** shows no gap. Alert on that log message.
+
+**Verify audit chain** counts *branches* (two rows that name the same predecessor)
+without failing, because two concurrent writers produce one. A row inserted directly
+into `uc_audit` that names an existing row as its predecessor looks the same. Only
+`admin` and `sc_admin` can write `uc_audit`, and they can rewrite the whole chain
+anyway (D-075).
 
 Run status (D-031) is searched with the caller's token, so it never reveals
 scheduler data a user could not search themselves.
