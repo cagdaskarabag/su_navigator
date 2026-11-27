@@ -535,6 +535,7 @@ class _Structure:
         self.macros: List[str] = []
         self.mask = self._mask()
         self.spans: List[Tuple[int, int]] = []
+        self.generating: List[List[Tuple[int, int]]] = []
         self.commands: List[str] = []
         self._scan()
 
@@ -571,26 +572,36 @@ class _Structure:
 
     def _scan(self) -> None:
         mask = self.mask
-        stack: List[Dict[str, Any]] = [{"start": 0, "first": True, "pieces": [],
+        stack: List[Dict[str, Any]] = [{"start": 0, "first": True, "pieces": [], "n": 0,
                                         "bar": mask.lstrip().startswith("|")}]
 
         def close(frame: Dict[str, Any], end: int) -> None:
             pieces = frame["pieces"] + [(frame["start"], end)]
             joined = "".join(mask[a:b] for a, b in pieces)
             command = re.match(r"[A-Za-z_]\w*", joined.lstrip())
+            clause: List[Tuple[int, int]] = []
             if frame["first"] and not frame["bar"]:
+                clause = list(pieces)
                 self.spans.extend(pieces)
-                return
-            if command:
-                self.commands.append(command.group(0).lower())
-            if command and command.group(0).lower() == "search":
-                skip = len(joined) - len(joined.lstrip()) + command.end()
-                for a, b in pieces:
-                    if skip >= b - a:
-                        skip -= b - a
-                        continue
-                    self.spans.append((a + skip, b))
-                    skip = 0
+                word = re.match(r"([A-Za-z_]\w*)(?=\s|$)", joined.lstrip())
+                if word and word.group(1).lower() in _BREAKER_COMMANDS:
+                    self.commands.append(word.group(1).lower())
+            else:
+                if command:
+                    self.commands.append(command.group(0).lower())
+                if command and command.group(0).lower() == "search":
+                    skip = len(joined) - len(joined.lstrip()) + command.end()
+                    for a, b in pieces:
+                        if skip >= b - a:
+                            skip -= b - a
+                            continue
+                        clause.append((a + skip, b))
+                        skip = 0
+                    self.spans.extend(clause)
+            if joined.strip():
+                if frame["n"] == 0 and clause:
+                    self.generating.append(clause)
+                frame["n"] += 1
 
         for i, ch in enumerate(mask):
             frame = stack[-1]
@@ -599,7 +610,7 @@ class _Structure:
                 frame.update(start=i + 1, first=False, pieces=[], bar=False)
             elif ch == "[":
                 frame["pieces"].append((frame["start"], i))
-                stack.append({"start": i + 1, "first": True, "pieces": [],
+                stack.append({"start": i + 1, "first": True, "pieces": [], "n": 0,
                               "bar": mask[i + 1:].lstrip().startswith("|")})
             elif ch == "]":
                 if len(stack) == 1:
@@ -610,6 +621,12 @@ class _Structure:
         if len(stack) != 1:
             raise NotRunnable("the search has unbalanced brackets, so its structure cannot be read")
         close(stack[0], len(mask))
+
+    def unmatched_clauses(self, pattern: Any) -> int:
+        """How many search clauses that start a pipeline (the main search, a subsearch) have no match of ``pattern``."""
+        matches = [(m.start(), m.end()) for m in pattern.finditer(self.mask)]
+        return sum(1 for clause in self.generating
+                   if not any(a <= ms and me <= b for a, b in clause for ms, me in matches))
 
     def rewrite(self, pattern: Any, replacement: str) -> Tuple[str, int]:
         """Replace every match of ``pattern`` (run on the mask) that lies inside a search clause."""
@@ -627,7 +644,8 @@ def scope_to_test_index(spl: str, test_index: str, marker: str) -> str:
     """Rewrite the index filters of the SPL's search clauses to the test index and run marker, or raise NotRunnable.
 
     Only search clauses are rewritten; ``eval``, ``where``, ``fields`` and the like keep their text, as do
-    quoted strings. A search with no index filter in any search clause is refused, and so is anything that
+    quoted strings. A search is refused when any clause that starts a pipeline (the search itself or a
+    subsearch) has no index filter, and so is anything that
     could read another index: commands that generate or redirect data, macros (their expansion is not
     visible), negated or listed index filters, and a ``source`` filter (the run marker is the source).
     """
@@ -643,6 +661,8 @@ def scope_to_test_index(spl: str, test_index: str, marker: str) -> str:
     out, rewritten = struct.rewrite(_INDEX, 'index=%s source="%s"' % (test_index, marker))
     if not rewritten:
         raise NotRunnable("the search names no index in a search clause, so it cannot be scoped to the test index")
+    if struct.unmatched_clauses(_INDEX):
+        raise NotRunnable("a search clause, such as a subsearch, names no index, so it cannot be scoped to the test index")
     return out
 
 

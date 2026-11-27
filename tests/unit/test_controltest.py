@@ -185,6 +185,43 @@ class ScopeTest(unittest.TestCase):
             with self.assertRaises(ct.NotRunnable, msg=spl):
                 ct.scope_to_test_index(spl, "t", "m")
 
+    def test_every_clause_that_starts_a_pipeline_needs_an_index(self):
+        """Issue #50: a subsearch without an index would run on the caller's default indexes."""
+        refused = [
+            "index=ids [ search sourcetype=auth user=admin ]",
+            "index=ids | append [ search sourcetype=auth ] | stats count",
+            "index=ids | join host [ search sourcetype=auth | fields host ]",
+            "| makeresults | join [ search host=x ]",
+            "index=ids [ search index=other | fields host ] [ search sourcetype=auth ]",
+        ]
+        for spl in refused:
+            with self.assertRaises(ct.NotRunnable, msg=spl) as ctx:
+                ct.scope_to_test_index(spl, "t", "m")
+            self.assertIn("names no index", str(ctx.exception), spl)
+
+    def test_subsearches_with_an_index_and_later_search_clauses_stay_runnable(self):
+        self.assertEqual(
+            ct.scope_to_test_index("index=ids | append [ search index=other sourcetype=x ] | stats count", "t", "m"),
+            'index=t source="m" | append [ search index=t source="m" sourcetype=x ] | stats count')
+        self.assertEqual(ct.scope_to_test_index("index=ids | search error | where x>1 | search foo=bar", "t", "m"),
+                         'index=t source="m" | search error | where x>1 | search foo=bar')
+        self.assertEqual(ct.scope_to_test_index("| search index=ids user=a", "t", "m"),
+                         '| search index=t source="m" user=a')
+        self.assertEqual(ct.scope_to_test_index("| makeresults | append [ search index=ids ]", "t", "m"),
+                         '| makeresults | append [ search index=t source="m" ]')
+
+    def test_a_generating_command_written_first_without_a_pipe_is_refused(self):
+        for spl in ("metadata type=hosts index=ids", "tstats count where index=ids", "dbinspect index=ids",
+                    "index=ids [ metadata type=hosts index=ids ]"):
+            with self.assertRaises(ct.NotRunnable, msg=spl) as ctx:
+                ct.scope_to_test_index(spl, "t", "m")
+            self.assertIn("cannot be redirected", str(ctx.exception), spl)
+
+    def test_a_breaker_name_used_as_a_search_term_is_not_a_command(self):
+        for spl, want in (("index=ids from=a", 'index=t source="m" from=a'),
+                          ("index=ids history failed", 'index=t source="m" history failed')):
+            self.assertEqual(ct.scope_to_test_index(spl, "t", "m"), want)
+
 
 class RunnerTest(unittest.TestCase):
     SPL = 'index=ids sourcetype=snort:alert | search "hit" | stats count'
