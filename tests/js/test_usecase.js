@@ -232,14 +232,30 @@ var tests = {
         assert.ok(hasText(v, /does not store or export/));
         assert.strictEqual(button(v, "Run search").disabled, false);
     },
-    "zero results is shown as a result, not an error": function () {
+    "zero results is shown as a result, not an error, without waiting for a data event": function () {
         var v = open(fixture("fenre_plain"));
         button(v, "Run search").dispatch("click");
         var sm = FakeSearchManager.instances[0];
-        sm.handlers["search:done"]({ content: { resultCount: 0 } });
+        sm.handlers["search:done"]({ content: { resultCount: 0, scanCount: 1200 } });
+        assert.strictEqual(sm.results, undefined, "no results model is needed for an empty result");
+        assert.ok(hasText(v, /Done: 0 results from 1200 events scanned/));
+        assert.ok(hasText(v, /returned no results/));
+        assert.strictEqual(button(v, "Run search").disabled, false, "the button is usable again (issue #43)");
+        assert.strictEqual(button(v, "Cancel").disabled, true);
+        FakeSearchManager.instances.length = 0;
+        button(v, "Run search").dispatch("click");
+        assert.strictEqual(FakeSearchManager.instances.length, 1, "a second run can start");
+    },
+    "an unknown result count still waits for the data event": function () {
+        var v = open(fixture("fenre_plain"));
+        button(v, "Run search").dispatch("click");
+        var sm = FakeSearchManager.instances[0];
+        sm.handlers["search:done"]({ content: { scanCount: 10 } });
+        assert.strictEqual(button(v, "Run search").disabled, true);
         sm.results.payload = { fields: ["a"], rows: [] };
         sm.results.handlers.data();
         assert.ok(hasText(v, /returned no results/));
+        assert.strictEqual(button(v, "Run search").disabled, false);
     },
     "failures are shown and re-enable the button": function () {
         var v = open(fixture("fenre_plain"));

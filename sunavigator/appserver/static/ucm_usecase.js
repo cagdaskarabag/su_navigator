@@ -1107,6 +1107,11 @@ function ucmViewMain($, ucm) {
                 status.textContent = "Done: " + total + " results from " + (c.scanCount || 0) + " events scanned" +
                     (c.runDuration !== undefined ? " in " + c.runDuration + " s" : "") + "." +
                     (c.isFinalized ? " The search was finalized before it completed (limit " + SEARCH_MAX_SECONDS + " s)." : "");
+                if (c.resultCount === 0) {
+                    renderResults(out, [], [], 0);
+                    finish();
+                    return;
+                }
                 var results = manager.data("results", { count: SEARCH_ROW_CAP, offset: 0, output_mode: "json_rows" });
                 results.on("data", function () {
                     if (active !== run) { return; }
