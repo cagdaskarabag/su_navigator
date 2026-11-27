@@ -359,6 +359,13 @@ directly through the KV REST API, bypassing validation. Those collections are
 derived data (rebuildable by sync/reindex) and never hold customer-owned
 state.
 
+KV Store has no compare-and-swap. A deployment record carries a `version`
+counter that is checked before each write and read back after it, which
+rejects most concurrent edits. Two saves of the same record that start from
+the same version within the same instant can both pass both checks; the later
+write wins and the earlier caller is told it succeeded. Both actions are still
+in `uc_audit`.
+
 Run status (D-031) is searched with the caller's token, so it never reveals
 scheduler data a user could not search themselves.
 
