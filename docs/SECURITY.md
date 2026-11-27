@@ -393,7 +393,7 @@ into `uc_audit` that names an existing row as its predecessor looks the same. On
 `admin` and `sc_admin` can write `uc_audit`, and they can rewrite the whole chain
 anyway (D-075).
 
-`tools/ucm_cli.py build-bundle` (the offline ESCU bundle builder) runs on the operator's
+`tools/ucm_cli.py build-escu-bundle` (the offline ESCU bundle builder) runs on the operator's
 machine, not in Splunk. It follows symlinks in a package directory and does not cap the
 number of archive members or the unpacked size. Run it only on packages you downloaded
 from Splunk. The bundle it writes is validated again when it is imported.
