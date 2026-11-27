@@ -696,7 +696,7 @@ repository has no labels today; the "Labels" line is a suggestion.
 **Body:**
 
 > ## Context
-> The lint (0.8.9, D-065) has five rules (`L001` to `L005`), each shown wrong on Splunk 10.2.9 with
+> The lint (0.8.9, D-065) has six rules (`L001` to `L006`; `L006` since 0.12.1), each shown wrong on Splunk 10.2.9 with
 > `/services/search/parser` or real searches. Rules that were considered and not shipped needed data, add-on fields
 > or functions that were not probed.
 >

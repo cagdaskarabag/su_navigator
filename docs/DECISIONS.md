@@ -2435,7 +2435,8 @@ as drift.
 * **6. SPL split.** `_backtick_end` (and `backtickEnd` in `ucm_common.js`) pair a macro or a three-backtick comment; an
   unclosed one is read as ordinary characters so every later command stays visible. Before the change, a backtick inside
   a comment hid an `outputlookup` in a subsearch from the static check (reproduced). The parity corpus has the cases. A live
-  test parses the case on the lab and runs nothing.
+  test parses the case on the lab. *Correction (0.12.1, D-083):* a parse of a subsearch that writes does run it; the
+  live test now asserts that such a search is refused before the parser.
 * **7. Bundle tool.** Symlinked package files are refused; archives are capped at 100,000 members and 1 GiB unpacked.
 * **8. Content.** A non-list `references` no longer raises; an invalid regular expression in a schema is skipped by the
   validator, and an upstream schema that has one is replaced by the bundled schema with a warning.
@@ -2448,3 +2449,35 @@ as drift.
 * Evidence: `tests/unit/test_hardening_0120.py`, `test_principal.py`, `test_spl_guard_parity.py`, `tests/js/test_admin.js`,
   `tests/live/test_live_splunk.py` (the audit-chain tests now POST; one new test for item 6).
 
+## D-083 Patch: subsearches that write are not parsed; control-test sourcetype note; lint rule L006
+
+*0.12.1.*
+
+* **Context.** The live suite on Splunk 10.4.3 (maintainer's instance, 27 Nov 2026) found that `POST /services/search/parser`
+  with `parse_only=true` runs subsearches: a draft with `| makeresults | append [ | makeresults | outputlookup x.csv ]`
+  came back `parse_ok` with `side_effects: ["outputlookup"]` and the lookup was written, by a subsearch search job of the
+  calling user (`_audit`: `subsearch_searchparsetmp_...`). The static check named the side effect, but only after the parse
+  had run, so the "a parse never runs the search" assumption in D-026 and D-082 item 6 was wrong for subsearches. It is not
+  a privilege escalation (the job runs as the caller) and not new in 0.12.0.
+* **Fix.** `spl.analysis.subsearch_side_effects` finds side-effect commands inside `[ ... ]` using the same quote masking,
+  backtick pairing and segment split as the policy. `spl.parser.parse` raises `ValidationError` before it calls splunkd when
+  any is found, so validation, deployment and the control-test pre-check show "not sent to Splunk's parser". A side-effect
+  command at the top level is still parsed: Splunk does not run the main pipeline when it parses.
+* **Not closed.** A macro whose body holds a subsearch that writes is expanded by the parser, not by the app, so it still
+  runs (`test_policy_sees_commands_in_macros_inside_subsearches` shows it). Closing it needs the macro definitions
+  resolved before the parse; macros are administrator-created configuration, so this is listed as a known limit.
+* **Control test.** The Windows add-on (`Splunk_TA_windows`) rewrites `sourcetype=WinEventLog:Security` to `WinEventLog` at
+  index time (confirmed on 10.4.3: `stats count by sourcetype` over the test index shows `WinEventLog`; a search on the
+  original name finds 0 events, on the new name 4). It is the instance, not the search or the app. When the positive run is
+  short, the runner asks the test index which sourcetypes the marker's events have and, if the fixture's is not among them,
+  adds that to the reason and `positive.indexed_sourcetypes`. The verdict does not change. This is also Fenre report
+  section 4: 158 use cases filter on `sourcetype="WinEventLog:..."` and would miss events on an instance with the add-on;
+  whether that is a Fenre defect is for the Fenre owner, and the app does not rewrite use cases.
+* **Lint.** `L006` flags `\u`, `\U`, `\l`, `\L`, `\F` in a `match`/`replace` regex after eval unescaping. Evidence: the
+  parser answers "PCRE2 does not support \F, \L, \l, \N{name}, \U, or \u" for each of the five and accepts `\N` and `\E`
+  and the four-backslash form. Fenre `0e21f019`: UC-1.2.66 and UC-1.2.29 (`"^\\registry\\user"`, a second defect in a search
+  L004 already flagged); ESCU 0 of 2,214. Both Fenre hits were sent to the parser and rejected.
+* **Tests.** The live suite now skips with a reason where the instance cannot run a test (Windows add-on, CIM add-on, no
+  ESCU, GitHub rate limit) and no longer depends on earlier runs (scheduler-visibility refusal count, evidence-pack timestamps).
+* Evidence: `tests/unit/test_parse_guard.py`, `test_controltest_sourcetype.py`, `test_spl_lint.py`,
+  `tests/live/test_live_splunk.py`, `docs/upstream/FENRE_UPSTREAM_REPORT.md`.

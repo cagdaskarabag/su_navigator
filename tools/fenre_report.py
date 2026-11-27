@@ -61,6 +61,12 @@ RULE_TEXT: Dict[str, Tuple[str, str, str]] = {
         "no events.",
         "Snap to one unit, for example `-6h@m`, and use `span=5m` in `bin`, `tstats` or `timechart` for 5-minute buckets.",
     ),
+    "L006": (
+        "Regex with an escape PCRE2 does not support",
+        "After the eval string is unescaped, `\\u`, `\\U`, `\\l`, `\\L` and `\\F` remain in the regex, usually a Windows "
+        "path written `\"^.:\\\\users\\\\\"`. PCRE2 does not support them and Splunk rejects the search.",
+        "Write four backslashes for each literal backslash: `\"^.:\\\\\\\\users\\\\\\\\\"`.",
+    ),
 }
 
 

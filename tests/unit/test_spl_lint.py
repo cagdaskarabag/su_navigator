@@ -194,6 +194,28 @@ class TrailingBackslashTest(unittest.TestCase):
             self.assertEqual(rules(spl), [], spl)
 
 
+class UnsupportedEscapeTest(unittest.TestCase):
+    def test_windows_path_with_unsupported_escapes(self):
+        f = only('| where match(path,"^.:\\\\users\\\\x")', "L006")
+        self.assertEqual((f["command"], f["rule"]), ("where", "L006"))
+        self.assertIn("\\u", f["message"])
+        self.assertEqual(rules('| eval r=replace(k,"^\\\\registry\\\\user","hku")'), ["L006"])
+        for letter in "uULlF":
+            self.assertEqual(rules('| where match(x,"a\\\\%sb")' % letter), ["L006"], letter)
+
+    def test_valid_escapes_are_silent(self):
+        for spl in ('| where match(path,"^.:\\\\\\\\users\\\\\\\\x")',
+                    '| eval r=replace(k,"^\\\\registry","hku")',
+                    '| where match(x,"\\\\d+\\\\s")',
+                    '| where match(x,"a\\\\Nb")',
+                    'index=a | rex field=_raw "\\\\users"',
+                    'index=a "\\\\users"'):
+            self.assertEqual(rules(spl), [], spl)
+
+    def test_both_rules_can_fire_on_one_regex(self):
+        self.assertEqual(rules('| where match(t,"^.:\\\\users\\\\temp\\\\")'), ["L004", "L006"])
+
+
 class TimeSnapTest(unittest.TestCase):
     def test_snap_to_a_count_of_units(self):
         f = only("| tstats count where index=a earliest=-6h@5m latest=now by host", "L005")

@@ -341,7 +341,7 @@ Full model: `docs/SECURITY.md`.
   `max_rows_per_query` (50,000 by default). The catalogue marks a total at the
   bound (`total_capped`) and Administration warns near it; `[catalog] kv_row_limit`
   tells the app the platform value (issue #14, D-065).
-* The SPL lint (`spl/lint.py`) is advisory, covers five rules shown wrong on Splunk
+* The SPL lint (`spl/lint.py`) is advisory, covers six rules shown wrong on Splunk
   10.2.9, does not expand macros and never changes a gate or score (D-065).
 * Free-text search is a case-insensitive substring match (all terms must
   match) over a precomputed `search_text` field holding id, title,

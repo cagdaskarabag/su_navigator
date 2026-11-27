@@ -1,10 +1,10 @@
-# SUNavigator 0.12.0 — operator guide
+# SUNavigator 0.12.1 — operator guide
 
 **SUNavigator** is a use-case navigator for Splunk Enterprise. It discovers, assesses,
 selects, validates and deploys monitoring use cases.
 
 This is the install, usage and troubleshooting guide for **SUNavigator
-0.12.0**. It is written for a single Splunk Enterprise instance
+0.12.1**. It is written for a single Splunk Enterprise instance
 (search head + indexer on one host), including a local macOS install. Search
 head clusters with a deployer, Splunk Cloud and Splunk Enterprise Security are **not** validated and not planned
 (no lab; D-078).
@@ -25,6 +25,33 @@ Related documents (design, not how-to):
 ---
 
 ## What changed in 0.9.x to 0.12
+
+### 0.12.1
+
+0.12.1 is a patch release (D-083). It adds no migration and changes no setting.
+
+- **A subsearch that writes is no longer sent to Splunk's parser.** Splunk expands a subsearch while it parses the
+  search, so `... | append [ | makeresults | outputlookup x.csv ]` wrote the lookup during validation or deployment,
+  as the user who pressed the button, even though only a parse was asked for. The static check already named the side
+  effect, but only after the parse had run. Now a search with `outputlookup`, `outputcsv`, `collect`, `sendemail`,
+  `delete`, `script`, `run` or another side-effect command inside a `[ ... ]` subsearch is not sent to the parser at all;
+  validation shows "not sent to Splunk's parser: a subsearch uses ...". Such a search could not be deployed before
+  either. The same command at the top level of a search is still parsed, because a parse does not run it. A macro
+  whose body holds such a subsearch is not seen before the parse (see §12).
+- **A failed control test says when an add-on changed the sourcetype.** With `Splunk_TA_windows` installed, events sent as
+  `WinEventLog:Security` are stored as `WinEventLog`, so a use case that filters on the first name finds nothing. When the
+  positive run is short, the result now reads "the fixture was sent as sourcetype WinEventLog:Security but indexed as
+  WinEventLog: an add-on rewrote it on ingest ...", and the result lists `indexed_sourcetypes`. The verdict is still
+  `failed`; it is the instance, not the search.
+- **New lint rule L006** (advisory). A regex for `match` or `replace` that contains `\u`, `\U`, `\l`, `\L` or `\F` once
+  the eval string is unescaped, usually a Windows path written `"\\users"`. PCRE2 does not support them and Splunk rejects
+  the search. On Fenre `0e21f019` it flags UC-1.2.66 and UC-1.2.29 (a second defect in a search L004 already flagged);
+  none of the 2,214 ESCU detections.
+- **Doc fix.** Deleting a deployed search in Settings is refused for roles without `[savedsearches]` write; splunkd
+  answers 400 or 403 depending on the path.
+- **Tests.** The live suite skips, with a reason, the control-test class when `Splunk_TA_windows` is installed, the
+  populated-model class when `Splunk_SA_CIM` is installed and the external-match class without ESCU; the remote manifest
+  test skips on a GitHub rate limit; the scheduler-visibility and evidence-pack tests no longer depend on earlier runs.
 
 ### 0.12.0
 
@@ -713,7 +740,7 @@ provider is [Fenre](https://github.com/fenre/splunk-monitoring-use-cases)):
 6. **Cover** MITRE ATT&CK (and regulation controls) from catalogue → running.
 
 It never executes imported SPL as part of catalogue, discovery or coverage;
-the one exception is the interactive search a user starts from the use-case page,
+a parse can run subsearches, which 0.12.1 guards (see "What changed"); the one exception is the interactive search a user starts from the use-case page,
 which runs as that user (§6.2a, D-058).
 Preview and field sampling are explicit, bounded, and refuse side-effect
 commands (`delete`, `outputlookup`, `collect`, script, and similar). Deployed
@@ -721,7 +748,7 @@ searches have **no script alert actions**. Email and webhook actions exist only 
 an administrator has listed permitted destinations in `[actions]` and the approver has acknowledged
 them (0.9.5, D-072); the default alert mode only writes to Splunk's Triggered Alerts.
 
-**Not in 0.12.0:** PDF export of coverage, a bundled regulation-control
+**Not in 0.12.1:** PDF export of coverage, a bundled regulation-control
 catalogue, SHC validation with a deployer and indexer peers, Splunk Cloud
 vetting submission, and any Enterprise Security output mode (all three dropped for lack of a lab, D-078;
 0.9.1 only reads ES and ESCU state and hands off, §5.2b).
@@ -735,7 +762,7 @@ vetting submission, and any Enterprise Security output mode (all three dropped f
 | Splunk | Enterprise 10.x (validated on 10.2.9 in development; tested by operators on 10.4.3 Darwin arm64). Python 3.9 or 3.13 in Splunk. |
 | KV Store | Must reach `status: ready`. The app stores catalogue, inventory, readiness, selections, deployments and audit in KV collections. |
 | Role | First-time setup needs `admin` (or `sc_admin` on Cloud). |
-| Disk | The 0.12.0 package is a few megabytes. Category 9 of Fenre is about 120 records; the full Fenre corpus is tens of thousands of records. |
+| Disk | The 0.12.1 package is a few megabytes. Category 9 of Fenre is about 120 records; the full Fenre corpus is tens of thousands of records. |
 | Network | Optional. Remote sync needs HTTPS to `api.github.com` and `raw.githubusercontent.com`. Offline import needs none. |
 | Browser | Splunk Web. The app is a set of Simple XML views plus JavaScript under `/en-US/app/sunavigator/`. |
 
@@ -752,7 +779,7 @@ Placeholders used below:
 
 ```bash
 ./tools/package.sh
-# writes dist/sunavigator-0.12.0.tar.gz
+# writes dist/sunavigator-0.12.1.tar.gz
 ```
 
 The tarball has a single top-level folder `sunavigator/`
@@ -770,11 +797,11 @@ then fails in the UI with `500 Internal Server Error` even though splunkd is
 still unpacking. Use the CLI:
 
 ```bash
-$SPLUNK_HOME/bin/splunk install app /path/to/sunavigator-0.12.0.tar.gz \
+$SPLUNK_HOME/bin/splunk install app /path/to/sunavigator-0.12.1.tar.gz \
   -auth "$SPLUNK_USER:$SPLUNK_PASSWORD"
 # first install: omit -update
 # upgrade of an existing copy:
-$SPLUNK_HOME/bin/splunk install app /path/to/sunavigator-0.12.0.tar.gz \
+$SPLUNK_HOME/bin/splunk install app /path/to/sunavigator-0.12.1.tar.gz \
   -update 1 -auth "$SPLUNK_USER:$SPLUNK_PASSWORD"
 
 $SPLUNK_HOME/bin/splunk restart
@@ -911,7 +938,7 @@ The app refuses deploy, enable, disable, rollback and retire until this is set
 (the message names the setting). Searches run with that account's indexes,
 so grant it read access to the indexes your use cases search. Operators have
 no write access to the saved searches themselves: editing one in Splunk Web
-returns 403, and so does deleting it.
+returns 403, and deleting it is refused too (splunkd answers 400 or 403 depending on the path).
 
 **What the scheduler role may do (0.9.2, D-068).** `ucm_scheduler` no longer imports
 `user`. It holds `search`, `schedule_search`, `get_metadata`, `input_file`,
@@ -1393,6 +1420,7 @@ Splunk's parser, the SPL policy and the approval workflow decide as before.
 | L003 | `match`, `like` or `cidrmatch` with the wrong number of arguments in `where`, `eval` and the like (for example `match(x, "re", "i")`). | Splunk rejects it: "The arguments to the function are invalid". Put the flag in the regex, `(?i)`. |
 | L004 | A regex string for `match` or `replace` that ends in a single backslash after eval unescaping (`"^.*\\"`). | Splunk rejects it: "Regex: \ at end of pattern". Write four backslashes. |
 | L005 | A time modifier that snaps to a number of units (`-6h@5m`, `@w8`). | `tstats` rejects it, and a plain search selects nothing. Use `-6h@m` and bin with `span=5m`. |
+| L006 | A regex string for `match` or `replace` that contains `\u`, `\U`, `\l`, `\L` or `\F` after eval unescaping (`"^.:\\users\\"`). | Splunk rejects it: "PCRE2 does not support \F, \L, \l, \N{name}, \U, or \u". Write four backslashes for each literal one. |
 
 Each finding shows the rule, the segment number and command, the text it found and a
 suggested rewrite. **Dismiss** hides one finding on that page until it is loaded again;
@@ -1411,7 +1439,7 @@ python3 tools/spl_lint_corpus.py --fenre /tmp/fenre --escu /tmp/DA-ESS-ContentUp
 ```
 
 Over the Fenre `0e21f019` corpus the lint flags 141 of 19,771 searches (L001 80, L002 56,
-L003 1, L004 3, L005 1) and none of the 2,214 ESCU detections. The lists, and why the
+L003 1, L004 3, L005 1, L006 2; L006 only adds findings to searches that L004 already flagged) and none of the 2,214 ESCU detections. The lists, and why the
 counts differ from the first estimate of 51 and 54, are in
 `docs/upstream/SPL_LINT_CORPUS.md`.
 
@@ -1901,7 +1929,7 @@ app. Do the steps in this order:
    $SPLUNK_HOME/bin/splunk restart
    ```
 
-4. **Install SUNavigator 0.12.0** as in §3.2. The first install omits
+4. **Install SUNavigator 0.12.1** as in §3.2. The first install omits
    `-update`, because `sunavigator` is a new app ID.
 5. **Re-create the GitHub token** if you use one (§3.6). It must be stored in
    realm `sunavigator`. The 0.7.0 token in realm `splunk_use_case_manager` is
@@ -2282,7 +2310,7 @@ Full table: [ARCHITECTURE.md §6](ARCHITECTURE.md).
 
 ---
 
-## 12. Known limitations (0.12.0)
+## 12. Known limitations (0.12.1)
 
 Each item says where to read more and ends with its tracking: an issue number on GitHub, a draft
 (`N-nn`) in `docs/ISSUES_PENDING.md` that has not been filed yet, or "no issue" for a limit that is
@@ -2351,7 +2379,12 @@ by design.
 
 **SPL checks**
 
-- The SPL lint (§6.2b) is advice and covers five rules shown wrong on 10.2.9. It does
+- A macro whose body holds a subsearch with a side-effect command is not seen before the parse: Splunk expands the
+  macro and runs the subsearch while it parses (the live test `test_policy_sees_commands_in_macros_inside_subsearches`
+  shows it). The policy still names the command from the parsed pipeline and refuses to deploy, preview or enable it,
+  but the write has happened by then, as the user who pressed Validate. Macros are server configuration that an
+  administrator creates, which is why this is a known limit and not a closed gap (D-083).
+- The SPL lint (§6.2b) is advice and covers six rules shown wrong on 10.2.9. It does
   not expand macros. A clean result is not proof of correct SPL. More rules only with evidence from the lab
   (#29).
 - The use-case page "Run search" runs in your browser with your own permissions and
@@ -2418,7 +2451,7 @@ by design.
 
 ## 13. Quick start checklist
 
-1. `splunk install app sunavigator-0.12.0.tar.gz` then `splunk restart`.
+1. `splunk install app sunavigator-0.12.1.tar.gz` then `splunk restart`.
 2. `splunk show kvstore-status` → `ready` (macOS: §9.2 if stuck on `starting`).
 3. Open **SUNavigator → Administration**; all platform pills green.
 4. **Check provider for categories** → tick **9** → **Synchronize**, **or**

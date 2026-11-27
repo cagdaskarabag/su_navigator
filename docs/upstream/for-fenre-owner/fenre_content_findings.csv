@@ -152,3 +152,5 @@ L004,UC-1.2.119,Sysmon Run and RunOnce Registry Value Sets,primary,eval,"replace
 L004,UC-1.2.119,Sysmon Run and RunOnce Registry Value Sets,primary,eval,"match(registry_key_lc,""^hklm\\"")","Write the end of the string as ""...\\\\"""
 L004,UC-1.2.119,Sysmon Run and RunOnce Registry Value Sets,primary,eval,"replace(registry_key_lc,""^(hklm|hku\\[^\\]+)\\"","""")","Write the end of the string as ""...\\\\"""
 L005,UC-3.2.1,Kubernetes Pod Container Restart Churn and Rolling Restart-Rate Anomalies,primary,tstats,earliest=-6h@5m,"Snap to one unit, for example -6h@m, and use span=5m in bin, tstats or timechart if you need 5-minute buckets"
+L006,UC-1.2.29,Registry Run Key Modification (Persistence),primary,eval,"replace(registry_key_lc,""^\\registry\\user"",""hku"")","Write each literal backslash as four backslashes in the eval string, for example ""^.:\\\\users"""
+L006,UC-1.2.66,Sysmon Executable or Script Creation in Selected User-Writable Paths,primary,eval,"match(target_filename,""^.:\\users\\[^\\]+\\appdata\\local\\temp\\"")","Write each literal backslash as four backslashes in the eval string, for example ""^.:\\\\users"""

@@ -1,6 +1,6 @@
 # Roadmap
 
-Status: 0.12.0 beta. The code freeze was lifted by the maintainer on 27 Nov 2026; the maintainer decides what goes into each release. Every item links to its issue. Nothing here is a promise of a date.
+Status: 0.12.1 beta. The code freeze was lifted by the maintainer on 27 Nov 2026; the maintainer decides what goes into each release. Every item links to its issue. Nothing here is a promise of a date.
 
 What the beta is for: finding out which parts people use (readiness and governed deployment, or the compliance pages),
 and what breaks on their Splunk. Feedback goes through the [feedback form](https://github.com/cagdaskarabag/su_navigator/issues/new?template=feedback.yml).

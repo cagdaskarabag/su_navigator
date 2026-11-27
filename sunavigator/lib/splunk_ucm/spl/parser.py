@@ -8,7 +8,7 @@ from typing import List
 
 from ..errors import ValidationError
 from ..platform.search import ParseResult, SearchClient
-from .analysis import HIGH_COST_COMMANDS
+from .analysis import HIGH_COST_COMMANDS, subsearch_side_effects
 
 
 def for_parser(spl: str) -> str:
@@ -35,6 +35,11 @@ def parser_candidates(spl: str) -> List[str]:
 
 
 def parse(client: SearchClient, spl: str, app: str = "") -> ParseResult:
+    unsafe = subsearch_side_effects(spl)
+    if unsafe:
+        raise ValidationError(
+            "not sent to Splunk's parser: a subsearch uses %s, and Splunk runs subsearches while it parses a search"
+            % ", ".join(unsafe), {"commands": unsafe})
     last = None
     for candidate in parser_candidates(spl):
         last = client.parse(candidate, app=app) if app else client.parse(candidate)

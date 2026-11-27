@@ -156,18 +156,19 @@ class LiveOneshotContractTest(unittest.TestCase):
             self.assertEqual(status, 404, "the probe lookup must not be left behind")
 
     def test_backtick_in_a_comment_does_not_hide_a_subsearch_outputlookup(self):
-        """Issue #51, item 6. The search is only parsed, never run. Splunk may refuse it or accept it; the static check
-        must name the side effect either way, and this records which of the two Splunk does."""
+        """Issue #51, item 6, and the parse guard. Splunk runs subsearches while it parses, so a subsearch that writes must
+        not reach the parser at all, whatever a comment or macro quote before it looks like."""
+        from splunk_ucm.errors import ValidationError
         from splunk_ucm.platform.search import SearchClient
         from splunk_ucm.spl.parser import parse
         from splunk_ucm.spl.policy import classify
         client = SearchClient(transport())
-        spl = "| makeresults | append [ ```a`b``` | makeresults | outputlookup sun_live_never_written.csv ]"
+        lookup = "sun_live_never_written_%s.csv" % uuid.uuid4().hex[:6]
+        spl = "| makeresults | append [ ```a`b``` | makeresults | outputlookup %s ]" % lookup
         self.assertEqual(classify(spl).side_effects, ["outputlookup"])
-        parsed = parse(client, spl, app="sunavigator")
-        if parsed.ok:
-            self.assertEqual(classify(spl, parsed).side_effects, ["outputlookup"])
-        status, _ = transport().request("GET", "/servicesNS/nobody/sunavigator/data/lookup-table-files/sun_live_never_written.csv",
+        with self.assertRaises(ValidationError):
+            parse(client, spl, app="sunavigator")
+        status, _ = transport().request("GET", "/servicesNS/nobody/sunavigator/data/lookup-table-files/" + lookup,
                                         None, None)
         self.assertEqual(status, 404)
 
@@ -427,10 +428,13 @@ class LiveApiTest(unittest.TestCase):
         if not regs:
             self.skipTest("no regulation mappings imported")
         framework = regs[0]
-        status, first = api(self.viewer, "GET", "frameworks/evidence", {"framework": framework, "format": "csv"})
-        self.assertEqual(status, 200, first)
-        _, again = api(self.viewer, "GET", "frameworks/evidence", {"framework": framework, "format": "csv"})
-        self.assertEqual(first["sha256"], again["sha256"])
+        for _ in range(3):
+            status, first = api(self.viewer, "GET", "frameworks/evidence", {"framework": framework, "format": "csv"})
+            self.assertEqual(status, 200, first)
+            _, again = api(self.viewer, "GET", "frameworks/evidence", {"framework": framework, "format": "csv"})
+            if first["sha256"] == again["sha256"]:
+                break
+        self.assertEqual(first["sha256"], again["sha256"], "the pack embeds readiness timestamps; three tries all raced a readiness update")
         self.assertEqual(first["sha256"], hashlib.sha256(first["content"].encode("utf-8")).hexdigest())
         _, pack = api(self.viewer, "GET", "frameworks/evidence", {"framework": framework})
         gaps = {c["clause"] for c in json.loads(pack["content"])["clauses"] if c["gap"]}
@@ -1283,7 +1287,13 @@ class LiveSchedulerVisibilityTest(unittest.TestCase):
         body["id"] = self.UC
         return api(who, "POST", "deployment/" + action, body=body)
 
+    def second_person_refusals(self):
+        _, audit = api(self.admin, "GET", "audit", {"prefix": "refused.", "limit": "500"})
+        return len([e for e in audit["events"] if e["object_id"] == self.UC and e["outcome"] == "refused"
+                    and e["details"].get("code") == "second_person_required"])
+
     def test_restricted_role_then_granted(self):
+        second_person_before = self.second_person_refusals()
         status, summary = api(self.operator, "GET", "readiness/summary")
         self.assertEqual(status, 200, summary)
         card = summary["scheduler"]
@@ -1338,11 +1348,11 @@ class LiveSchedulerVisibilityTest(unittest.TestCase):
         _, audit = api(self.admin, "GET", "audit", {"prefix": "deployment.approve", "limit": "20"})
         approvals = [e for e in audit["events"] if e["object_id"] == self.UC]
         self.assertTrue(any(e["details"].get("access_gap_reason") for e in approvals), approvals)
-        _, audit = api(self.admin, "GET", "audit", {"prefix": "refused.", "limit": "50"})
+        _, audit = api(self.admin, "GET", "audit", {"prefix": "refused.", "limit": "500"})
         refused = [e for e in audit["events"] if e["object_id"] == self.UC and e["outcome"] == "refused"]
         codes = {e["details"]["code"] for e in refused}
         self.assertTrue({"access_gap_reason_required", "second_person_required"} <= codes, refused)
-        self.assertEqual(len([e for e in refused if e["details"]["code"] == "second_person_required"]), 1, refused)
+        self.assertEqual(self.second_person_refusals() - second_person_before, 1, refused)
 
         self.role(srchIndexesAllowed="_internal")
         status, summary = api(self.operator, "GET", "readiness/summary")

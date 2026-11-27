@@ -1,6 +1,6 @@
-# SUNavigator 0.12.0: feature status
+# SUNavigator 0.12.1: feature status
 
-**Beta.** Version 0.12.0, build 25. The last tagged release is [v0.11.0](https://github.com/cagdaskarabag/su_navigator/releases/tag/v0.11.0); 0.11.1 and 0.12.0 are tagged after the live suite has run on Splunk 10.4.x (issue #42). The open work is in [ROADMAP.md](ROADMAP.md).
+**Beta.** Version 0.12.1, build 26. The last tagged release is [v0.11.0](https://github.com/cagdaskarabag/su_navigator/releases/tag/v0.11.0); 0.11.1, 0.12.0 and 0.12.1 are tagged after the live suite has run on Splunk 10.4.x (issue #42). The open work is in [ROADMAP.md](ROADMAP.md).
 Validated on Splunk Enterprise 10.2.9, single instance. Splunk Cloud, search head clusters with a deployer, and
 Splunk Enterprise Security 8 are **not validated and not planned** (D-078).
 
@@ -21,7 +21,7 @@ Legend: **Working** = built and checked on the lab. **Built, limited** = works, 
 | Content | Sync of the Fenre catalogue from GitHub (pinned ref), offline bundle import, ESCU bundle import | §5 |
 | Catalogue | Search, multi-select facets with counts, criticality, difficulty, MITRE, provider, wave, maturity, data source, quality flags, bookmarks, availability filter | D-059, D-066, D-074 |
 | Use-case page | Description, SPL, requirements, readiness card, MITRE and regulation mapping, provider and twin links | §6.2 |
-| SPL lint | Five rules, each shown wrong on Splunk 10.2.9; advice only, changes no gate | D-065, §6.2b |
+| SPL lint | Six rules, each shown wrong on Splunk 10.2.9; advice only, changes no gate | D-065, §6.2b |
 | Interactive search | Runs the SPL in the browser with the user's own rights; refuses commands it cannot show | D-058, §6.2a |
 | Discovery | Indexes, sourcetypes, apps, data models; populated check for data models | §6.3, D-063 |
 | Readiness | Deterministic requirement checks, states and score, evidence list, staleness, scheduler access check | §6.4, D-069 to D-070 |

@@ -219,6 +219,38 @@ def segment_commands(masked: str) -> List[Tuple[int, int, str, Optional[str]]]:
     return [(s, e, kind, _segment_command(masked[s:e], kind, hosts.get(s, ""))) for s, e, kind in segments]
 
 
+def subsearch_side_effects(spl: str) -> List[str]:
+    """Side-effect commands that sit inside a ``[ ... ]`` subsearch.
+
+    Splunk expands subsearches while it parses a search, so such a command runs even
+    though the search itself is only being parsed.
+    """
+    if not spl or not spl.strip():
+        return []
+    masked = _mask_quotes(spl)
+    depth_at = [0] * (len(masked) + 1)
+    depth = 0
+    i = 0
+    while i < len(masked):
+        ch = masked[i]
+        if ch == "`":
+            end = _backtick_end(masked, i)
+            if end is not None:
+                for j in range(i, min(end, len(masked)) + 1):
+                    depth_at[j] = depth
+                i = end
+                continue
+        elif ch == "[":
+            depth += 1
+        elif ch == "]" and depth:
+            depth -= 1
+        depth_at[i + 1] = depth
+        i += 1
+    found = [cmd for s, _, _, cmd in segment_commands(masked)
+             if cmd in SIDE_EFFECT_COMMANDS and depth_at[s] > 0]
+    return _uniq(found)
+
+
 def _top_level_parts(text: str, start: int) -> List[Tuple[int, str]]:
     """Split at commas outside parentheses; returns ``(offset, part)``."""
     parts, depth, begin = [], 0, start

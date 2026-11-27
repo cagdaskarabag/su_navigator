@@ -116,6 +116,10 @@ issue can be written from it.
   *Correction (0.8.9):* the second call in the same search, `replace(TargetObject,"\\[^\\]+$","")`,
   was listed here as having the same defect. It does not: it unescapes to `\[^\]+$`, which is
   a valid regex, and Splunk accepts it (lab, 10.2.9). Only the `"^.*\\"` argument is wrong.
+* *Addition (0.12.1, lint `L006`):* the same search has a second defect the report of 27 Nov 2026 did not list:
+  `replace(registry_key_lc,"^\\registry\\user","hku")` unescapes to `^\registry\user`, and PCRE2 rejects `\u`
+  (checked on 10.4.3 and on the parser: "PCRE2 does not support \F, \L, \l, \N{name}, \U, or \u"). UC-1.2.66 has the same
+  class of defect in `"^.:\\users\\..."`. A fix of only the trailing backslash leaves both searches rejected.
 * Suggested fix: `"^.*\\\\"` (a regex backslash needs four in an eval string). The search also filters on `source=`, which the control test cannot scope
   (see the last section).
 
@@ -220,3 +224,14 @@ in 80 searches (61 with `match`), F-09 in 56, F-06 in 3 (UC-1.2.29, UC-1.2.66, U
 in 1, F-08 in 1. All 61 searches flagged for F-06 to F-09 are rejected by Splunk's own parser on
 the lab. The ESCU corpus (2,214 detections) has none. The per-rule lists and the difference from
 the earlier hand counts are in [SPL_LINT_CORPUS.md](SPL_LINT_CORPUS.md).
+
+## Independent check of 27 Nov 2026 and the open question
+
+`FENRE_UPSTREAM_REPORT.md` (another SUNavigator session against the maintainer's own Splunk, Fenre `0e21f019`)
+reproduced the lint counts exactly: A 80, B 56, C 3, D 1, E 1 (141 searches), and the same use case lists. Its F, G and H
+are F-05, F-10 and F-01/F-02/F-04/F-11 above. Its section 4, the `Splunk_TA_windows` rewrite of
+`WinEventLog:Security` to `WinEventLog`, is **confirmed on Splunk 10.4.3 with the add-on** (a control test on UC-9.1.2:
+3 events indexed, `stats count by sourcetype` shows `WinEventLog`, the use case's own filter finds 0 and
+`sourcetype="WinEventLog"` finds 4). Whether the 158 use cases that filter on `WinEventLog:...` are a Fenre defect on a
+live forwarder is not tested and is for the Fenre owner. SUNavigator 0.12.1 only explains it when a control test comes
+back short (D-083).

@@ -4,9 +4,9 @@ This is a courtesy report. It is written to be read on its own and nothing in it
 Use as much or as little of it as is useful; every item says how to reproduce it and what would fix it.
 
 * Catalogue checked: Fenre `main` at commit `0e21f019` (16,726 use cases, 19,771 searches counting the CIM variants).
-* Tool: SUNavigator 0.11.0, `tools/fenre_report.py` (SPL lint, `sunavigator/lib/splunk_ucm/spl/lint.py`) and the control-test campaign (`tools/controltest_campaign.py`).
+* Tool: SUNavigator 0.12.1 (https://github.com/cagdaskarabag/su_navigator, Apache-2.0), `tools/fenre_report.py` (SPL lint, `sunavigator/lib/splunk_ucm/spl/lint.py`) and the control-test campaign (`tools/controltest_campaign.py`).
 * Environment: Splunk Enterprise 10.2.9, no add-ons installed. Every rule below fires only for a construct that was shown to be wrong on that version. For rules `L002` to `L005` the flagged searches were also sent to Splunk's own parser (`/services/search/parser`) and all of them were rejected. `L001` is silent in the parser (Splunk accepts the search and returns nothing), so it is shown by the one-line check in its section.
-* Counting: 153 findings in 141 searches. A search counts once per rule however often the rule fires in it.
+* Counting: 155 findings in 141 searches. A search counts once per rule however often the rule fires in it.
 
 ## Part A. SPL that Splunk rejects or that cannot match
 
@@ -17,6 +17,7 @@ Use as much or as little of it as is useful; every item says how to reproduce it
 | L003 | `match`, `like` or `cidrmatch` with the wrong number of arguments | 1 | 1 |
 | L004 | Regex ending in a single backslash inside an eval string | 3 | 7 |
 | L005 | Time modifier that snaps to a number of units | 1 | 1 |
+| L006 | Regex with an escape PCRE2 does not support | 2 | 2 |
 
 The same rows, one per finding, are in `fenre_content_findings.csv`.
 
@@ -217,6 +218,16 @@ By function (findings): `match` 62, `like` 12, `lower` 5, `isnotnull` 4, `cidrma
 |---|---|---|---|---|
 | UC-3.2.1 | Kubernetes Pod Container Restart Churn and Rolling Restart-Rate Anoma… | primary | `tstats` | `earliest=-6h@5m` |
 
+### L006 Regex with an escape PCRE2 does not support
+
+* Why it is wrong: After the eval string is unescaped, `\u`, `\U`, `\l`, `\L` and `\F` remain in the regex, usually a Windows path written `"^.:\\users\\"`. PCRE2 does not support them and Splunk rejects the search.
+* Suggested fix: Write four backslashes for each literal backslash: `"^.:\\\\users\\\\"`.
+
+| Use case | Title | Search | Command | Construct |
+|---|---|---|---|---|
+| UC-1.2.29 | Registry Run Key Modification (Persistence) | primary | `eval` | `replace(registry_key_lc,"^\\registry\\user","hku")` |
+| UC-1.2.66 | Sysmon Executable or Script Creation in Selected User-Writable Paths | primary | `eval` | `match(target_filename,"^.:\\users\\[^\\]+\\appdata\\local\\temp\\")` |
+
 ## Part B. Findings from running the fixtures
 
 SUNavigator ran the events of 94 fixtures through each use case's own SPL on a lab with no add-ons and compared the result with the fixture's manifest. A defect is listed only when it holds without any add-on, or when it was shown to hold with the add-on's fields emulated. Fixture and manifest names refer to the files in `samples/` and `content/`.
@@ -321,6 +332,10 @@ SUNavigator ran the events of 94 fixtures through each use case's own SPL on a l
   *Correction (0.8.9):* the second call in the same search, `replace(TargetObject,"\\[^\\]+$","")`,
   was listed here as having the same defect. It does not: it unescapes to `\[^\]+$`, which is
   a valid regex, and Splunk accepts it (lab, 10.2.9). Only the `"^.*\\"` argument is wrong.
+* *Addition (0.12.1, lint `L006`):* the same search has a second defect the report of 27 Nov 2026 did not list:
+  `replace(registry_key_lc,"^\\registry\\user","hku")` unescapes to `^\registry\user`, and PCRE2 rejects `\u`
+  (checked on 10.4.3 and on the parser: "PCRE2 does not support \F, \L, \l, \N{name}, \U, or \u"). UC-1.2.66 has the same
+  class of defect in `"^.:\\users\\..."`. A fix of only the trailing backslash leaves both searches rejected.
 * Suggested fix: `"^.*\\\\"` (a regex backslash needs four in an eval string). The search also filters on `source=`, which the control test cannot scope
   (see the last section).
 

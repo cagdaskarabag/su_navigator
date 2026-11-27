@@ -815,7 +815,10 @@ class ControlTestRunner:
                  run_search: Callable[[str, str, str, str], List[Dict[str, Any]]],
                  test_index: str = DEFAULT_TEST_INDEX,
                  sleep: Callable[[float], None] = time.sleep, settle: float = SETTLE_SECONDS,
-                 clock: Callable[[], float] = time.time):
+                 clock: Callable[[], float] = time.time,
+                 sourcetypes_of: Optional[Callable[[str, str], List[str]]] = None):
+        self.sourcetypes_of = sourcetypes_of
+        self.marker = ""
         self.ingest = ingest
         self.count_events = count_events
         self.run_search = run_search
@@ -839,7 +842,7 @@ class ControlTestRunner:
             waited += _SETTLE_STEP
 
     def _replay(self, spl: str, text: str, fixture: Dict[str, Any]) -> Tuple[int, Dict[str, Any], List[Dict[str, Any]]]:
-        marker = "ucm-ct-" + uuid.uuid4().hex
+        marker = self.marker = "ucm-ct-" + uuid.uuid4().hex
         events = split_events(text)
         window = derive_window(events, self.clock())
         for event in events:
@@ -879,6 +882,7 @@ class ControlTestRunner:
         phase = "positive"
         try:
             indexed, window, rows = self._replay(spl, fixture["positive"], fixture)
+            positive_marker = self.marker
             base["positive"] = self._positive(indexed, window, rows, fixture)
             if fixture["negative"].strip():
                 phase = "negative"
@@ -898,6 +902,7 @@ class ControlTestRunner:
         if positive["rows"] < positive["min_count"]:
             problems.append("positive run returned %d rows, expected at least %d"
                             % (positive["rows"], positive["min_count"]))
+            problems.extend(self._sourcetype_note(positive, positive_marker, fixture))
         if positive.get("max_count") is not None and positive["rows"] > positive["max_count"]:
             problems.append("positive run returned %d rows, expected at most %d"
                             % (positive["rows"], positive["max_count"]))
@@ -907,6 +912,22 @@ class ControlTestRunner:
         if negative is not None and not negative["pass"]:
             problems.append("negative run returned %d rows, expected none" % negative["rows"])
         return dict(base, status=verdict(positive, negative), reason="; ".join(problems))
+
+
+    def _sourcetype_note(self, positive: Dict[str, Any], marker: str, fixture: Dict[str, Any]) -> List[str]:
+        """Say so when an add-on indexed the fixture under another sourcetype than the one it was sent with."""
+        if self.sourcetypes_of is None:
+            return []
+        try:
+            seen = [str(item) for item in self.sourcetypes_of(self.test_index, marker) if item]
+        except (TimeoutError, UcmError):
+            return []
+        if not seen or fixture["sourcetype"] in seen:
+            return []
+        positive["indexed_sourcetypes"] = seen
+        return ["the fixture was sent as sourcetype %s but indexed as %s: an add-on rewrote it on ingest (for example "
+                "Splunk_TA_windows turns WinEventLog:Security into WinEventLog), so a sourcetype filter in the search "
+                "cannot match it. This is the instance, not the search" % (fixture["sourcetype"], ", ".join(seen))]
 
 
 def _search_error_text(exc: Exception) -> Optional[str]:
@@ -939,6 +960,11 @@ def splunk_runner(writer: Any, search: Any, app: str, test_index: str = DEFAULT_
                                 app=app, earliest=WINDOW_EARLIEST, latest=WINDOW_LATEST, max_count=1)
         return int(result.rows[0].get("n", 0)) if result.rows else 0
 
+    def sourcetypes(index: str, marker: str) -> List[str]:
+        result = search.preview('search index=%s source="%s" | stats count BY sourcetype' % (index, marker),
+                                app=app, earliest=WINDOW_EARLIEST, latest=WINDOW_LATEST, max_count=20)
+        return [row.get("sourcetype", "") for row in result.rows]
+
     def run(spl: str, marker: str, earliest: str, latest: str) -> List[Dict[str, Any]]:
         query = spl.strip() if spl.lstrip().startswith("|") else "search " + spl.strip()
         try:
@@ -951,4 +977,4 @@ def splunk_runner(writer: Any, search: Any, app: str, test_index: str = DEFAULT_
             raise ContentError(text) from exc
         return result.rows
 
-    return ControlTestRunner(ingest, count, run, test_index=test_index, settle=settle)
+    return ControlTestRunner(ingest, count, run, test_index=test_index, settle=settle, sourcetypes_of=sourcetypes)

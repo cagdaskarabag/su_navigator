@@ -18,6 +18,7 @@ Status: working data for the product owner. **Nothing has been filed on the Fenr
 | L003 | `match`/`like`/`cidrmatch` with the wrong number of arguments in an eval-style command (Splunk rejects) | 1 | 0 |
 | L004 | regex for `match`/`replace` ending in one backslash after eval unescaping (Splunk rejects) | 3 | 0 |
 | L005 | time modifier snapping to a number of units, `-6h@5m` (`tstats` rejects, a plain search selects nothing) | 1 | 0 |
+| L006 | regex for `match`/`replace` with `\u`, `\U`, `\l`, `\L` or `\F` after eval unescaping (0.12.1; UC-1.2.29 and UC-1.2.66, both already flagged by L004, so no new searches) | 2 | 0 |
 
 141 of the 19,771 Fenre searches have at least one finding; none of the ESCU searches has one.
 

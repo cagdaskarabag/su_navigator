@@ -454,3 +454,10 @@ remove power or add a refusal.
 | 10 | The evidence CSV formula guard ignores leading whitespace. The Fenre report CSV uses the same guard. |
 | 11 | `GET selections` clamps `count` to 1 to 500 and `offset` to 0 or more. |
 
+## Patch 0.12.1 (D-083)
+
+| Finding | What changed |
+|---|---|
+| Splunk's parser runs subsearches | A search with a side-effect command (`outputlookup`, `collect`, `sendemail`, `delete`, `script` ...) inside a `[ ... ]` subsearch is no longer sent to `search/parser`. Before, validation and deployment wrote the lookup or sent the mail during the parse, as the signed-in user (found on Splunk 10.4.3). Not an escalation: the job ran with that user's rights. |
+| Still open | A macro whose body holds such a subsearch is expanded by Splunk during the parse and runs. The policy then refuses the use case, but the write has happened. Macros are created by administrators. |
+| Correction | The 0.12.0 note that the item 6 live test "runs nothing" was wrong for subsearches; the test now asserts the refusal. |

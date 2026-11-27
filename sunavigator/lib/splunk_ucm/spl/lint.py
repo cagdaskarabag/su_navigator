@@ -18,6 +18,9 @@ Quoted text and macro bodies are masked first, so a string that merely contains
 * ``L004`` a regex string for ``match``/``replace`` that ends in one backslash after the
   eval string is unescaped, in an eval-style command: Splunk rejects it. In a search
   clause the call is never evaluated, so only ``L001`` applies there.
+* ``L006`` a regex string for ``match``/``replace`` that contains ``\\u``, ``\\U``, ``\\l``, ``\\L`` or ``\\F`` once the eval
+  string is unescaped, in an eval-style command (a Windows path written as ``"\\\\users"``): PCRE does not
+  support those escapes and Splunk rejects the search.
 * ``L005`` a time modifier snapping to a number of units (``-6h@5m``) or to ``@w8``/``@w9``:
   ``tstats`` rejects it and a plain search silently selects nothing.
 """
@@ -37,6 +40,7 @@ RULES: Dict[str, str] = {
     "L003": "function_argument_count",
     "L004": "regex_ends_in_backslash",
     "L005": "invalid_time_snap",
+    "L006": "regex_unsupported_escape",
 }
 
 SEARCH_TERM_FUNCTIONS = (
@@ -58,6 +62,7 @@ _STRING = re.compile(r'^"((?:[^"\\]|\\.)*)"$', re.DOTALL)
 _BAD_SNAP = re.compile(r"@(?:\d|w[89])", re.IGNORECASE)
 _TIME_VALUE = re.compile(r'"([^"]*)"|([^\s"\)\]|,]+)')
 _TRAILING_BACKSLASHES = re.compile(r"\\+$")
+_PCRE_UNSUPPORTED = "uULlF"
 _OPTION = re.compile(r"^\w+=")
 _CALL_TEXT_LIMIT = 120
 
@@ -290,6 +295,42 @@ def _rule_calls(spl: str, blanked: str, piece: _Piece, in_map: int, out: _Collec
                         "The regex for %s() ends in a single backslash once the eval string is unescaped "
                         "(a regex backslash needs four in an eval string); Splunk rejects the search." % name,
                         'Write the end of the string as "...%s"' % fixed[-len(run.group(0)) * 2:], key=name)
+            bad = _unsupported_escape(_regex_text(literal.group(1)))
+            if bad:
+                out.add("L006", piece.segment, piece.command, in_map, call,
+                        "The regex for %s() contains %s once the eval string is unescaped (a path such as "
+                        "\"\\\\users\" becomes \\users); PCRE does not support that escape and Splunk rejects "
+                        "the search." % (name, bad),
+                        "Write each literal backslash as four backslashes in the eval string, for example "
+                        "\"^.:\\\\\\\\users\"", key=name)
+
+
+def _regex_text(eval_string: str) -> str:
+    """The regex an eval string stands for: ``\\\\`` and ``\\"`` are unescaped, any other backslash pair stays."""
+    out: List[str] = []
+    i = 0
+    while i < len(eval_string):
+        ch = eval_string[i]
+        if ch == "\\" and i + 1 < len(eval_string):
+            nxt = eval_string[i + 1]
+            out.append(nxt if nxt in '\\"' else ch + nxt)
+            i += 2
+            continue
+        out.append(ch)
+        i += 1
+    return "".join(out)
+
+
+def _unsupported_escape(regex: str) -> str:
+    i = 0
+    while i < len(regex) - 1:
+        if regex[i] == "\\":
+            if regex[i + 1] in _PCRE_UNSUPPORTED:
+                return regex[i:i + 2]
+            i += 2
+            continue
+        i += 1
+    return ""
 
 
 def _rule_time_snap(spl: str, blanked: str, piece: _Piece, in_map: int, out: _Collector) -> None:
