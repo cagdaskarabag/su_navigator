@@ -36,7 +36,7 @@ class HttpConfig:
     max_rate_limit_wait: float = 60.0
     proxy_url: str = ""
     ca_bundle: str = ""
-    user_agent: str = "splunk-use-case-manager/" + __version__
+    user_agent: str = "sunavigator/" + __version__
 
 
 @dataclasses.dataclass

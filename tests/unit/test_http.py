@@ -57,7 +57,7 @@ class HttpFetcherTest(unittest.TestCase):
         f, _ = fetcher(opener)
         self.assertEqual(f.get("https://api.github.com/x").body, b"hello")
         headers = {k.lower(): v for k, v in opener.calls[0][1].items()}
-        self.assertTrue(headers["user-agent"].startswith("splunk-use-case-manager/"))
+        self.assertTrue(headers["user-agent"].startswith("sunavigator/"))
 
     def test_rejects_non_https_and_unlisted_hosts(self):
         f, _ = fetcher(ScriptedOpener())

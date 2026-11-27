@@ -13,3 +13,7 @@ See THIRD_PARTY_NOTICES.md for the full list and licence texts:
   * Splunk ES Content Update and splunk/security_content (Copyright Splunk Inc.), Apache License 2.0.
     SUNavigator reads ESCU packages supplied by the operator; bundles built from them keep
     Splunk's notices.
+
+SUNavigator is an independent project. It is not made, sponsored or endorsed by Splunk.
+Splunk, Splunk>, and Turn Data Into Doing are trademarks or registered trademarks of
+Splunk LLC in the United States and other countries.
