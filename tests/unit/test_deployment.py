@@ -489,6 +489,57 @@ class WorkflowTest(unittest.TestCase):
         self.assertEqual(svc.verify("bob", UC)["live"]["status"], "missing")
         self.assertEqual(svc.summary()["drifted"], 1)
 
+    def test_alert_trigger_edits_are_drift(self):
+        svc, _, saved = service()
+        approved(svc)
+        name = svc.deploy("bob", UC)["saved_search"]["name"]
+        live = saved.items[name]
+        self.assertEqual(svc.verify("bob", UC)["live"]["drift"], [])
+        for key, bad in (("alert.track", "0"), ("alert_threshold", "999999"), ("alert.severity", "1"),
+                         ("alert_type", "always"), ("alert_comparator", "less than")):
+            good = live[key]
+            live[key] = bad
+            fields = [d["field"] for d in svc.verify("bob", UC)["live"]["drift"]]
+            self.assertEqual(fields, [key], key)
+            live[key] = good
+        self.assertEqual(svc.verify("bob", UC)["live"]["drift"], [])
+
+    def test_alert_values_are_compared_as_splunk_returns_them(self):
+        from splunk_ucm.deployment.spec import drift
+        rev = {"rev": 1, "spl": "index=main", "spl_hash": spl_hash("index=main"), "cron": "*/15 * * * *",
+               "earliest": "-15m", "latest": "now", "alert_mode": "track", "threshold": 3, "severity": "high"}
+        base = dict(settings_for(rev, UC), is_scheduled=True, disabled=True)
+        self.assertEqual(drift(rev, base, True), [])
+        for track in (True, 1, "1", "true", "True"):
+            self.assertEqual(drift(rev, dict(base, **{"alert.track": track}), True), [], track)
+        for track in ("0", "false", "auto", "", None):
+            self.assertEqual([d["field"] for d in drift(rev, dict(base, **{"alert.track": track}), True)],
+                             ["alert.track"], track)
+        self.assertEqual(drift(rev, dict(base, alert_threshold=3, **{"alert.severity": 4}), True), [])
+        self.assertEqual([d["field"] for d in drift(rev, dict(base, alert_type="Number Of Events ", alert_threshold=" 4"), True)],
+                         ["alert_threshold"])
+        missing = dict(base)
+        del missing["alert_threshold"]
+        self.assertEqual([d["field"] for d in drift(rev, missing, True)], ["alert_threshold"])
+
+    def test_a_search_that_only_records_runs_expects_tracking_off(self):
+        from splunk_ucm.deployment.spec import drift
+        rev = {"rev": 1, "spl": "index=main", "spl_hash": spl_hash("index=main"), "cron": "*/15 * * * *",
+               "earliest": "-15m", "latest": "now", "alert_mode": "none", "threshold": 0, "severity": "low"}
+        base = dict(settings_for(rev, UC), is_scheduled=True, disabled=True)
+        self.assertEqual((base["alert_type"], base["alert.track"]), ("always", "0"))
+        self.assertEqual(drift(rev, base, True), [])
+        self.assertEqual([d["field"] for d in drift(rev, dict(base, **{"alert.track": "1"}), True)], ["alert.track"])
+        self.assertEqual([d["field"] for d in drift(rev, dict(base, alert_type="number of events"), True)], ["alert_type"])
+
+    def test_a_revision_without_alert_settings_is_not_checked_for_them(self):
+        from splunk_ucm.deployment.spec import drift
+        rev = {"spl_hash": spl_hash("| makeresults"), "cron": "*/5 * * * *", "earliest": "-20m@m",
+               "latest": "-5m@m", "rev": 1}
+        live = {"search": "| makeresults", "cron_schedule": "*/5 * * * *", "dispatch.earliest_time": "-20m@m",
+                "dispatch.latest_time": "-5m@m", "is_scheduled": True, "disabled": True, "alert.track": "0"}
+        self.assertEqual(drift(rev, live, True), [])
+
     def test_approved_spl_is_frozen_against_upstream_changes(self):
         svc, store, saved = service()
         approved(svc)

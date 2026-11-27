@@ -133,6 +133,20 @@ class SettingsAndDriftTest(unittest.TestCase):
                          "action.email.sendresults")
         self.assertEqual(A.drift({}, {"actions": "email"})[0]["field"], "actions")
 
+    def test_email_message_and_results_link_edits_are_reported(self):
+        actions = norm(EMAIL)
+        message = A.drift(actions, self.live(actions, **{"action.email.message.alert": "Ignore this alert"}))
+        self.assertEqual([d["field"] for d in message], ["action.email.message.alert"])
+        self.assertNotIn("Ignore", repr(message))
+        link = A.drift(actions, self.live(actions, **{"action.email.include.results_link": "0"}))
+        self.assertEqual([d["field"] for d in link], ["action.email.include.results_link"])
+        for same in ("1", 1, True, "true", "True"):
+            self.assertEqual(A.drift(actions, self.live(actions, **{"action.email.include.results_link": same})), [])
+        off = norm({"email": dict(EMAIL["email"], include_link=False)})
+        self.assertEqual(A.drift(off, self.live(off)), [])
+        self.assertEqual([d["field"] for d in A.drift(off, self.live(off, **{"action.email.include.results_link": "1"}))],
+                         ["action.email.include.results_link"])
+
     def test_audit_summary_has_no_webhook_path(self):
         out = A.summary(norm(dict(EMAIL, **HOOK)))
         self.assertEqual(out["webhook"], {"host": "hooks.example.com"})

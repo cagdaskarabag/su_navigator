@@ -170,6 +170,32 @@ def spl_hash(spl: str) -> str:
     return sha256_text(" ".join((spl or "").split()))
 
 
+_FALSE_WORDS = ("0", "false", "no", "off")
+
+
+def _alert_value(key: str, value: Any) -> str:
+    text = str(value if value is not None else "").strip().lower()
+    if key == "alert.track":
+        if _truthy(value):
+            return "1"
+        return "0" if text in _FALSE_WORDS else text
+    return text
+
+
+def _alert_drift(revision: Dict[str, Any], live: Dict[str, Any]) -> list:
+    """The alert trigger the app wrote (issue #48): type, comparator, threshold, tracking and severity."""
+    if revision.get("alert_mode") == "track":
+        expected = {"alert_type": "number of events", "alert_comparator": "greater than",
+                    "alert_threshold": str(revision["threshold"]), "alert.track": "1",
+                    "alert.severity": str(SEVERITIES[revision["severity"]])}
+    elif revision.get("alert_mode"):
+        expected = {"alert_type": "always", "alert.track": "0"}
+    else:
+        return []
+    return [{"field": key, "expected": want, "observed": live.get(key)}
+            for key, want in expected.items() if _alert_value(key, live.get(key)) != want]
+
+
 def drift(revision: Dict[str, Any], live: Dict[str, Any], expected_disabled: bool, owner: str = "") -> list:
     out = []
     if owner and live.get("owner") != owner:
@@ -196,6 +222,7 @@ def drift(revision: Dict[str, Any], live: Dict[str, Any], expected_disabled: boo
                      _fields(live.get("alert.suppress.fields")))):
                 if observed != expected:
                     out.append({"field": key, "expected": expected, "observed": live.get(key)})
+    out.extend(_alert_drift(revision, live))
     if "actions" in revision:
         out.extend(actions_mod.drift(revision["actions"], live))
     else:

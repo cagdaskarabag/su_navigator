@@ -229,6 +229,11 @@ def drift(actions: Dict[str, Any], live: Dict[str, Any]) -> List[Dict[str, Any]]
         if str(live.get("action.email.subject") or "") != (email.get("subject") or ""):
             out.append({"field": "action.email.subject", "expected": email.get("subject") or "",
                         "observed": live.get("action.email.subject")})
+        if str(live.get("action.email.message.alert") or "") != (email.get("message") or ""):
+            out.append({"field": "action.email.message.alert", "detail": "email message differs from the revision"})
+        if _flag(live.get("action.email.include.results_link")) != bool(email.get("include_link")):
+            out.append({"field": "action.email.include.results_link", "expected": bool(email.get("include_link")),
+                        "observed": live.get("action.email.include.results_link")})
         for key in ("action.email.sendresults", "action.email.sendcsv", "action.email.sendpdf", "action.email.inline"):
             if key in live and _flag(live.get(key)):
                 out.append({"field": key, "expected": False, "observed": True})
