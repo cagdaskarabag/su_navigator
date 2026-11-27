@@ -656,6 +656,8 @@ class LiveApiTest(unittest.TestCase):
     @unittest.skipUnless(os.environ.get("UCM_LIVE_REMOTE") == "1", "set UCM_LIVE_REMOTE=1 for GitHub access")
     def test_remote_manifest_through_splunkd(self):
         status, body = api(self.admin, "GET", "provider/manifest")
+        if status != 200 and "rate_limited" in json.dumps(body):
+            self.skipTest("GitHub rate-limited the unauthenticated requests from this machine; rerun later")
         self.assertEqual(status, 200, body)
         self.assertRegex(body["source_ref"], "^[0-9a-f]{40}$")
         self.assertGreaterEqual(len(body["categories"]), 20)
@@ -824,6 +826,10 @@ class LiveControlTestTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.admin = transport()
+        if _app_state(cls.admin, "Splunk_TA_windows") is not None:
+            raise unittest.SkipTest("Splunk_TA_windows rewrites sourcetype WinEventLog:Security to WinEventLog on "
+                                    "ingest, so the fixture events cannot match this use case's sourcetype filter "
+                                    "(Fenre upstream report, section 4)")
         cls.admin.request("POST", "/services/data/indexes", form={"name": cls.INDEX})
         status, _ = cls.admin.request("POST", "/services/authentication/users",
                                       form={"name": cls.OPERATOR, "password": cls.OPERATOR_PW,
@@ -1715,6 +1721,9 @@ class LivePopulatedTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.admin = transport()
+        if _app_state(cls.admin, "Splunk_SA_CIM") is not None:
+            raise unittest.SkipTest("Splunk_SA_CIM is installed: readiness resolves the native Authentication model, "
+                                    "so the stand-in model mapping this test relies on is never consulted")
         for name, constraint in ((cls.YES, "index=_internal"), (cls.NO, "index=_internal sourcetype=sun_live_no_such_sourcetype")):
             status, content = cls.admin.request("POST", "/servicesNS/nobody/search/data/models", None, None,
                                                 form={"name": name, "eai:data": cls.model_json(name, constraint)})
@@ -1899,6 +1908,8 @@ class LiveExternalMatchTest(unittest.TestCase):
     def setUpClass(cls):
         from urllib.parse import quote
         cls.admin = transport()
+        if _app_state(cls.admin, cls.APP) is None:
+            raise unittest.SkipTest("ESCU (DA-ESS-ContentUpdate) is not installed on this Splunk instance")
         cls.kv = KVStore(cls.admin)
         rows = [r for r in cls.kv.query(C.CATALOG, {"provider": "escu", "provider_status": "active"}, limit=300)
                 if r.get("spl_hash") and r.get("mitre_ids")]
