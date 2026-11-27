@@ -25,7 +25,7 @@ Status: 0.9.1 (catalogue, discovery, readiness, selection, SPL validation, deplo
 | *(none)* | Read catalogue, categories, use-case detail, sync status, platform report, inventory, mappings, discovery status. |
 | `ucm_manage_content` | Remote sync, provider manifest check, offline import, catalogue reindex, audit read, framework import and activation. |
 | `ucm_run_discovery` | Queue discovery jobs; create and delete **local** source mappings; run readiness assessments (full or single). |
-| `ucm_deploy` | Approve, reject, deploy, enable, disable, roll back, retire and control-test deployments; create and delete generated dashboards. Drafting and submitting also accept `ucm_run_discovery`. |
+| `ucm_deploy` | Approve, reject, deploy, enable, disable, roll back, retire and control-test deployments; create and delete generated dashboards. Drafting, submitting and **Verify** (a read-only comparison of the live saved search with the approved revision, which records the result and an audit row) also accept `ucm_run_discovery`. |
 | `ucm_assess` | Read and write assessments, plan items (POA&M) and evidence snapshots; reading them needs it too (D-077). |
 | `ucm_admin` | Audit read; app administration in later WPs. |
 
