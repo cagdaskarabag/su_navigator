@@ -338,5 +338,5 @@ class FenreReportTest(unittest.TestCase):
             rows = list(csv.DictReader(handle))
         with open(os.path.join(base, "FENRE_CONTENT_FINDINGS.md"), encoding="utf-8") as handle:
             text = handle.read()
-        self.assertEqual(len(rows), 153)
+        self.assertEqual(len(rows), 155)
         self.assertIn("%d findings in" % len(rows), text)
