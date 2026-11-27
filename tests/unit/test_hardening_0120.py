@@ -312,5 +312,47 @@ class RecordRobustnessTest(unittest.TestCase):
         self.assertEqual(manifest.schema_version, "1.11.0")
 
 
+class RolesTransport:
+    def __init__(self, default):
+        self.default = default
+
+    def request(self, method, path, query=None, json_body=None, form=None, timeout=60.0):
+        import json
+        if "/authentication/users/" in path:
+            content = {"roles": ["r"]}
+        else:
+            content = {"srchIndexesAllowed": ["*"], "srchIndexesDefault": self.default}
+        return 200, json.dumps({"entry": [{"content": content}]}).encode()
+
+
+class TestIndexTest(unittest.TestCase):
+    def run_test(self, index, default=None, with_roles=True):
+        from splunk_ucm.storage.kvstore import InMemoryStore
+        ctx = make_ctx(InMemoryStore(), ["ucm_deploy"], AppConfig({"controltest": {"index": index}}))
+        if with_roles:
+            ctx.system_transport = RolesTransport(default or [])
+        return call(ctx, "POST", "deployment/controltest", body={"id": UC})
+
+    def test_item_9_main_is_never_a_test_index(self):
+        status, body = self.run_test("main", with_roles=False)
+        self.assertEqual(status, 409, body)
+        self.assertEqual(body["error"]["details"]["code"], "test_index_is_default")
+
+    def test_item_9_a_default_index_of_the_caller_is_refused(self):
+        status, body = self.run_test("ucm_controltest", default=["ucm_controltest"])
+        self.assertEqual((status, body["error"]["details"]["code"]), (409, "test_index_is_default"))
+        status, body = self.run_test("ucm_controltest", default=["ucm_*"])
+        self.assertEqual(status, 409, body)
+
+    def test_item_9_a_dedicated_index_goes_on_to_the_normal_checks(self):
+        status, body = self.run_test("ucm_controltest", default=["main"])
+        self.assertNotEqual(body.get("error", {}).get("details", {}).get("code"), "test_index_is_default", body)
+
+    def test_item_9_the_check_does_not_open_the_action_to_a_viewer(self):
+        from splunk_ucm.storage.kvstore import InMemoryStore
+        ctx = make_ctx(InMemoryStore(), [], AppConfig({"controltest": {"index": "main"}}))
+        self.assertEqual(call(ctx, "POST", "deployment/controltest", body={"id": UC})[0], 403)
+
+
 if __name__ == "__main__":
     unittest.main()

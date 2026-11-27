@@ -36,7 +36,7 @@ from ..deployment.controltest import DEFAULT_TEST_INDEX, splunk_runner
 from ..deployment.savedsearch import SavedSearchClient
 from ..deployment.service import DeploymentService
 from ..deployment.worker import settings_from_config as deployment_settings
-from ..errors import NotFoundError, PermissionDenied, UcmError, UnsupportedOperation, ValidationError
+from ..errors import ConflictError, NotFoundError, PermissionDenied, UcmError, UnsupportedOperation, ValidationError
 from ..frameworks.coverage import CoverageService
 from ..frameworks.evidence import EvidenceService
 from ..frameworks.operations import OperationsService
@@ -44,7 +44,7 @@ from ..frameworks.assessment import AssessmentService
 from ..frameworks.controls import catalogue_coverage
 from ..frameworks.registry import FrameworkRegistry
 from ..platform.search import SearchClient
-from ..readiness.principal import SchedulerAccess, read_principal
+from ..readiness.principal import SchedulerAccess, pattern_matches, read_principal
 from ..refusals import REFUSED_STATUSES, RefusalAudit, governed
 from ..readiness.query import ReadinessFilter, ReadinessQueryService
 from ..readiness.recommend import MAX_ITEMS as MAX_RECOMMENDATIONS, RecommendationService
@@ -692,6 +692,22 @@ def get_deployment(ctx: Context, req: Request) -> Response:
     return Response(200, _deployment_view(ctx, svc, svc.get(req.arg("id"))))
 
 
+ALWAYS_DEFAULT_INDEXES = ("main", "defaultdb")
+
+
+def _refuse_default_test_index(ctx: Context) -> None:
+    """Control-test events must not land in an index that searches without ``index=`` read (issue #51, item 9)."""
+    index = (ctx.config.get("controltest", "index", DEFAULT_TEST_INDEX).strip() or DEFAULT_TEST_INDEX).lower()
+    as_default = index in ALWAYS_DEFAULT_INDEXES
+    if not as_default and ctx.system_transport is not None:
+        principal = read_principal(ctx.system_transport, ctx.user)
+        as_default = principal.readable and any(pattern_matches(p, index) for p in principal.default)
+    if as_default:
+        raise ConflictError("the control-test index %r is a default search index, so the test events would show up in "
+                            "searches that name no index; set [controltest] index in ucm.conf to a dedicated index"
+                            % index, {"code": "test_index_is_default"})
+
+
 def _deployment_action(action: str) -> Handler:
     propose = action in ("draft", "submit")
     observe = action == "verify"
@@ -718,6 +734,7 @@ def _deployment_action(action: str) -> Handler:
         elif action == "verify":
             doc = svc.verify(ctx.user, use_case_id)
         elif action == "controltest":
+            _refuse_default_test_index(ctx)
             doc = svc.control_test(ctx.user, use_case_id)
         elif action == "approve":
             doc = svc.approve(ctx.user, use_case_id, note,

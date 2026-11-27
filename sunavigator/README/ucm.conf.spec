@@ -43,6 +43,7 @@ max_bundle_mb = <integer>
 index = <string>
 * Dedicated test index for post-deploy control tests (D-054). Create it on the
   Splunk instance first; the app never creates indexes. Default ucm_controltest.
+* A control test is refused when this index is main, or is a default search index of the user who runs it.
 
 [catalog]
 max_page_size = <integer>
