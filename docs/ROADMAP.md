@@ -1,6 +1,6 @@
 # Roadmap
 
-Status: 0.11.1 beta. The code freeze was lifted by the maintainer on 27 Nov 2026; the maintainer decides what goes into each release. Every item links to its issue. Nothing here is a promise of a date.
+Status: 0.12.0 beta. The code freeze was lifted by the maintainer on 27 Nov 2026; the maintainer decides what goes into each release. Every item links to its issue. Nothing here is a promise of a date.
 
 What the beta is for: finding out which parts people use (readiness and governed deployment, or the compliance pages),
 and what breaks on their Splunk. Feedback goes through the [feedback form](https://github.com/cagdaskarabag/su_navigator/issues/new?template=feedback.yml).
@@ -22,7 +22,7 @@ An external code review of the application code (16 bundles, every finding check
 1. **Now, no code.** Finish the maintainer checklist ([#47](https://github.com/cagdaskarabag/su_navigator/issues/47)). Decide about the Fenre files with the content owner ([#20](https://github.com/cagdaskarabag/su_navigator/issues/20)). Announce the beta with the notices already in the README.
 2. **Patch release 0.11.1: the three confirmed defects. Built; tag after the live suite has run on 10.4.x.** [#49](https://github.com/cagdaskarabag/su_navigator/issues/49) (redirects and the token), [#48](https://github.com/cagdaskarabag/su_navigator/issues/48) (drift coverage), [#50](https://github.com/cagdaskarabag/su_navigator/issues/50) (control-test scoping). Each is a change to one or two functions with unit tests. Add the user-visible fixes that are already small and understood: [#43](https://github.com/cagdaskarabag/su_navigator/issues/43), [#45](https://github.com/cagdaskarabag/su_navigator/issues/45), and [#44](https://github.com/cagdaskarabag/su_navigator/issues/44) with the matching `NOTICE` change. Run the live suite on Splunk 10.4.x ([#42](https://github.com/cagdaskarabag/su_navigator/issues/42)) before tagging.
 3. **Human security review on the 0.11.1 code** ([#32](https://github.com/cagdaskarabag/su_navigator/issues/32)). Review the fixed code, so the checklist does not describe code that is about to change. The external review makes this shorter: the confirmed and rejected findings are written down.
-4. **Hardening release.** The eleven items in [#51](https://github.com/cagdaskarabag/su_navigator/issues/51). The first three (the `ucm_admin` write right, throttled audit rows, the save token) are the most useful. Most of the rest are a few lines each.
+4. **Hardening release 0.12.0. Built; tag after the live suite has run on 10.4.x.** The eleven items in [#51](https://github.com/cagdaskarabag/su_navigator/issues/51). The first three (the `ucm_admin` write right, throttled audit rows, the save token) are the most useful. Most of the rest are a few lines each.
 5. **After beta feedback.** The usability and scale items below, in the order the feedback asks for them.
 
 What the review did not cover: the tests, the documentation and the data files; the Splunk platform itself; and behaviour on a live system. It is a reading of the code. It does not replace #32.
@@ -38,7 +38,7 @@ The defects of the external code review and the small fixes #43 to #45 are fixed
 
 ## Security
 
-- Hardening candidates from the external code review: [#51](https://github.com/cagdaskarabag/su_navigator/issues/51).
+- The hardening items from the external code review are in 0.12.0 ([#51](https://github.com/cagdaskarabag/su_navigator/issues/51)); `docs/SECURITY.md` lists what each one does. Left as they were: drafting over a pending or approved revision needs only `ucm_run_discovery`.
 - Complete the human review of the security paths. It is open in [#32](https://github.com/cagdaskarabag/su_navigator/issues/32), with the refusal-audit limits added in [#46](https://github.com/cagdaskarabag/su_navigator/issues/46).
 - A public beta is reasonable while #32 is open, as long as the beta label is clear (see the README).
 

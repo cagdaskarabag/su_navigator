@@ -2411,3 +2411,40 @@ as drift.
 * Evidence: `tests/unit/test_http.py` (`RedirectTest`), `test_deployment.py`, `test_actions.py`, `test_controltest.py`,
   `test_poam_rules.py`, `tests/js/test_usecase.js`, `test_assessment_ui.js`.
 
+## D-082 Hardening release: the eleven low-severity items of the external review
+
+*0.12.0.*
+
+* **Context.** The external review (D-081) found eleven low-severity items. None gives a role more power than it should
+  have; the owner asked for them in one release after the patch. Each is a small change with a unit test.
+* **1. Roles.** `ucm_admin` is removed from `[savedsearches]` write in `default.meta`. D-051 documented the right as
+  intended, but nothing in the app needs it: the REST handler writes deployed searches with the system token. A site
+  that wants an operator to edit a deployed search keeps `admin` or `sc_admin` for that.
+* **2. Verify audit.** The audit service has `written_within(action, object_id, seconds)`. A manual Verify writes a row
+  only if the result changed or no `deployment.verified` row for that deployment exists in `[audit] verify_window_seconds`
+  (300, any user). `audit/verify` is a POST (it writes), is exposed for POST in `web.conf`, and is throttled the same way
+  unless the chain has a problem. The worker's own sweep already wrote only on change.
+* **3. Save token.** `_save` writes `save_token` and compares it on read-back. This catches an interleaved write; it does
+  not catch two saves that complete one after the other, which KV Store cannot prevent without compare-and-swap. The
+  version check before the write still catches a stale document.
+* **4. Draft audit.** `deployment.draft` carries `from` and `replaced_draft`. The optional rule that replacing a pending
+  or approved revision needs `ucm_deploy` is not built: replacing sends the revision back to draft, which is the safe
+  direction, and the audit row now shows who did it.
+* **5. Readiness.** A wildcard is *partial* when the account covers only some matching indexes; the audit-chain result
+  has `branch_rows`.
+* **6. SPL split.** `_backtick_end` (and `backtickEnd` in `ucm_common.js`) pair a macro or a three-backtick comment; an
+  unclosed one is read as ordinary characters so every later command stays visible. Before the change, a backtick inside
+  a comment hid an `outputlookup` in a subsearch from the static check (reproduced). The parity corpus has the cases. A live
+  test parses the case on the lab and runs nothing.
+* **7. Bundle tool.** Symlinked package files are refused; archives are capped at 100,000 members and 1 GiB unpacked.
+* **8. Content.** A non-list `references` no longer raises; an invalid regular expression in a schema is skipped by the
+  validator, and an upstream schema that has one is replaced by the bundled schema with a warning.
+* **9. Test index.** The `controltest` action refuses `main`, `defaultdb` and any default index of the caller (read from the
+  caller's roles with the system session). If the roles cannot be read the check is skipped, as the other principal
+  checks are.
+* **10. CSV.** The formula guard looks at the first character after leading whitespace; `tools/fenre_report.py` uses it.
+* **11. Selections.** `count` is clamped to 1 to 500 (the browser asks for 500), `offset` to 0 or more.
+* **Not done.** The live suite on Splunk 10.4.x (#42) has not run on this code.
+* Evidence: `tests/unit/test_hardening_0120.py`, `test_principal.py`, `test_spl_guard_parity.py`, `tests/js/test_admin.js`,
+  `tests/live/test_live_splunk.py` (the audit-chain tests now POST; one new test for item 6).
+

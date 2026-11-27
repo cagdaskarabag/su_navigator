@@ -1,6 +1,6 @@
-# SUNavigator 0.11.1: feature status
+# SUNavigator 0.12.0: feature status
 
-**Beta.** Version 0.11.1, build 24. The last tagged release is [v0.11.0](https://github.com/cagdaskarabag/su_navigator/releases/tag/v0.11.0); 0.11.1 is tagged after the live suite has run on Splunk 10.4.x (issue #42). The open work is in [ROADMAP.md](ROADMAP.md).
+**Beta.** Version 0.12.0, build 25. The last tagged release is [v0.11.0](https://github.com/cagdaskarabag/su_navigator/releases/tag/v0.11.0); 0.11.1 and 0.12.0 are tagged after the live suite has run on Splunk 10.4.x (issue #42). The open work is in [ROADMAP.md](ROADMAP.md).
 Validated on Splunk Enterprise 10.2.9, single instance. Splunk Cloud, search head clusters with a deployer, and
 Splunk Enterprise Security 8 are **not validated and not planned** (D-078).
 

@@ -25,7 +25,7 @@ Status: 0.9.1 (catalogue, discovery, readiness, selection, SPL validation, deplo
 | *(none)* | Read catalogue, categories, use-case detail, sync status, platform report, inventory, mappings, discovery status. |
 | `ucm_manage_content` | Remote sync, provider manifest check, offline import, catalogue reindex, audit read, framework import and activation. |
 | `ucm_run_discovery` | Queue discovery jobs; create and delete **local** source mappings; run readiness assessments (full or single). |
-| `ucm_deploy` | Approve, reject, deploy, enable, disable, roll back, retire and control-test deployments; create and delete generated dashboards. Drafting, submitting and **Verify** (a read-only comparison of the live saved search with the approved revision, which records the result and an audit row) also accept `ucm_run_discovery`. |
+| `ucm_deploy` | Approve, reject, deploy, enable, disable, roll back, retire and control-test deployments; create and delete generated dashboards. Drafting, submitting and **Verify** (a read-only comparison of the live saved search with the approved revision, which records the result and an audit row, at most one per deployment in each `[audit] verify_window_seconds` unless the result changed) also accept `ucm_run_discovery`. |
 | `ucm_assess` | Read and write assessments, plan items (POA&M) and evidence snapshots; reading them needs it too (D-077). |
 | `ucm_admin` | Audit read; app administration in later WPs. |
 
@@ -253,11 +253,10 @@ The enable gate for a search the scheduler cannot read uses the existing audited
 override reason (at least 10 characters) and the existing `ucm_deploy` capability. It
 adds a refusal; it removes none.
 
-A wildcard index in the SPL (`index=web*`) counts as searchable when the scheduler
-account can search at least one of the matching indexes known from discovery. If it can
-search only some of them, the check still reports the pattern as searchable, and the
-scheduled search silently skips the others. Check the role's index list for wildcard
-searches.
+A wildcard index in the SPL (`index=web*`) is checked against every matching index known
+from discovery. If the scheduler account can search only some of them, the check reports
+**partial** (since 0.12.0) and names the others; the scheduled search would silently skip
+them. If it can search none, the result is *not met*.
 
 ## The system token reads ES and ESCU state (D-067)
 
@@ -350,9 +349,9 @@ writes; keep it separate from production indexes and set its retention. A search
   forged through the KV REST API (verified live: an operator gets 403).
   Four eyes covers the app's workflow. The saved searches the app deploys are owned by the
   scheduler account (D-051), not by the operator, and `ucm_deployment_operator` has no write
-  access to them. `admin`, `sc_admin` and `ucm_admin` can still edit them in Splunk, which is
-  intended; such an edit shows as drift on the next Verify (D-029) but the app does not record
-  who made it (Splunk's `index=_audit` does). Do not give `ucm_admin` to day-to-day operators.
+  access to them. `admin` and `sc_admin` can still edit them in Splunk, which is intended; such an edit shows as
+  drift on the next Verify (D-029) but the app does not record who made it (Splunk's `index=_audit`
+  does). Until 0.11.1 `ucm_admin` could edit them too; 0.12.0 removes that right (D-082).
 - `uc_frameworks` and `uc_dashboards`: readable by all app users, writable
   only by `admin` / `sc_admin`; written by the REST handler with the system
   token after the capability check (verified live: viewer and operator get
@@ -360,7 +359,7 @@ writes; keep it separate from production indexes and set its retention. A search
   system token, so dashboard creators do not need view-write permissions; the
   app only overwrites or deletes views that carry its marker and have a
   record (D-032).
-- `savedsearches` in this app: writable by `admin`, `sc_admin` and `ucm_admin` only (D-051).
+- `savedsearches` in this app: writable by `admin` and `sc_admin` only (D-051, D-082).
   Operators cannot edit or delete deployed searches (verified on the lab).
 - `uc_audit`: readable by admins and content managers, writable only by
   `admin` / `sc_admin`. The REST handler appends audit records with the
@@ -375,9 +374,11 @@ state.
 KV Store has no compare-and-swap. A deployment record carries a `version`
 counter that is checked before each write and read back after it, which
 rejects most concurrent edits. Two saves of the same record that start from
-the same version within the same instant can both pass both checks; the later
-write wins and the earlier caller is told it succeeded. Both actions are still
-in `uc_audit`.
+the same version within the same instant can both pass the version checks. Since 0.12.0 each
+save also writes a random token and compares it on read-back, which catches the case where the
+other save lands between the write and the read-back; the earlier caller is then told the record
+changed. A save whose read-back finishes before the other save writes is still not detected: the
+later write wins. Both actions are in `uc_audit`.
 
 Drift covers the search text, owner, cron, time range, schedule window, suppression, the list of actions, email recipients, subject and attachment flags, the webhook URL, `is_scheduled` and `disabled`. Since 0.11.1 it also covers the alert trigger (`alert_type`, `alert_comparator`, `alert_threshold`, `alert.track`, `alert.severity`), the email message and the results-link flag (issue #48); the trigger is compared only for a revision that records an alert mode. After the upgrade, Verify can report new drift on a search deployed earlier, if its trigger or message was edited in Settings; the report names the field.
 
@@ -387,15 +388,16 @@ itself still completes. The failure is logged as `audit write failed` in
 that was written, so **Verify audit chain** shows no gap. Alert on that log message.
 
 **Verify audit chain** counts *branches* (two rows that name the same predecessor)
-without failing, because two concurrent writers produce one. A row inserted directly
+without failing, because two concurrent writers produce one, and lists the rows involved
+(since 0.12.0). A row inserted directly
 into `uc_audit` that names an existing row as its predecessor looks the same. Only
 `admin` and `sc_admin` can write `uc_audit`, and they can rewrite the whole chain
 anyway (D-075).
 
 `tools/ucm_cli.py build-escu-bundle` (the offline ESCU bundle builder) runs on the operator's
-machine, not in Splunk. It follows symlinks in a package directory and does not cap the
-number of archive members or the unpacked size. Run it only on packages you downloaded
-from Splunk. The bundle it writes is validated again when it is imported.
+machine, not in Splunk. Since 0.12.0 it refuses a package file that is a symbolic link (or
+sits behind one) and an archive with more than 100,000 members or more than 1 GiB unpacked.
+Run it only on packages you downloaded from Splunk. The bundle it writes is validated again when it is imported.
 
 Run status (D-031) is searched with the caller's token, so it never reveals
 scheduler data a user could not search themselves.
@@ -432,3 +434,23 @@ collections, logs or API responses, is sent only to the configured API host
   sync engine only writes `uc_catalog`, `uc_content`, `uc_categories` and
   `uc_sync_state`, and withdraws rather than deletes records that disappear
   upstream.
+
+## Hardening release 0.12.0 (issue #51, D-082)
+
+Eleven low-severity items from the external code review. None of them gives a role more power than it had; four
+remove power or add a refusal.
+
+| Item | What changed |
+|---|---|
+| 1 | `ucm_admin` no longer writes `[savedsearches]` (`metadata/default.meta`). Only `admin` and `sc_admin` can edit or delete a deployed search in Settings. A `local.meta` from an earlier ACL change can still grant it. |
+| 2 | Verify (a deployment) and Verify audit chain write at most one audit row per object in each `[audit] verify_window_seconds` (300), unless the result changed or the audit chain has a problem. `audit/verify` is a POST. |
+| 3 | A per-save token narrows the lost-update window (see above). KV Store still has no compare-and-swap. |
+| 4 | The `deployment.draft` audit row has `from` (the state the draft replaced, or `none`) and `replaced_draft`. Whether a draft may replace a pending or approved revision without `ucm_deploy` is **not** changed. |
+| 5 | A wildcard index the account covers only in part is *partial*; the audit-chain check lists branch rows. |
+| 6 | The static SPL split, on the server and in the browser, pairs macros and three-backtick comments and reads an unpaired backtick as an ordinary character, so a later command stays visible. |
+| 7 | The offline bundle tool refuses symlinked package files and caps archive members and unpacked size. |
+| 8 | A scalar `references` value rejects that record only; an invalid regular expression in an upstream schema makes the provider use the bundled schema. |
+| 9 | A control test is refused when `[controltest] index` is `main` or a default search index of the user who runs it. If the roles cannot be read, the check is skipped. |
+| 10 | The evidence CSV formula guard ignores leading whitespace. The Fenre report CSV uses the same guard. |
+| 11 | `GET selections` clamps `count` to 1 to 500 and `offset` to 0 or more. |
+

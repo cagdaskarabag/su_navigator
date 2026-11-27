@@ -1,10 +1,10 @@
-# SUNavigator 0.11.1 — operator guide
+# SUNavigator 0.12.0 — operator guide
 
 **SUNavigator** is a use-case navigator for Splunk Enterprise. It discovers, assesses,
 selects, validates and deploys monitoring use cases.
 
 This is the install, usage and troubleshooting guide for **SUNavigator
-0.11.1**. It is written for a single Splunk Enterprise instance
+0.12.0**. It is written for a single Splunk Enterprise instance
 (search head + indexer on one host), including a local macOS install. Search
 head clusters with a deployer, Splunk Cloud and Splunk Enterprise Security are **not** validated and not planned
 (no lab; D-078).
@@ -24,7 +24,39 @@ Related documents (design, not how-to):
 
 ---
 
-## What changed in 0.9.x to 0.11
+## What changed in 0.9.x to 0.12
+
+### 0.12.0
+
+0.12.0 is the hardening release (D-082): the eleven low-severity items of issue #51. It adds no feature and no migration.
+
+- **`ucm_admin` no longer edits deployed searches.** Only `admin` and `sc_admin` can edit or delete a `SUN - …` saved
+  search in Settings (`[savedsearches]` in `metadata/default.meta`). The app's own writes are not affected. If you
+  have a `local/metadata/local.meta` that grants the right, it still applies.
+- **Verify writes fewer audit rows.** A manual **Verify now** and **Verify audit chain** write at most one row per
+  use case (or per chain) in each `[audit] verify_window_seconds` (300; `0` writes every time). A change in the result,
+  or a problem in the audit chain, is always written.
+- **`audit/verify` is a POST.** The button works as before. A script that calls `GET /ucm/audit/verify` gets 405; send
+  a POST with an empty body.
+- **Verify audit chain lists branch rows.** Rows that name the same predecessor are listed, not only counted.
+- **A wildcard index the account covers in part is *partial*.** `index=fw_*` with access to some of the matching indexes
+  used to show as searchable; it now shows as partial and names the others.
+- **Control tests refuse a default search index.** If `[controltest] index` is `main` or a default index of the user,
+  the test is refused (`test_index_is_default`) and nothing is sent to it. Set a dedicated index.
+- **Draft audit rows say what they replaced.** `deployment.draft` has `from` (the previous state, or `none`) and
+  `replaced_draft`.
+- **Concurrent saves.** Each save of a deployment carries a random token that is checked on read-back, so two saves
+  that overlap are told apart more often. KV Store has no compare-and-swap, so the window is narrowed, not closed.
+- **SPL checks.** An unpaired backtick, or a backtick inside a three-backtick comment, no longer hides the commands
+  after it from the static check, on the server or in the browser.
+- **Content import.** A record whose `references` is not a list is rejected on its own; an invalid regular expression
+  in an upstream schema makes the sync use the bundled schema (a warning says so). Neither stops the sync.
+- **Offline bundle tool.** `build-escu-bundle` refuses a symbolic link in a package directory and an archive with more
+  than 100,000 members or more than 1 GiB unpacked.
+- **Smaller changes.** The evidence CSV formula guard ignores leading whitespace; `GET selections` takes `count` from 1
+  to 500.
+- **Not changed.** A user with `ucm_run_discovery` can still draft over a pending or approved revision, which sends it
+  back to draft; the audit row now shows it.
 
 ### 0.11.1
 
@@ -689,7 +721,7 @@ searches have **no script alert actions**. Email and webhook actions exist only 
 an administrator has listed permitted destinations in `[actions]` and the approver has acknowledged
 them (0.9.5, D-072); the default alert mode only writes to Splunk's Triggered Alerts.
 
-**Not in 0.11.1:** PDF export of coverage, a bundled regulation-control
+**Not in 0.12.0:** PDF export of coverage, a bundled regulation-control
 catalogue, SHC validation with a deployer and indexer peers, Splunk Cloud
 vetting submission, and any Enterprise Security output mode (all three dropped for lack of a lab, D-078;
 0.9.1 only reads ES and ESCU state and hands off, §5.2b).
@@ -703,7 +735,7 @@ vetting submission, and any Enterprise Security output mode (all three dropped f
 | Splunk | Enterprise 10.x (validated on 10.2.9 in development; tested by operators on 10.4.3 Darwin arm64). Python 3.9 or 3.13 in Splunk. |
 | KV Store | Must reach `status: ready`. The app stores catalogue, inventory, readiness, selections, deployments and audit in KV collections. |
 | Role | First-time setup needs `admin` (or `sc_admin` on Cloud). |
-| Disk | The 0.11.1 package is a few megabytes. Category 9 of Fenre is about 120 records; the full Fenre corpus is tens of thousands of records. |
+| Disk | The 0.12.0 package is a few megabytes. Category 9 of Fenre is about 120 records; the full Fenre corpus is tens of thousands of records. |
 | Network | Optional. Remote sync needs HTTPS to `api.github.com` and `raw.githubusercontent.com`. Offline import needs none. |
 | Browser | Splunk Web. The app is a set of Simple XML views plus JavaScript under `/en-US/app/sunavigator/`. |
 
@@ -720,7 +752,7 @@ Placeholders used below:
 
 ```bash
 ./tools/package.sh
-# writes dist/sunavigator-0.11.1.tar.gz
+# writes dist/sunavigator-0.12.0.tar.gz
 ```
 
 The tarball has a single top-level folder `sunavigator/`
@@ -738,11 +770,11 @@ then fails in the UI with `500 Internal Server Error` even though splunkd is
 still unpacking. Use the CLI:
 
 ```bash
-$SPLUNK_HOME/bin/splunk install app /path/to/sunavigator-0.11.1.tar.gz \
+$SPLUNK_HOME/bin/splunk install app /path/to/sunavigator-0.12.0.tar.gz \
   -auth "$SPLUNK_USER:$SPLUNK_PASSWORD"
 # first install: omit -update
 # upgrade of an existing copy:
-$SPLUNK_HOME/bin/splunk install app /path/to/sunavigator-0.11.1.tar.gz \
+$SPLUNK_HOME/bin/splunk install app /path/to/sunavigator-0.12.0.tar.gz \
   -update 1 -auth "$SPLUNK_USER:$SPLUNK_PASSWORD"
 
 $SPLUNK_HOME/bin/splunk restart
@@ -848,10 +880,11 @@ account you either:
 
 **Edit rights on deployed searches and drift (D-051).** Deployed searches are owned by
 the scheduler account, and the app's own write path is the only one for the
-operator roles. Three roles can still edit or delete a `SUN - …` search in Settings:
-`admin`, `sc_admin` and `ucm_admin` (`metadata/default.meta`, `[savedsearches]`). That
-is intended, and it is why `ucm_admin` is not a role to give to day-to-day
-operators; give them `ucm_deployment_operator`. An edit made that way shows as
+operator roles. Two roles can still edit or delete a `SUN - …` search in Settings:
+`admin` and `sc_admin` (`metadata/default.meta`, `[savedsearches]`). That is intended.
+Until 0.11.1 `ucm_admin` could do so too; 0.12.0 removes that right (D-082). If you changed
+the permissions of this app's saved searches in Settings, check `local/metadata/local.meta`:
+an entry there overrides the packaged file. An edit made that way shows as
 **drift** on the next **Verify now** (§6.6), for the settings listed in §6.6 step 7, and in the audit log of the app; the
 app does not repair it by itself, and it does not say who made the edit. Splunk's own
 audit (`index=_audit`) is the place to look. **Roll back** writes the previous revision
@@ -1556,8 +1589,10 @@ failed after a deploy error; retry deploy from approved/failed
    override reason of at least 10 characters; the reason is audited.
 7. **Verify now** — compare the live saved search with the frozen revision.
    The worker also verifies on `[deployment] verify_interval_minutes`
-   (default 60). External edits show as **drift**. Anyone with `admin`, `sc_admin` or
-   `ucm_admin` can make such an edit (§4); the app reports it and does not undo it.
+   (default 60). External edits show as **drift**. Anyone with `admin` or `sc_admin`
+   can make such an edit (§4); the app reports it and does not undo it. A manual **Verify now**
+   writes at most one audit row per use case in each `[audit] verify_window_seconds` (300)
+   unless the result changed.
    Drift covers the search text, owner, cron, time range, schedule window, suppression, the list of actions, email recipients, subject and attachment flags, the webhook URL, `is_scheduled` and `disabled`. Since 0.11.1 it also covers the alert trigger (`alert_type`, `alert_comparator`, `alert_threshold`, `alert.track`, `alert.severity`), the email message and the results-link flag (issue #48); the trigger is compared only for a revision that records an alert mode. After the upgrade, Verify can report new drift on a search deployed earlier, if its trigger or message was edited in Settings; the report names the field.
 8. **Roll back** — writes the previous deployed revision, again disabled.
 9. **Retire** — deletes the saved search from Splunk.
@@ -1822,12 +1857,13 @@ Common stanzas:
 | `[deployment] enable_second_person` | `false` | `true` makes every *Enable* a request that a second person confirms. |
 | `[deployment] override_second_person` | `true` | Enabling a search that a gate blocks (readiness or scheduler access) needs a second person. `false` for a one-person team (0.11.0, D-080). |
 | `[audit] refusals` | `true` | Write refused governance requests to the audit trail. Limits: `refusal_window_seconds` (300), `refusal_actor_per_hour` (20), `refusal_total_per_hour` (200). |
+| `[audit] verify_window_seconds` | `300` | Verify (a deployment, or the audit chain) writes at most one audit row per object in this many seconds, unless the result changed or the chain has a problem. `0` writes a row on every call. |
 | `[deployment] default_earliest` / `default_latest` | `-20m@m` / `-5m@m` | Time range proposed for new drafts. |
 | `[deployment] default_schedule_window` | `auto` | Schedule window proposed for new drafts (`auto` or 0–1440 minutes). |
 | `[catalog] kv_row_limit` | `50000` | Set to the same value as the platform's `max_rows_per_query` if you raised it, so totals and the warning follow it (issue #14). |
 | `[import] max_bundle_mb` | `50` | Offline bundle size cap, 1 to 500; see §5.2 for splitting instead. |
 | `[retention] audit_days` | `365` | `0` keeps audit forever. Also indexed in `_internal` via the app log. |
-| `[controltest] index` | `ucm_controltest` | Test index for control tests (§6.6a). Must exist. |
+| `[controltest] index` | `ucm_controltest` | Test index for control tests (§6.6a). Must exist, and must not be `main` or a default search index of the user who runs the test: such a test is refused with `test_index_is_default`. |
 
 The worker interval is 60 seconds (`default/inputs.conf`). Do not disable
 `ucm_sync_worker://default` unless you intend to stop all background jobs
@@ -1865,7 +1901,7 @@ app. Do the steps in this order:
    $SPLUNK_HOME/bin/splunk restart
    ```
 
-4. **Install SUNavigator 0.11.1** as in §3.2. The first install omits
+4. **Install SUNavigator 0.12.0** as in §3.2. The first install omits
    `-update`, because `sunavigator` is a new app ID.
 5. **Re-create the GitHub token** if you use one (§3.6). It must be stored in
    realm `sunavigator`. The 0.7.0 token in realm `splunk_use_case_manager` is
@@ -2246,7 +2282,7 @@ Full table: [ARCHITECTURE.md §6](ARCHITECTURE.md).
 
 ---
 
-## 12. Known limitations (0.11.1)
+## 12. Known limitations (0.12.0)
 
 Each item says where to read more and ends with its tracking: an issue number on GitHub, a draft
 (`N-nn`) in `docs/ISSUES_PENDING.md` that has not been filed yet, or "no issue" for a limit that is
@@ -2339,7 +2375,7 @@ by design.
 - The POA&M eligibility note for CMMC Level 2 (32 CFR 170.21) is information. The app has no conditional
   status, no 180-day clock and no closeout record (D-079, D-080). No issue: by design.
 - Default four-eyes blocks a single `admin` from approving their own draft (§4). No issue: by design.
-- `admin`, `sc_admin` and `ucm_admin` can edit deployed searches in Settings; the
+- `admin` and `sc_admin` can edit deployed searches in Settings; the
   app reports drift and does not repair it (§4, D-051). The scheduler account must
   hold `ucm_scheduler`; removing it orphans its searches. No issue: by design.
 - "Ran without error" on Coverage and Deployments means `status=success` in
@@ -2382,7 +2418,7 @@ by design.
 
 ## 13. Quick start checklist
 
-1. `splunk install app sunavigator-0.11.1.tar.gz` then `splunk restart`.
+1. `splunk install app sunavigator-0.12.0.tar.gz` then `splunk restart`.
 2. `splunk show kvstore-status` → `ready` (macOS: §9.2 if stuck on `starting`).
 3. Open **SUNavigator → Administration**; all platform pills green.
 4. **Check provider for categories** → tick **9** → **Synchronize**, **or**

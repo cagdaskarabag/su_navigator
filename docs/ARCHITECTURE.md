@@ -223,7 +223,7 @@ Downgrades are not supported (D-033).
 | `GET ucm/provider/manifest` | `ucm_manage_content` | Resolve the remote manifest (optional `ref`) without importing. |
 | `GET ucm/platform` | read | Capability report. Since 0.9.1 also `security_content`: ES and ESCU `state` (`installed`, `disabled`, `not_installed`, `unverified`), version and reason (D-067). |
 | `GET ucm/audit` | `ucm_manage_content` or `ucm_admin` | Recent audit events (`limit`, `prefix`). |
-| `GET ucm/audit/verify` | `ucm_manage_content` or `ucm_admin` | Re-compute the audit hash chain: `ok`, counts of chained, legacy, modified, missing-predecessor and restart rows, `branches`, `head` (D-075). Audited as `audit.verified`. |
+| `POST ucm/audit/verify` | `ucm_manage_content` or `ucm_admin` | Re-compute the audit hash chain: `ok`, counts of chained, legacy, modified, missing-predecessor and restart rows, `branches`, `branch_rows`, `head` (D-075). A POST because it writes; audited as `audit.verified`, at most once per `[audit] verify_window_seconds` unless the chain has a problem. |
 | `GET ucm/deployment/diff` | read | Compare two revisions of one deployment (`id`, `from`, `to`): changed settings, action summary, SPL diff; or `available: false` with the reason (D-075). |
 | `POST ucm/deployment/withdraw` | `ucm_deploy` | Send an approved, not yet deployed revision back for review; `note` of at least 5 characters. |
 | `POST ucm/deployment/cancel_enable` | `ucm_deploy` | Cancel an open enable request (second-person mode). |

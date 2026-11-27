@@ -752,4 +752,4 @@ Closed by documentation in this beta: the README clone URL and prerequisites, th
 | #48 | Drift check misses the alert trigger and email message settings | Fixed in 0.11.1; close after the live run |
 | #49 | Outbound HTTP follows redirects past the host allowlist and forwards the token | Fixed in 0.11.1; close after the live run |
 | #50 | Control-test scoping: a subsearch or append clause without an index runs on the default indexes | Fixed in 0.11.1; close after the live run |
-| #51 | Hardening candidates from the external code review (11 low-severity items) | Checklist; no item changes who can do what |
+| #51 | Hardening candidates from the external code review (11 low-severity items) | Done in 0.12.0 (item 4's optional capability check is not built); close after the live run |
