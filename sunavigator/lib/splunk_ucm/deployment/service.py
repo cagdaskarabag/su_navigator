@@ -33,7 +33,7 @@ from ..storage import collections as C
 from ..storage.collections import DOC_SCHEMA
 from ..storage.kvstore import DocumentStore
 from ..storage.repositories import CategoryRepository, ContentRepository
-from ..util import safe_key, utc_now, utc_now_iso
+from ..util import new_id, safe_key, utc_now, utc_now_iso
 from . import actions as action_rules
 from . import revisions as revision_tools
 from .actions import ActionPolicy
@@ -251,11 +251,14 @@ class DeploymentService:
                                   % spec["spl_source"])
         check = self._check_spl(spl)
         key = deployment_key(uc.key)
-        doc = self.store.get(C.DEPLOYMENTS, key) or self._new(uc, actor)
+        doc = self.store.get(C.DEPLOYMENTS, key)
+        existed = doc is not None
+        doc = doc or self._new(uc, actor)
         prev_state = doc.get("state")
         revisions = doc.setdefault("revisions", [])
         latest = revisions[-1] if revisions else None
-        if latest is not None and prev_state == DRAFT and not latest.get("submitted_at"):
+        replaced_draft = latest is not None and prev_state == DRAFT and not latest.get("submitted_at")
+        if replaced_draft:
             rev_no = latest["rev"]
             revisions.pop()
         else:
@@ -286,8 +289,8 @@ class DeploymentService:
         self._trim_revisions(doc)
         self._history(doc, actor, "draft", prev_state, DRAFT, rev_no, spec["notes"][:200])
         self._save(doc, actor)
-        details = {"revision": rev_no, "spl_source": spec["spl_source"],
-                   "parse_ok": check["parse_ok"], "side_effects": check["side_effects"],
+        details = {"revision": rev_no, "from": prev_state if existed else "none", "replaced_draft": replaced_draft,
+                   "spl_source": spec["spl_source"], "parse_ok": check["parse_ok"], "side_effects": check["side_effects"],
                    "review_commands": check["review_commands"], "actions": action_rules.summary(actions)}
         if parallel:
             details["parallel_copy"] = parallel
@@ -1049,15 +1052,17 @@ class DeploymentService:
         doc["version"] = int(doc.get("version", 0)) + 1
         doc["updated_at"] = utc_now_iso()
         doc["updated_by"] = actor
+        doc["save_token"] = new_id()
         self.store.upsert(C.DEPLOYMENTS, doc)
         stored = self.store.get(C.DEPLOYMENTS, doc["_key"])
-        if stored is None or stored.get("version") != doc["version"]:
+        if stored is None or stored.get("version") != doc["version"] or stored.get("save_token") != doc["save_token"]:
             raise ConflictError("the deployment was changed by someone else while it was being saved; reload and "
                                 "check what it now says before retrying", {"code": "concurrent_update_detected"})
 
     def _decorate(self, doc: Dict[str, Any], summary: bool = False) -> Dict[str, Any]:
         out = dict(doc)
         out.pop("live_drift", None)
+        out.pop("save_token", None)
         out.pop("override_active", None)
         out.pop("outcome_value", None)
         now = utc_now_iso()

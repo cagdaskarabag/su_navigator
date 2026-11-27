@@ -75,5 +75,56 @@ class RolesAndAuditTest(unittest.TestCase):
         self.assertEqual(call(make_ctx(InMemoryStore(), []), "POST", "audit/verify")[0], 403)
 
 
+class SaveTokenTest(unittest.TestCase):
+    def test_item_3_two_saves_from_the_same_version_are_told_apart(self):
+        from splunk_ucm.errors import ConflictError
+        from splunk_ucm.storage import collections as C
+        svc, store, _ = service()
+        svc.save_draft("alice", UC, {})
+        real = store.upsert
+        rival_wrote = []
+
+        def with_rival(collection, doc):
+            real(collection, doc)
+            if collection == C.DEPLOYMENTS and not rival_wrote:
+                rival_wrote.append(True)
+                other = dict(doc)
+                other["save_token"] = "someone-else"
+                real(collection, other)
+        store.upsert = with_rival
+        with self.assertRaises(ConflictError) as raised:
+            svc.submit("alice", UC)
+        self.assertEqual(raised.exception.details["code"], "concurrent_update_detected")
+
+    def test_item_3_the_token_is_stored_but_not_returned(self):
+        from splunk_ucm.deployment.service import deployment_key
+        from splunk_ucm.storage import collections as C
+        svc, store, _ = service()
+        doc = svc.save_draft("alice", UC, {})
+        self.assertNotIn("save_token", doc)
+        stored = store.get(C.DEPLOYMENTS, deployment_key("fenre_UC-9.1.1"))
+        self.assertTrue(stored["save_token"])
+        first = stored["save_token"]
+        svc.submit("alice", UC)
+        self.assertNotEqual(store.get(C.DEPLOYMENTS, deployment_key("fenre_UC-9.1.1"))["save_token"], first)
+
+
+class DraftAuditTest(unittest.TestCase):
+    def draft_rows(self, store):
+        return [r for r in store.query("uc_audit", {}, limit=500) if r.get("action") == "deployment.draft"]
+
+    def test_item_4_the_draft_row_says_which_state_it_replaced(self):
+        svc, store, _ = service()
+        svc.save_draft("alice", UC, {})
+        svc.save_draft("alice", UC, {"severity": "high"})
+        svc.submit("alice", UC)
+        svc.save_draft("mallory", UC, {"severity": "low"})
+        rows = sorted(self.draft_rows(store), key=lambda r: r["time"])
+        self.assertEqual([(r["details"]["from"], r["details"]["replaced_draft"]) for r in rows],
+                         [("none", False), ("draft", True), ("pending_approval", False)])
+        self.assertEqual(rows[-1]["actor"], "mallory")
+        self.assertEqual(rows[-1]["details"]["revision"], 2)
+
+
 if __name__ == "__main__":
     unittest.main()
