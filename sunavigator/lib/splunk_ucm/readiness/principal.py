@@ -332,9 +332,16 @@ def check_access(principal: Optional[PrincipalAccess], scan: Optional[Dict[str, 
                 if "index_pattern_unresolved" not in reasons:
                     reasons.append("index_pattern_unresolved")
                 continue
-            ok_any = any(principal.covers(m)[0] for m in matches)
-            if ok_any:
-                covered.extend(m for m in matches if principal.covers(m)[0])
+            open_to = [m for m in matches if principal.covers(m)[0]]
+            closed = [m for m in matches if m not in open_to]
+            if open_to and closed:
+                covered.extend(open_to)
+                why = "it matches %d indexes and the account can search %d; not %s" % (
+                    len(matches), len(open_to), ", ".join(closed[:3]) + (" and more" if len(closed) > 3 else ""))
+                uncovered.append((pattern, why))
+                rows.append({"index": pattern, "searchable": True, "partial": True, "reason": why})
+            elif open_to:
+                covered.extend(open_to)
                 rows.append({"index": pattern, "searchable": True, "reason": ""})
             else:
                 why = principal.covers(matches[0])[1]

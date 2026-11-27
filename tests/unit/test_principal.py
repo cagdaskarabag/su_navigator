@@ -141,7 +141,8 @@ class CoverageRulesTest(unittest.TestCase):
         self.assertIn("not _internal", out["detail"])
 
     def test_wildcard_in_spl_expands_over_known_indexes(self):
-        self.assertEqual(check("index=win*", principal(allowed=["winsec"]))["status"], MET)
+        self.assertEqual(check("index=win*", principal(allowed=["win*"]))["status"], MET)
+        self.assertEqual(check("index=win*", principal(allowed=["winsec"]))["status"], PARTIAL)
         self.assertEqual(check("index=win*", principal(allowed=["unix_logs"]))["status"], NOT_MET)
         self.assertEqual(check("index=unknown*", principal())["code"], "index_pattern_unresolved")
 

@@ -61,6 +61,14 @@ var tests = {
         assert.ok(/The audit chain is intact/.test(t) && /8 of 10 rows are chained/.test(t) && /2 older rows from before the chain/.test(t), t);
         assert.ok(/Head abc123/.test(t) && /same moment as another/.test(t), t);
     },
+    "rows that share a predecessor are listed": function () {
+        var r = intact();
+        r.branches = 1; r.branch_rows = [{ key: "a", time: "2026-11-25T10:00:00Z", action: "deployment.draft" }, { key: "b", time: "2026-11-25T10:00:01Z", action: "deployment.verified" }];
+        var v = open({ active: 1, summary: { version: 6, outdated: 0 } }, r);
+        press(v, "Verify audit chain");
+        var t = v.root.textContent;
+        assert.ok(/share a predecessor: deployment.draft at 2026-11-25T10:00:00Z; deployment.verified at 2026-11-25T10:00:01Z/.test(t), t);
+    },
     "a modified row and a missing predecessor are named": function () {
         var r = intact();
         r.ok = false; r.modified_count = 1; r.modified = [{ key: "k", time: "2026-11-25T10:00:00Z", action: "deployment.approve" }];

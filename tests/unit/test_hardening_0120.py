@@ -126,5 +126,48 @@ class DraftAuditTest(unittest.TestCase):
         self.assertEqual(rows[-1]["details"]["revision"], 2)
 
 
+class WildcardAndChainTest(unittest.TestCase):
+    def check(self, allowed, pattern="fw_*", known=("fw_a", "fw_b", "fw_c")):
+        from splunk_ucm.readiness.principal import PrincipalAccess, check_access
+        principal = PrincipalAccess("svc", roles=["r"], allowed=allowed)
+        scan = {"indexes": [pattern], "reads_indexes": True, "uses_default": False, "unverified": [], "sourcetypes": []}
+        return check_access(principal, scan, [{"name": k} for k in known])
+
+    def test_item_5_a_wildcard_the_account_only_partly_covers_is_partial(self):
+        result = self.check(["fw_a"])
+        self.assertEqual(result["status"], "partial", result)
+        self.assertEqual(result["code"], "index_not_accessible")
+        self.assertIn("fw_b", result["detail"])
+        row = result["observed"][0]
+        self.assertTrue(row["partial"] and row["searchable"])
+        self.assertIn("matches 3 indexes", row["reason"])
+
+    def test_item_5_a_wildcard_fully_covered_is_met_and_not_covered_is_not_met(self):
+        self.assertEqual(self.check(["fw_*"])["status"], "met")
+        self.assertEqual(self.check(["other"])["status"], "not_met")
+
+    def test_item_5_the_verify_result_lists_the_rows_that_share_a_predecessor(self):
+        from splunk_ucm.audit import AuditService, row_hash
+        from splunk_ucm.storage import collections as C
+        from splunk_ucm.storage.kvstore import InMemoryStore
+        store = InMemoryStore()
+        audit = AuditService(store)
+        for i in range(3):
+            audit.record("a", "deployment.draft", "deployment", "x%d" % i)
+        rows = sorted(store.query(C.AUDIT, {}, limit=10), key=lambda r: r["time"])
+        twin = {"_key": "zz", "time": rows[-1]["time"] + 0.5, "time_iso": "t", "actor": "b", "action": "deployment.twin",
+                "object_type": "deployment", "object_id": "x", "outcome": "success", "details": {},
+                "prev_hash": rows[-2]["hash"]}
+        twin["hash"] = row_hash(twin)
+        store.upsert(C.AUDIT, twin)
+        result = audit.verify_chain()
+        self.assertTrue(result["ok"])
+        self.assertEqual(result["branches"], 1)
+        self.assertEqual(sorted(r["action"] for r in result["branch_rows"]), ["deployment.draft", "deployment.twin"])
+        clean = AuditService(InMemoryStore())
+        clean.record("a", "x", "x", "x")
+        self.assertEqual(clean.verify_chain()["branch_rows"], [])
+
+
 if __name__ == "__main__":
     unittest.main()

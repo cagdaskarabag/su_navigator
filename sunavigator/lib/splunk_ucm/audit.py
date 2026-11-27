@@ -106,22 +106,27 @@ class AuditService:
         missing: List[Dict[str, Any]] = []
         restarts: List[Dict[str, Any]] = []
         links: Dict[str, int] = {}
+        siblings: Dict[str, List[Dict[str, Any]]] = {}
         for index, row in enumerate(chained):
             ref = {"key": row["_key"], "time": row.get("time_iso"), "action": row.get("action")}
             if row_hash(row) != row["hash"]:
                 modified.append(ref)
             prev = row.get("prev_hash") or ""
             links[prev] = links.get(prev, 0) + 1
+            if prev:
+                siblings.setdefault(prev, []).append(ref)
             if not prev:
                 if index:
                     restarts.append(ref)
             elif prev not in known and index:
                 missing.append(ref)
         branches = sum(n - 1 for p, n in links.items() if p and n > 1)
+        branch_rows = [ref for group in siblings.values() if len(group) > 1 for ref in group]
         ok = not (modified or missing or restarts)
         return {"ok": ok, "rows": len(rows), "chained": len(chained), "legacy": len(rows) - len(chained),
                 "modified": modified[:LISTED], "modified_count": len(modified),
                 "missing_predecessor": missing[:LISTED], "missing_count": len(missing),
                 "restarts": restarts[:LISTED], "restart_count": len(restarts), "branches": branches,
+                "branch_rows": branch_rows[:LISTED],
                 "head": chained[-1]["hash"] if chained else "", "truncated": truncated,
                 "first_time": chained[0].get("time_iso") if chained else ""}

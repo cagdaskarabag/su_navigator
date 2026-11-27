@@ -263,7 +263,8 @@ function ucmViewMain($, ucm) {
         var problems = r.modified_count + r.missing_count + r.restart_count;
         var lines = [r.chained + " of " + r.rows + " rows are chained" + (r.legacy ? " (" + r.legacy + " older rows from before the chain are not checked)" : "") + ".",
             "Head " + (r.head || "none") + ". Record it outside Splunk to also detect removal of the newest rows."];
-        if (r.branches) { lines.push(r.branches + " rows were written at the same moment as another; that is normal and not a failure."); }
+        if (r.branches) { lines.push(r.branches + " rows were written at the same moment as another; that is normal and not a failure." +
+            ((r.branch_rows || []).length ? " Rows that share a predecessor: " + r.branch_rows.map(function (m) { return m.action + " at " + m.time; }).join("; ") + "." : "")); }
         if (r.truncated) { lines.push("Only the first " + r.rows + " rows were checked."); }
         if (!problems) { return ucm.stateBox("info", "The audit chain is intact.", lines.join(" ")); }
         var found = [];
