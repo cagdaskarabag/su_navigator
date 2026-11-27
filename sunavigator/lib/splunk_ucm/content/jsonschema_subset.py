@@ -80,6 +80,7 @@ class SchemaValidator:
             raise ValueError("schema must be an object")
         self.schema = schema
         self.unsupported_keywords: Set[str] = set()
+        self.invalid_patterns: List[str] = []
         self._scan(schema)
         self._pattern_cache: Dict[str, Any] = {}
 
@@ -90,6 +91,8 @@ class SchemaValidator:
                     continue
                 if key not in _SUPPORTED and key not in _ANNOTATIONS:
                     self.unsupported_keywords.add(key)
+                if key == "pattern" and isinstance(value, str) and self._compile(value) is None:
+                    self.invalid_patterns.append(value[:200])
                 if key == "properties" and isinstance(value, dict):
                     for sub in value.values():
                         self._scan(sub)
@@ -108,12 +111,17 @@ class SchemaValidator:
         self._validate(instance, self.schema, [], findings)
         return findings
 
+    @staticmethod
+    def _compile(pattern: Any):
+        try:
+            return re.compile(pattern)
+        except (re.error, TypeError, RecursionError, OverflowError):
+            return None
+
     def _regex(self, pattern: str):
-        compiled = self._pattern_cache.get(pattern)
-        if compiled is None:
-            compiled = re.compile(pattern)
-            self._pattern_cache[pattern] = compiled
-        return compiled
+        if pattern not in self._pattern_cache:
+            self._pattern_cache[pattern] = self._compile(pattern)
+        return self._pattern_cache[pattern]
 
     def _validate(self, value: Any, schema: Any, path: PathT, out: List[SchemaFinding]) -> None:
         if schema is False:
@@ -139,7 +147,8 @@ class SchemaValidator:
                 out.append(SchemaFinding(path, "minLength", "shorter than %d" % schema["minLength"]))
             if "maxLength" in schema and len(value) > schema["maxLength"]:
                 out.append(SchemaFinding(path, "maxLength", "longer than %d" % schema["maxLength"]))
-            if "pattern" in schema and not self._regex(schema["pattern"]).search(value):
+            if "pattern" in schema and self._regex(schema["pattern"]) is not None \
+                    and not self._regex(schema["pattern"]).search(value):
                 out.append(SchemaFinding(path, "pattern", "does not match %s" % schema["pattern"]))
             if "format" in schema and not _check_format(value, schema["format"]):
                 out.append(SchemaFinding(path, "format", "not a valid %s" % schema["format"]))

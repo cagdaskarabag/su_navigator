@@ -271,5 +271,46 @@ class PackageLimitsTest(unittest.TestCase):
             self.assertIn("too much data", raised.exception.message)
 
 
+class RecordRobustnessTest(unittest.TestCase):
+    def validator(self, schema=None):
+        from splunk_ucm.content.fenre.normalizer import fenre_validation_policy
+        from splunk_ucm.content.validation import RecordValidator
+        return RecordValidator(fenre_validation_policy(512 * 1024), schema)
+
+    def test_item_8_a_scalar_references_value_rejects_the_record_only(self):
+        for bad in (5, "https://example.com", {"url": "https://example.com"}, True):
+            result = self.validator().validate({"id": "1.1.1", "title": "t", "references": bad})
+            self.assertFalse(result.ok, bad)
+            self.assertIn("type_mismatch", [f.code for f in result.errors], bad)
+
+    def test_item_8_references_as_a_list_still_checks_the_urls(self):
+        result = self.validator().validate({"id": "1.1.1", "title": "t",
+                                            "references": [{"url": "javascript:alert(1)"}, {"url": "https://a.example/x"}]})
+        self.assertTrue(result.ok)
+        self.assertEqual([f.code for f in result.warnings], ["non_http_url"])
+
+    def test_item_8_an_invalid_regex_in_a_schema_does_not_crash_validation(self):
+        schema = {"type": "object", "properties": {"title": {"type": "string", "pattern": "(["}}}
+        from splunk_ucm.content.jsonschema_subset import SchemaValidator
+        self.assertEqual(SchemaValidator(schema).invalid_patterns, ["(["])
+        result = self.validator(schema).validate({"id": "1.1.1", "title": "t"})
+        self.assertTrue(result.ok)
+
+    def test_item_8_a_valid_pattern_still_applies(self):
+        schema = {"type": "object", "properties": {"code": {"type": "string", "pattern": "^[a-z]+$"}}}
+        result = self.validator(schema).validate({"id": "1.1.1", "title": "t", "code": "ABC"})
+        self.assertIn("schema_pattern", [f.code for f in result.warnings])
+
+    def test_item_8_an_upstream_schema_with_a_bad_pattern_falls_back_to_the_bundled_one(self):
+        import json
+        gh = helpers.FakeGitHub()
+        schema = json.loads(gh.files["schemas/uc.schema.json"])
+        schema.setdefault("properties", {})["x"] = {"type": "string", "pattern": "(["}
+        gh.put("schemas/uc.schema.json", schema)
+        manifest = helpers.fenre_provider(gh).get_manifest()
+        self.assertTrue(any("bundled schema" in w and "regular expression" in w for w in manifest.warnings), manifest.warnings)
+        self.assertEqual(manifest.schema_version, "1.11.0")
+
+
 if __name__ == "__main__":
     unittest.main()

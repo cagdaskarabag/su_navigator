@@ -154,7 +154,8 @@ class RecordValidator:
                 add(Finding(ERROR, "spl_control_chars", "/" + name, "SPL contains NUL bytes"))
 
         for name in self.policy.url_fields:
-            for i, ref in enumerate(record.get(name) or []):
+            refs = record.get(name)
+            for i, ref in enumerate(refs if isinstance(refs, list) else []):
                 url = ref.get("url") if isinstance(ref, dict) else None
                 # Non-http(s) links are never rendered as links; the normalizer drops
                 # them or keeps repository-relative paths as plain text.

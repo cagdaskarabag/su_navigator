@@ -25,6 +25,7 @@ from ...util import git_blob_sha, utc_now_iso
 from ..http import HttpConfig, HttpFetcher
 from ..provider import (ContentProvider, Normalizer, ProviderCategory, ProviderManifest,
                         ProviderRecord, RecordListing)
+from ..jsonschema_subset import SchemaValidator
 from ..validation import RecordValidator
 from .normalizer import FenreNormalizer, fenre_validation_policy
 
@@ -218,7 +219,10 @@ class FenreJsonProvider(ContentProvider):
             schema = json.loads(self._raw(commit, self.config.schema_path, 2 * 1024 * 1024))
             if not isinstance(schema, dict):
                 raise ValueError("schema is not an object")
-        except (ProviderError, ValueError) as exc:
+            bad = SchemaValidator(schema).invalid_patterns
+            if bad:
+                raise ValueError("it has a pattern that is not a valid regular expression: %s" % bad[0])
+        except (ProviderError, ValueError, TypeError, RecursionError) as exc:
             warnings.append("upstream schema unavailable (%s); using bundled schema" % exc)
             schema = load_bundled_schema()
         schema_version = str(schema.get("version", "unknown"))
