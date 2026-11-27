@@ -155,6 +155,22 @@ class LiveOneshotContractTest(unittest.TestCase):
             status, _ = t.request("GET", "/servicesNS/nobody/sunavigator/data/lookup-table-files/" + lookup, None, None)
             self.assertEqual(status, 404, "the probe lookup must not be left behind")
 
+    def test_backtick_in_a_comment_does_not_hide_a_subsearch_outputlookup(self):
+        """Issue #51, item 6. The search is only parsed, never run. Splunk may refuse it or accept it; the static check
+        must name the side effect either way, and this records which of the two Splunk does."""
+        from splunk_ucm.platform.search import SearchClient
+        from splunk_ucm.spl.parser import parse
+        from splunk_ucm.spl.policy import classify
+        client = SearchClient(transport())
+        spl = "| makeresults | append [ ```a`b``` | makeresults | outputlookup sun_live_never_written.csv ]"
+        self.assertEqual(classify(spl).side_effects, ["outputlookup"])
+        parsed = parse(client, spl, app="sunavigator")
+        if parsed.ok:
+            self.assertEqual(classify(spl, parsed).side_effects, ["outputlookup"])
+        status, _ = transport().request("GET", "/servicesNS/nobody/sunavigator/data/lookup-table-files/sun_live_never_written.csv",
+                                        None, None)
+        self.assertEqual(status, 404)
+
     def test_map_probe_is_refused_and_writes_nothing(self):
         import json as _json
         from splunk_ucm.audit import AuditService

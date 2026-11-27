@@ -194,5 +194,82 @@ class SplSplitTest(unittest.TestCase):
         self.assertIn("outputlookup", verdict.side_effects)
 
 
+class PackageLimitsTest(unittest.TestCase):
+    def archive(self, tmp, entries):
+        import io
+        import tarfile
+        path = os.path.join(tmp, "p.tar.gz")
+        with tarfile.open(path, "w:gz") as tar:
+            for name, data in entries:
+                info = tarfile.TarInfo(name)
+                info.size = len(data)
+                tar.addfile(info, io.BytesIO(data))
+        return path
+
+    def test_item_7_a_symlinked_package_file_is_refused(self):
+        import tempfile
+        from splunk_ucm.content.escu import package
+        from splunk_ucm.errors import ValidationError
+        with tempfile.TemporaryDirectory() as tmp:
+            outside = os.path.join(tmp, "outside.conf")
+            with open(outside, "w") as handle:
+                handle.write("[x]\nsearch = y\n")
+            pkg = os.path.join(tmp, "pkg")
+            os.makedirs(os.path.join(pkg, "default"))
+            os.symlink(outside, os.path.join(pkg, "default", "savedsearches.conf"))
+            with self.assertRaises(ValidationError) as raised:
+                package.read_package(pkg)
+            self.assertIn("symbolic link", raised.exception.message)
+
+    def test_item_7_a_symlinked_default_directory_is_refused(self):
+        import tempfile
+        from splunk_ucm.content.escu import package
+        from splunk_ucm.errors import ValidationError
+        with tempfile.TemporaryDirectory() as tmp:
+            real = os.path.join(tmp, "elsewhere")
+            os.makedirs(real)
+            with open(os.path.join(real, "savedsearches.conf"), "w") as handle:
+                handle.write("[x]\nsearch = y\n")
+            pkg = os.path.join(tmp, "pkg")
+            os.makedirs(pkg)
+            os.symlink(real, os.path.join(pkg, "default"))
+            with self.assertRaises(ValidationError):
+                package.read_package(pkg)
+
+    def test_item_7_a_plain_directory_still_reads(self):
+        import tempfile
+        from splunk_ucm.content.escu import package
+        with tempfile.TemporaryDirectory() as tmp:
+            os.makedirs(os.path.join(tmp, "default"))
+            with open(os.path.join(tmp, "default", "savedsearches.conf"), "w") as handle:
+                handle.write("[x]\nsearch = y\n")
+            self.assertIn("default/savedsearches.conf", package.read_package(tmp)["files"])
+
+    def test_item_7_an_archive_with_too_many_members_is_refused(self):
+        import tempfile
+        from unittest import mock
+        from splunk_ucm.content.escu import package
+        from splunk_ucm.errors import ValidationError
+        with tempfile.TemporaryDirectory() as tmp:
+            path = self.archive(tmp, [("default/savedsearches.conf", b"[x]\n")] + [("f%d" % i, b"") for i in range(10)])
+            with mock.patch.object(package, "MAX_ARCHIVE_MEMBERS", 5):
+                with self.assertRaises(ValidationError) as raised:
+                    package.read_package(path)
+            self.assertIn("too many members", raised.exception.message)
+            self.assertIn("default/savedsearches.conf", package.read_package(path)["files"])
+
+    def test_item_7_an_archive_that_unpacks_to_too_much_is_refused(self):
+        import tempfile
+        from unittest import mock
+        from splunk_ucm.content.escu import package
+        from splunk_ucm.errors import ValidationError
+        with tempfile.TemporaryDirectory() as tmp:
+            path = self.archive(tmp, [("default/savedsearches.conf", b"[x]\n"), ("big.bin", b"0" * 5000)])
+            with mock.patch.object(package, "MAX_UNPACKED_BYTES", 1000):
+                with self.assertRaises(ValidationError) as raised:
+                    package.read_package(path)
+            self.assertIn("too much data", raised.exception.message)
+
+
 if __name__ == "__main__":
     unittest.main()

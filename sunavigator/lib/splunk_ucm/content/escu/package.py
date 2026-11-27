@@ -26,15 +26,25 @@ from .normalizer import CATEGORIES, CATEGORY_BY_SLUG, ESCU_SCHEMA, PROVIDER
 
 MAX_MEMBER_BYTES = 32 * 1024 * 1024
 MAX_ARCHIVE_BYTES = 128 * 1024 * 1024
+MAX_ARCHIVE_MEMBERS = 100000
+MAX_UNPACKED_BYTES = 1024 * 1024 * 1024
 _FILES = ("default/savedsearches.conf", "default/analyticstories.conf", "default/app.conf",
           "default/content-version.conf")
 _SEVERITY_TEXT = {"informational", "low", "medium", "high", "critical"}
+
+
+def _inside(root: str, full: str) -> bool:
+    root = os.path.realpath(root)
+    return os.path.realpath(full).startswith(root + os.sep)
 
 
 def _read_directory(path: str) -> Dict[str, bytes]:
     out = {}
     for rel in _FILES:
         full = os.path.join(path, *rel.split("/"))
+        if os.path.lexists(full) and (os.path.islink(full) or not _inside(path, full)):
+            raise ValidationError("package file is a symbolic link or lies outside the package directory",
+                                  {"file": rel})
         if os.path.isfile(full):
             if os.path.getsize(full) > MAX_MEMBER_BYTES:
                 raise ValidationError("package file is too large", {"file": rel})
@@ -51,9 +61,17 @@ def _read_archive(path: str) -> Tuple[Dict[str, bytes], bytes]:
     out: Dict[str, bytes] = {}
     try:
         with tarfile.open(fileobj=io.BytesIO(raw), mode="r:*") as archive:
-            for member in archive.getmembers():
+            members = 0
+            unpacked = 0
+            for member in archive:
+                members += 1
+                if members > MAX_ARCHIVE_MEMBERS:
+                    raise ValidationError("package archive has too many members", {"limit": MAX_ARCHIVE_MEMBERS})
                 if not member.isfile():
                     continue
+                unpacked += member.size
+                if unpacked > MAX_UNPACKED_BYTES:
+                    raise ValidationError("package archive unpacks to too much data", {"limit_bytes": MAX_UNPACKED_BYTES})
                 parts = member.name.split("/")
                 if ".." in parts or member.name.startswith("/"):
                     continue
