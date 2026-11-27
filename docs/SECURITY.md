@@ -157,6 +157,14 @@ Controls that remain, and their limits:
   the expanded pipeline. The parse is stored by the existing
   **Parse and sample fields** action, so a user who never ran it sees a reason,
   not a search.
+* The static split treats a backtick as the start of a macro, so it sees no
+  command after an unpaired backtick. Splunk refuses such a search (missing
+  closing tick mark), and preview, submit and deployment require Splunk's parse
+  (`parse_ok`). A backtick inside a ```` ``` ```` comment usually reads as a macro,
+  which sends the search to the server-side parse rule above.
+* Scripted and external lookups run code through `lookup`, which is read-only in
+  the command lists. The lookup definition in `transforms.conf`, which only an
+  admin can install, is the control point (D-038).
 * Other indirect and unknown commands (`map` with a clean readable search, `rest`,
   `dbxlookup`, custom commands) only produce a warning, because they run with the
   user's permissions.
