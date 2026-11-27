@@ -42,7 +42,7 @@ def _cell(value: Any) -> str:
     if isinstance(value, bool):
         return "true" if value else "false"
     text = str(value)
-    if text[:1] in ("=", "+", "-", "@", "\t", "\r"):
+    if text[:1] in ("\t", "\r") or text.lstrip()[:1] in ("=", "+", "-", "@"):
         text = "'" + text
     return text
 

@@ -354,5 +354,23 @@ class TestIndexTest(unittest.TestCase):
         self.assertEqual(call(ctx, "POST", "deployment/controltest", body={"id": UC})[0], 403)
 
 
+class CsvGuardTest(unittest.TestCase):
+    def test_item_10_leading_whitespace_does_not_hide_a_formula(self):
+        from splunk_ucm.frameworks.evidence import _cell
+        for text in ("=1+1", " =1+1", "  +cmd", "\u00a0@SUM(A1)", "\n-2", "\t=x", "\r=x"):
+            self.assertTrue(_cell(text).startswith("'"), repr(text))
+        for text in ("plain", " plain", "a=b", "", "3-4"):
+            self.assertEqual(_cell(text), text)
+
+    def test_item_10_the_fenre_report_csv_uses_the_same_guard(self):
+        import importlib.util
+        spec = importlib.util.spec_from_file_location("fenre_report", os.path.join(helpers.ROOT, "tools", "fenre_report.py"))
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        text = module.csv_text([{"rule": "L001", "use_case": "1.1.1", "title": " =HYPERLINK(1)", "search": "index=a",
+                                 "command": "x", "call": "y", "suggestion": "z"}])
+        self.assertIn("' =HYPERLINK(1)", text)
+
+
 if __name__ == "__main__":
     unittest.main()

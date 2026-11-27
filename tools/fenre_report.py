@@ -25,6 +25,7 @@ sys.path.insert(0, os.path.join(ROOT, "sunavigator", "lib"))
 sys.path.insert(0, HERE)
 
 from splunk_ucm.content.registry import bundle_provider  # noqa: E402
+from splunk_ucm.frameworks.evidence import _cell as csv_cell  # noqa: E402
 from splunk_ucm.spl.lint import RULES, lint  # noqa: E402
 from ucm_bundle_builder import build_bundle_from_directory  # noqa: E402
 
@@ -97,7 +98,8 @@ def csv_text(findings: List[Dict[str, Any]]) -> str:
     writer = csv.writer(out, lineterminator="\n")
     writer.writerow(["rule", "use_case", "title", "search", "command", "construct", "suggested_fix"])
     for f in findings:
-        writer.writerow([f["rule"], "UC-" + f["use_case"], f["title"], f["search"], f["command"], f["call"], f["suggestion"]])
+        writer.writerow([csv_cell(v) for v in (f["rule"], "UC-" + f["use_case"], f["title"], f["search"], f["command"],
+                                               f["call"], f["suggestion"])])
     return out.getvalue()
 
 
