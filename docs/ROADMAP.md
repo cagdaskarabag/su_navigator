@@ -16,6 +16,18 @@ These are repository settings and documentation. Tracked in [#47](https://github
 - Decide whether release `v0.11.0` stays the latest release or is marked as a pre-release for the beta.
 - Add the feedback link to the release notes.
 
+## Proposed order after the external code review
+
+An external code review of the application code (16 bundles, every finding checked against the code) found three defects and eleven low-severity hardening items. The code stays frozen until the maintainer decides otherwise. This is the order proposed for when it does.
+
+1. **Now, no code.** Finish the maintainer checklist ([#47](https://github.com/cagdaskarabag/su_navigator/issues/47)). Decide about the Fenre files with the content owner ([#20](https://github.com/cagdaskarabag/su_navigator/issues/20)). Announce the beta with the notices already in the README.
+2. **Patch release 0.11.1: the three confirmed defects.** [#49](https://github.com/cagdaskarabag/su_navigator/issues/49) (redirects and the token), [#48](https://github.com/cagdaskarabag/su_navigator/issues/48) (drift coverage), [#50](https://github.com/cagdaskarabag/su_navigator/issues/50) (control-test scoping). Each is a change to one or two functions with unit tests. Add the user-visible fixes that are already small and understood: [#43](https://github.com/cagdaskarabag/su_navigator/issues/43), [#45](https://github.com/cagdaskarabag/su_navigator/issues/45), and [#44](https://github.com/cagdaskarabag/su_navigator/issues/44) with the matching `NOTICE` change. Run the live suite on Splunk 10.4.x ([#42](https://github.com/cagdaskarabag/su_navigator/issues/42)) before tagging.
+3. **Human security review on the 0.11.1 code** ([#32](https://github.com/cagdaskarabag/su_navigator/issues/32)). Review the fixed code, so the checklist does not describe code that is about to change. The external review makes this shorter: the confirmed and rejected findings are written down.
+4. **Hardening release.** The eleven items in [#51](https://github.com/cagdaskarabag/su_navigator/issues/51). The first three (the `ucm_admin` write right, throttled audit rows, the save token) are the most useful. Most of the rest are a few lines each.
+5. **After beta feedback.** The usability and scale items below, in the order the feedback asks for them.
+
+What the review did not cover: the tests, the documentation and the data files; the Splunk platform itself; and behaviour on a live system. It is a reading of the code. It does not replace #32.
+
 ## Known defects (next release, needs a code change)
 
 | Item | Issue | Notes |
@@ -31,6 +43,7 @@ These are repository settings and documentation. Tracked in [#47](https://github
 
 ## Security
 
+- Hardening candidates from the external code review: [#51](https://github.com/cagdaskarabag/su_navigator/issues/51).
 - Complete the human review of the security paths. It is open in [#32](https://github.com/cagdaskarabag/su_navigator/issues/32), with the refusal-audit limits added in [#46](https://github.com/cagdaskarabag/su_navigator/issues/46).
 - A public beta is reasonable while #32 is open, as long as the beta label is clear (see the README).
 
