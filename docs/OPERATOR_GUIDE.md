@@ -828,7 +828,7 @@ operator roles. Three roles can still edit or delete a `SUN - …` search in Set
 `admin`, `sc_admin` and `ucm_admin` (`metadata/default.meta`, `[savedsearches]`). That
 is intended, and it is why `ucm_admin` is not a role to give to day-to-day
 operators; give them `ucm_deployment_operator`. An edit made that way shows as
-**drift** on the next **Verify now** (§6.6) and in the audit log of the app; the
+**drift** on the next **Verify now** (§6.6), for the settings listed in §6.6 step 7, and in the audit log of the app; the
 app does not repair it by itself, and it does not say who made the edit. Splunk's own
 audit (`index=_audit`) is the place to look. **Roll back** writes the previous revision
 and sets the owner to the scheduler account again.
@@ -1534,6 +1534,7 @@ failed after a deploy error; retry deploy from approved/failed
    The worker also verifies on `[deployment] verify_interval_minutes`
    (default 60). External edits show as **drift**. Anyone with `admin`, `sc_admin` or
    `ucm_admin` can make such an edit (§4); the app reports it and does not undo it.
+   Drift covers the search text, owner, cron, time range, schedule window, suppression, the list of actions, email recipients, subject and attachment flags, the webhook URL, `is_scheduled` and `disabled`. It does not yet cover the alert trigger (`alert_type`, `alert_comparator`, `alert_threshold`, `alert.track`, `alert.severity`) or the email message and results-link flag, so an edit to those is not reported (issue #48).
 8. **Roll back** — writes the previous deployed revision, again disabled.
 9. **Retire** — deletes the saved search from Splunk.
 

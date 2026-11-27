@@ -81,6 +81,7 @@ Found while writing the user guide. None changes data or exposes anything; all a
 | The POA&M banner says the threshold is met when the system security plan is missing (the value `can_pass` is correct) | issue #45 |
 | The product name contains a Splunk trademark in app metadata and the export header (docs and README are fixed) | issue #44 |
 | Refusal audit limits (20 per user and 200 per instance per hour) are not in the security review checklist | issue #46 |
+| **Verify** does not report edits to the alert trigger (threshold, tracking, severity) or the email message | issue #48 |
 | One use case's control-test fixture fails (UC-1.1.8); it is a known content finding in the Fenre corpus | `docs/upstream/FENRE_FINDINGS.md`, F-02 |
 | Unconfirmed: Splunk Web and the management API stopped answering for about six minutes during a discovery run on 10.4.3; cause unknown | issue #41 |
 

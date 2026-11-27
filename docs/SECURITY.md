@@ -366,6 +366,8 @@ the same version within the same instant can both pass both checks; the later
 write wins and the earlier caller is told it succeeded. Both actions are still
 in `uc_audit`.
 
+Drift covers the search text, owner, cron, time range, schedule window, suppression, the list of actions, email recipients, subject and attachment flags, the webhook URL, `is_scheduled` and `disabled`. It does not yet cover the alert trigger (`alert_type`, `alert_comparator`, `alert_threshold`, `alert.track`, `alert.severity`) or the email message and results-link flag, so an edit to those is not reported (issue #48).
+
 Run status (D-031) is searched with the caller's token, so it never reveals
 scheduler data a user could not search themselves.
 
