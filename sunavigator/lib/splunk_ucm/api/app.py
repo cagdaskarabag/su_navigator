@@ -440,15 +440,17 @@ def get_audit(ctx: Context, req: Request) -> Response:
     return Response(200, {"events": ctx.audit.recent(limit, req.arg("prefix"))})
 
 
-def get_audit_verify(ctx: Context, req: Request) -> Response:
+def post_audit_verify(ctx: Context, req: Request) -> Response:
     caps = ctx.capabilities()
     if CAP_ADMIN not in caps and CAP_MANAGE_CONTENT not in caps:
         raise PermissionDenied("missing capability %s" % CAP_ADMIN)
     result = ctx.audit.verify_chain()
-    ctx.audit.record(ctx.user, "audit.verified", "audit", "*", outcome="success" if result["ok"] else "failure",
-                     details={"rows": result["rows"], "modified": result["modified_count"],
-                              "missing": result["missing_count"], "restarts": result["restart_count"],
-                              "head": result["head"]})
+    window = ctx.config.get_int("audit", "verify_window_seconds", 300, 0, 3600)
+    if not result["ok"] or not ctx.audit.written_within("audit.verified", "*", window):
+        ctx.audit.record(ctx.user, "audit.verified", "audit", "*", outcome="success" if result["ok"] else "failure",
+                         details={"rows": result["rows"], "modified": result["modified_count"],
+                                  "missing": result["missing_count"], "restarts": result["restart_count"],
+                                  "head": result["head"]})
     return Response(200, result)
 
 
@@ -1007,7 +1009,7 @@ def build_router() -> Router:
     router.add("POST", "catalog/reindex", post_reindex)
     router.add("GET", "platform", get_platform)
     router.add("GET", "audit", get_audit)
-    router.add("GET", "audit/verify", get_audit_verify)
+    router.add("POST", "audit/verify", post_audit_verify)
     router.add("GET", "inventory", get_inventory)
     router.add("GET", "inventory/coverage", get_inventory_coverage)
     router.add("GET", "environment/health", get_environment_health)

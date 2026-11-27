@@ -63,6 +63,15 @@ class AuditService:
             log.exception("audit write failed", extra={"audit_action": action})
         return doc["_key"]
 
+    def written_within(self, action: str, object_id: str, seconds: float, now: Optional[float] = None) -> bool:
+        """Whether a row for this action and object, by anyone, was written in the last ``seconds`` (0 turns the check off)."""
+        if seconds <= 0:
+            return False
+        cutoff = (epoch_now() if now is None else now) - seconds
+        rows = self.store.query(C.AUDIT, {"$and": [{"action": action}, {"object_id": object_id},
+                                                   {"time": {"$gte": cutoff}}]}, limit=1, fields=["_key"])
+        return bool(rows)
+
     def recent(self, limit: int = 50, action_prefix: str = "") -> List[Dict[str, Any]]:
         query = {"action": {"$regex": "^" + re.escape(action_prefix)}} if action_prefix else None
         return self.store.query(C.AUDIT, query, sort=[("time", -1)], limit=limit)

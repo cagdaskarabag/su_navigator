@@ -45,6 +45,7 @@ def settings_from_config(config: AppConfig) -> DeploymentSettings:
         override_second_person=config.get_bool("deployment", "override_second_person", True),
         override_days=config.get_int("deployment", "override_days", 14, 0, 365),
         override_expiry_action=config.get("deployment", "override_expiry_action", "remind") or "remind",
+        verify_audit_window_seconds=config.get_int("audit", "verify_window_seconds", 300, 0, 3600),
         extra_safe_commands=parse_extra_safe(config.get("spl", "extra_safe_commands", "")))
 
 

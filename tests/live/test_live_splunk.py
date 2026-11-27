@@ -2063,12 +2063,12 @@ class LiveLifecycleRefinementsTest(unittest.TestCase):
         return api(who, "POST", "deployment/" + action, body=body)
 
     def test_audit_chain_survives_the_real_kv_store(self):
-        status, before = api(self.admin, "GET", "audit/verify")
+        status, before = api(self.admin, "POST", "audit/verify")
         self.assertEqual(status, 200, before)
         self.assertTrue(before["ok"], before)
-        self.assertEqual(api(self.operator, "GET", "audit/verify")[0], 403)
+        self.assertEqual(api(self.operator, "POST", "audit/verify")[0], 403)
         self.act(self.operator, "draft")
-        status, after = api(self.admin, "GET", "audit/verify")
+        status, after = api(self.admin, "POST", "audit/verify")
         self.assertTrue(after["ok"], after)
         self.assertEqual(after["modified_count"], 0, after)
         self.assertGreater(after["chained"], before["chained"], (before, after))
@@ -2102,7 +2102,7 @@ class LiveLifecycleRefinementsTest(unittest.TestCase):
         self.assertEqual(status, 200, diff)
         self.assertTrue(diff["available"], diff)
         self.assertIn("cron", [f["field"] for f in diff["fields"]])
-        status, verify = api(self.admin, "GET", "audit/verify")
+        status, verify = api(self.admin, "POST", "audit/verify")
         self.assertTrue(verify["ok"], verify)
         self.act(self.operator, "retire")
 
@@ -2297,7 +2297,7 @@ class LiveAssessmentTest(unittest.TestCase):
         self.assertEqual(len(limited), 1, [r["action"] for r in rows])
         self.assertEqual(len(rows), 21, len(rows))
         self.assertEqual(limited[0]["details"]["scope"], "actor")
-        status, out = api(self.admin, "GET", "audit/verify")
+        status, out = api(self.admin, "POST", "audit/verify")
         self.assertTrue(out["ok"], out)
 
     def test_snapshot_is_stored_hashed_and_verifiable(self):
@@ -2315,6 +2315,6 @@ class LiveAssessmentTest(unittest.TestCase):
         self.assertIn(snap["id"], [s["id"] for s in listing["items"]])
 
     def test_audit_chain_is_intact_after_all_assessment_writes(self):
-        status, out = api(self.admin, "GET", "audit/verify")
+        status, out = api(self.admin, "POST", "audit/verify")
         self.assertEqual(status, 200, out)
         self.assertTrue(out["ok"], out)

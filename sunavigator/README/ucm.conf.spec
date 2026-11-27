@@ -231,6 +231,8 @@ refusal_actor_per_hour = <integer 1-1000>
 * Most refusal rows one user writes per hour. The first one over writes a single refused.rate_limited row. Default 20.
 refusal_total_per_hour = <integer 1-100000>
 * Most refusal rows written per hour by all users together. Default 200.
+verify_window_seconds = <integer 0-3600>
+* Verify (a deployment, or the audit chain) writes at most one audit row per object per this many seconds, unless the result changed or the audit chain has a problem. 0 writes a row on every call. Default 300.
 
 [retention]
 audit_days = <integer 0-3650>

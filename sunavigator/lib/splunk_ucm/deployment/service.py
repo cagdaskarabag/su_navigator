@@ -65,7 +65,9 @@ class DeploymentSettings:
                  extra_safe_commands: Sequence[str] = (), schedule_window: str = "auto",
                  scheduled_owner: str = "", cron_jitter: bool = False, actions: Optional[ActionPolicy] = None,
                  enable_second_person: bool = False, enable_request_hours: int = 24, override_days: int = 14,
-                 override_expiry_action: str = "remind", override_second_person: bool = True):
+                 override_expiry_action: str = "remind", override_second_person: bool = True,
+                 verify_audit_window_seconds: int = 300):
+        self.verify_audit_window_seconds = max(0, verify_audit_window_seconds)
         self.enable_second_person = enable_second_person
         self.override_second_person = override_second_person
         self.enable_request_hours = enable_request_hours
@@ -685,7 +687,9 @@ class DeploymentService:
         self._refresh_live(doc)
         self._save(doc, actor)
         live = doc["live"]
-        if audit_always or live["status"] != before or bool(live.get("drift")) != before_drift:
+        changed = live["status"] != before or bool(live.get("drift")) != before_drift
+        if changed or (audit_always and not self.audit.written_within(
+                "deployment.verified", doc["content_id"], self.settings.verify_audit_window_seconds)):
             self.audit.record(actor, "deployment.verified", "deployment", doc["content_id"],
                               outcome="success" if not live.get("drift") and live["status"] not in (
                                   LIVE_MISSING, LIVE_UNMANAGED) else "failure",

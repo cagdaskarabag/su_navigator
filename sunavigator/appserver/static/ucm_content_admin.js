@@ -276,7 +276,7 @@ function ucmViewMain($, ucm) {
     function auditIntegrity() {
         var out = el("div", {});
         return el("div", { "class": "ucm-actions" }, el("button", { "class": "btn", type: "button", text: "Verify audit chain", onclick: function () {
-            ucm.get("audit/verify").done(function (r) { ucm.clear(out).appendChild(verifyResult(r)); })
+            ucm.post("audit/verify", {}).done(function (r) { ucm.clear(out).appendChild(verifyResult(r)); })
                 .fail(function (err) { ucm.clear(out).appendChild(ucm.stateBox("error", "Could not verify the audit chain.", err.message)); });
         } }), el("span", { "class": "ucm-sub", text: "Each audit row carries a hash of itself and of the row before it. Verification finds an edited row or one removed from the middle." }), out);
     }

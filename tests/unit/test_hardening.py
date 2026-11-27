@@ -27,7 +27,7 @@ EPOCH = NOW.timestamp()
 
 # POST routes any authenticated app user may call; everything else needs a capability.
 CALLER_SCOPED_POSTS = {"selections", "selections/delete", "dashboards/preview"}
-RESTRICTED_GETS = {"audit", "audit/verify", "provider/manifest", "external", "assessment", "assessment/control",
+RESTRICTED_GETS = {"audit", "provider/manifest", "external", "assessment", "assessment/control",
                    "assessment/snapshots", "assessment/snapshot", "poam"}
 
 

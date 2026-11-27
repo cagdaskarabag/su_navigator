@@ -45,10 +45,10 @@ access = read : [ * ], write : [ admin, sc_admin, ucm_admin ]
 
 # Deployed use cases are saved searches in this app. Only the REST handler
 # writes them (system token, after its capability check) and each one is owned
-# by [deployment] scheduled_owner (D-051). Nobody else may edit or delete them
-# directly, operators included.
+# by [deployment] scheduled_owner (D-051). Nobody but admin and sc_admin may edit
+# or delete them directly; ucm_admin and the operators cannot.
 [savedsearches]
-access = read : [ * ], write : [ admin, sc_admin, ucm_admin ]
+access = read : [ * ], write : [ admin, sc_admin ]
 
 # Workflow records (approvals) are written only with the REST handler's system
 # token after the capability check, so participants cannot forge approvals.

@@ -4,7 +4,7 @@ var runView = require("./fake_dom").runView;
 
 function open(facets, verify) {
     return runView("ucm_content_admin.js", "ucm-admin", { sync: {}, categories: { categories: [] }, platform: new Error("x"),
-        audit: { events: [] }, "catalog/facets": facets, "audit/verify": verify || new Error("not asked") });
+        audit: { events: [] }, "catalog/facets": facets, "POST audit/verify": verify || new Error("not asked") });
 }
 function intact() {
     return { ok: true, rows: 10, chained: 8, legacy: 2, modified: [], modified_count: 0, missing_predecessor: [], missing_count: 0,
@@ -46,7 +46,7 @@ var tests = {
         var event = { time_iso: "2026-11-25T10:00:00Z", actor: "mallory", action: "refused.deployment.approve", object_id: "fenre:UC-1",
             outcome: "refused", details: { code: "permission_denied", message: "missing capability ucm_deploy" } };
         var v = runView("ucm_content_admin.js", "ucm-admin", { sync: {}, categories: { categories: [] }, platform: new Error("x"),
-            audit: { events: [event] }, "catalog/facets": new Error("x"), "audit/verify": new Error("x") });
+            audit: { events: [event] }, "catalog/facets": new Error("x"), "POST audit/verify": new Error("x") });
         var t = v.root.textContent;
         assert.ok(/Refused requests/.test(t) && /mallory/.test(t) && /deployment\.approve/.test(t) && /permission_denied/.test(t), t);
         assert.ok(/once per window/.test(t));
