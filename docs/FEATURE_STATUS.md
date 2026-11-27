@@ -1,6 +1,6 @@
-# SUNavigator 0.11.0: feature status
+# SUNavigator 0.11.1: feature status
 
-**Beta.** Release: [v0.11.0](https://github.com/cagdaskarabag/su_navigator/releases/tag/v0.11.0), build 23. The code is frozen for this beta; the open work is in [ROADMAP.md](ROADMAP.md).
+**Beta.** Version 0.11.1, build 24. The last tagged release is [v0.11.0](https://github.com/cagdaskarabag/su_navigator/releases/tag/v0.11.0); 0.11.1 is tagged after the live suite has run on Splunk 10.4.x (issue #42). The open work is in [ROADMAP.md](ROADMAP.md).
 Validated on Splunk Enterprise 10.2.9, single instance. Splunk Cloud, search head clusters with a deployer, and
 Splunk Enterprise Security 8 are **not validated and not planned** (D-078).
 
@@ -77,13 +77,7 @@ Found while writing the user guide. None changes data or exposes anything; all a
 | The Platform card shows kvstore as unknown to roles that cannot read it | issue #37 |
 | The enable note ("blocked while readiness is blocked") appears on every use case | issue #38 |
 | Deleting a local source mapping has no confirmation | issue #39 |
-| **Run search** stays disabled after a search returns zero rows. Workaround: Cancel | issue #43 |
-| The POA&M banner says the threshold is met when the system security plan is missing (the value `can_pass` is correct) | issue #45 |
-| The product name contains a Splunk trademark in app metadata and the export header (docs and README are fixed) | issue #44 |
 | Refusal audit limits (20 per user and 200 per instance per hour) are not in the security review checklist | issue #46 |
-| **Verify** does not report edits to the alert trigger (threshold, tracking, severity) or the email message | issue #48 |
-| Outbound HTTP follows redirects without re-checking the host allowlist and forwards the provider token | issue #49 |
-| Control-test scoping: a subsearch or append clause without an index runs on the default indexes | issue #50 |
 | One use case's control-test fixture fails (UC-1.1.8); it is a known content finding in the Fenre corpus | `docs/upstream/FENRE_FINDINGS.md`, F-02 |
 | Unconfirmed: Splunk Web and the management API stopped answering for about six minutes during a discovery run on 10.4.3; cause unknown | issue #41 |
 

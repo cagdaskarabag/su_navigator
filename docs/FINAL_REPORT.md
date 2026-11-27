@@ -111,4 +111,5 @@ validated and not planned (D-078). The README support statement and operator gui
 - A walkthrough of every page, by role, was run on Splunk Enterprise 10.4.3 (macOS) by a second operator and is published as [USER_GUIDE.md](USER_GUIDE.md) with 94 screenshots. Product names that are not part of this project were removed from three of them.
 - It found small wording and layout defects (issues #34 to #41) and one unexplained outage of Splunk Web (#41, unconfirmed). Nothing changed data. None is scheduled; the feature list is [FEATURE_STATUS.md](FEATURE_STATUS.md).
 - The app is not being changed until feedback has been collected. The next release adds how-to help inside the app: [IN_APP_HELP_PLAN.md](IN_APP_HELP_PLAN.md).
+- Update (27 Nov 2026): 0.11.1 fixes #43, #44, #45, #48, #49 and #50 (see the operator guide, "What changed"). The text below was written before that.
 - Beta review (26 Nov 2026): the code is frozen for this beta. Open work, in priority order, is in [ROADMAP.md](ROADMAP.md): zero-row Run search (#43), the trademark in the product name (#44), the POA&M banner (#45), the security review (#32, #46) and the repository settings in #47.

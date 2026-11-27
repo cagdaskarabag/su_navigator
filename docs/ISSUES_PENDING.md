@@ -737,9 +737,9 @@ Filed from the user guide run, as backlog. None is scheduled (see `docs/FEATURE_
 
 | Issue | Title | Status |
 |---|---|---|
-| #43 | Run search stays disabled after a search returns zero rows | Fix planned; documented as a known issue in the user guide |
-| #44 | Remove the Splunk trademark from the product name in app metadata and the export header | Docs fixed; code change needed |
-| #45 | POA&M banner says the threshold is met while the system security plan is missing | Code change needed; wording only |
+| #43 | Run search stays disabled after a search returns zero rows | Fixed in 0.11.1; close after the live run |
+| #44 | Remove the Splunk trademark from the product name in app metadata and the export header | Fixed in 0.11.1 (metadata, export header, NOTICE); the repository description is a manual setting (#47) |
+| #45 | POA&M banner says the threshold is met while the system security plan is missing | Fixed in 0.11.1 |
 | #46 | Refusal audit limits as a checklist item for the human security review (#32) | Open; checklist |
 | #47 | Maintainer checklist before the beta announcement | Manual repository settings |
 
@@ -749,7 +749,7 @@ Closed by documentation in this beta: the README clone URL and prerequisites, th
 
 | Issue | Title | Status |
 |---|---|---|
-| #48 | Drift check misses the alert trigger and email message settings | Code change needed; gap documented in SECURITY.md and the operator guide |
-| #49 | Outbound HTTP follows redirects past the host allowlist and forwards the token | Code change needed; reproduced locally; gap documented in SECURITY.md |
-| #50 | Control-test scoping: a subsearch or append clause without an index runs on the default indexes | Code change needed; confirmed with `scope_to_test_index()`; gap documented in SECURITY.md |
+| #48 | Drift check misses the alert trigger and email message settings | Fixed in 0.11.1; close after the live run |
+| #49 | Outbound HTTP follows redirects past the host allowlist and forwards the token | Fixed in 0.11.1; close after the live run |
+| #50 | Control-test scoping: a subsearch or append clause without an index runs on the default indexes | Fixed in 0.11.1; close after the live run |
 | #51 | Hardening candidates from the external code review (11 low-severity items) | Checklist; no item changes who can do what |

@@ -2385,3 +2385,29 @@ as drift.
 * **Migration.** `0006_catalog_facets_v5` rebuilds the catalogue summary once. No collection or capability is added.
 * Evidence: `tests/unit/test_sprint21.py`, `tests/unit/test_poam_rules.py`, `tests/unit/test_spl_guard_parity.py`,
   `tests/js/test_usecase.js`, `test_admin.js`, `test_assessment_ui.js`, and the live suite on the lab.
+
+## D-081 Patch: redirects, drift coverage, control-test scoping and three small fixes
+
+*0.11.1.*
+
+* **Context.** An external code review of 0.11.0 (16 bundles, 45 findings, each checked against the code) confirmed three
+  defects; 22 findings were false and the rest were hardening items, now in issue #51. The owner lifted the code freeze
+  for a patch that fixes the three and the small user-visible issues already understood.
+* **1. Redirects (#49).** `HttpFetcher` uses a redirect handler that calls `check_url` on the target before following
+  it (HTTPS only, host allowlist) and removes `Authorization`, `Cookie` and `Proxy-Authorization` when the host changes.
+  Reproduced before the change with two local servers: the fetcher followed the redirect and forwarded the header.
+* **2. Drift (#48).** `spec.drift` compares the alert trigger when the revision records an alert mode, and
+  `actions.drift` compares the email message and results-link flag. Keys are compared as lower-case text; the tracking flag accepts
+  `1`, `true`, `0` and `false`. Not measured against a live Splunk; the live suite on 10.4.x must show that a clean deployment
+  reports no drift.
+* **3. Control-test scoping (#50).** `scope_to_test_index` raises `NotRunnable` when a clause has no index term, and
+  records the first word of an unpiped search as a command, so a subsearch or `append` clause cannot run on the default
+  indexes. The cost is that some searches become `not_runnable`; the count on the full corpus is not known yet.
+* **4. Small fixes.** #43 (zero rows re-enables Run search), #45 (`can_pass` and `blocked_by` in the programme block and a
+  warning banner), #44 (no Splunk trademark in the app description, the export header or the user agent; the
+  trademark notice is in `NOTICE`, kept equal in the package).
+* **Not done.** The eleven hardening items (#51); the live suite on Splunk 10.4.x (#42), which has to pass before the
+  release is tagged.
+* Evidence: `tests/unit/test_http.py` (`RedirectTest`), `test_deployment.py`, `test_actions.py`, `test_controltest.py`,
+  `test_poam_rules.py`, `tests/js/test_usecase.js`, `test_assessment_ui.js`.
+

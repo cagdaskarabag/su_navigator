@@ -16,7 +16,7 @@ Status: 0.9.1 (catalogue, discovery, readiness, selection, SPL validation, deplo
 | Deployment | Saved searches are written with the system token after the capability check and owned by `[deployment] scheduled_owner`, a dedicated `ucm_scheduler` account (D-051). Operators cannot edit or delete them in Splunk (verified on the lab). Disabled first, read back and compared, owner included. Only searches carrying the app's marker are modified. No alert actions. Workflow records are written with the system token after the capability check (D-029). |
 | Reference links | Rendered as links only when absolute `http(s)`; other values are dropped or shown as plain repository paths. |
 | Browser → app API | Splunk Web proxy (`/splunkd/__raw/services/ucm/*`), Splunk session + CSRF form key. All inputs are validated against allowlists; KV queries are built from structured filters, free text is regex-escaped. |
-| App → GitHub | HTTPS only, host allowlist (`api.github.com`, `raw.githubusercontent.com` by default, configurable), TLS verification on, optional proxy / CA bundle, response size caps, bounded retries, rate-limit aware. **Known gap (issue #49):** redirects are followed without re-checking the allowlist or the scheme, and the `Authorization` header goes with them. Refs are limited to `allowed_refs`; a commit SHA must be reachable from an allowed ref (GitHub compare API) before any content is fetched (D-043). |
+| App → GitHub | HTTPS only, host allowlist (`api.github.com`, `raw.githubusercontent.com` by default, configurable), TLS verification on, optional proxy / CA bundle, response size caps, bounded retries, rate-limit aware. A redirect is checked against the same allowlist and the HTTPS-only rule before it is followed, and a redirect to another host drops `Authorization`, `Cookie` and `Proxy-Authorization` (0.11.1, issue #49). Refs are limited to `allowed_refs`; a commit SHA must be reachable from an allowed ref (GitHub compare API) before any content is fetched (D-043). |
 
 ## Capabilities and roles
 
@@ -328,7 +328,7 @@ through `services/receivers/simple`, with the system token, and runs the deploye
 SPL as the caller, restricted to that index and a per-run `source` marker. The
 receiver call needs the system token because a caller's session cannot write
 events; the caller still needs `ucm_deploy`. The index is the only data the test
-writes; keep it separate from production indexes and set its retention. The scoping is incomplete (issue #50): a search clause with no index, such as a subsearch, `append` or `join` clause next to a scoped one, is not rewritten and runs on the caller's default indexes. A search with no index clause at all is refused.
+writes; keep it separate from production indexes and set its retention. A search with a clause that names no index (a subsearch, `append` or `join` next to a scoped one) is refused as not runnable instead of running on the caller's default indexes (0.11.1, issue #50). A search with no index clause at all is refused too.
 
 ## Storage ACLs (`metadata/default.meta`)
 
@@ -379,7 +379,7 @@ the same version within the same instant can both pass both checks; the later
 write wins and the earlier caller is told it succeeded. Both actions are still
 in `uc_audit`.
 
-Drift covers the search text, owner, cron, time range, schedule window, suppression, the list of actions, email recipients, subject and attachment flags, the webhook URL, `is_scheduled` and `disabled`. It does not yet cover the alert trigger (`alert_type`, `alert_comparator`, `alert_threshold`, `alert.track`, `alert.severity`) or the email message and results-link flag, so an edit to those is not reported (issue #48).
+Drift covers the search text, owner, cron, time range, schedule window, suppression, the list of actions, email recipients, subject and attachment flags, the webhook URL, `is_scheduled` and `disabled`. Since 0.11.1 it also covers the alert trigger (`alert_type`, `alert_comparator`, `alert_threshold`, `alert.track`, `alert.severity`), the email message and the results-link flag (issue #48); the trigger is compared only for a revision that records an alert mode. After the upgrade, Verify can report new drift on a search deployed earlier, if its trigger or message was edited in Settings; the report names the field.
 
 If writing an audit row fails (for example the KV Store is unavailable), the action
 itself still completes. The failure is logged as `audit write failed` in
