@@ -328,8 +328,7 @@ through `services/receivers/simple`, with the system token, and runs the deploye
 SPL as the caller, restricted to that index and a per-run `source` marker. The
 receiver call needs the system token because a caller's session cannot write
 events; the caller still needs `ucm_deploy`. The index is the only data the test
-writes; keep it separate from production indexes and set its retention. Searches
-that cannot be restricted to the test index are never run.
+writes; keep it separate from production indexes and set its retention. The scoping is incomplete (issue #50): a search clause with no index, such as a subsearch, `append` or `join` clause next to a scoped one, is not rewritten and runs on the caller's default indexes. A search with no index clause at all is refused.
 
 ## Storage ACLs (`metadata/default.meta`)
 

@@ -751,3 +751,4 @@ Closed by documentation in this beta: the README clone URL and prerequisites, th
 |---|---|---|
 | #48 | Drift check misses the alert trigger and email message settings | Code change needed; gap documented in SECURITY.md and the operator guide |
 | #49 | Outbound HTTP follows redirects past the host allowlist and forwards the token | Code change needed; reproduced locally; gap documented in SECURITY.md |
+| #50 | Control-test scoping: a subsearch or append clause without an index runs on the default indexes | Code change needed; confirmed with `scope_to_test_index()`; gap documented in SECURITY.md |
