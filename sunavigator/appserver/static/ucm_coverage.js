@@ -555,9 +555,14 @@ function ucmViewMain($, ucm) {
                 ucm.clear(listBox);
                 var prog = res.programme;
                 if (prog) {
-                    listBox.appendChild(ucm.stateBox(prog.meets_threshold ? "info" : "warn",
+                    var blocked = prog.can_pass === false;
+                    listBox.appendChild(ucm.stateBox(prog.meets_threshold && !blocked ? "info" : "warn",
                         "Score now " + prog.score + " of " + prog.requirements + " (" + prog.ratio.toFixed(2) + "); a plan of action for Conditional Level 2 status needs at least " + prog.threshold.toFixed(2),
-                        prog.basis + ". Closeout must be within 180 days of the status date. " + prog.notice));
+                        prog.basis + ". Closeout must be within 180 days of the status date. " +
+                        (blocked ? (prog.meets_threshold ? "The score reaches the threshold, but this is not a pass: " : "Not a pass either way: ") +
+                            "the system security plan requirement is not implemented yet" +
+                            ((prog.blocked_by || []).length ? " (" + prog.blocked_by.join(", ") + ")" : "") + ". " : "") +
+                        prog.notice));
                 }
                 if (!res.items.length) {
                     listBox.appendChild(ucm.stateBox("empty", "No plan items" + (stateSel.value ? " in this state" : " yet") + ".", ""));

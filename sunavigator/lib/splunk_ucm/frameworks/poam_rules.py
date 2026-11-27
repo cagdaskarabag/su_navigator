@@ -68,7 +68,8 @@ def programme(definition: Dict[str, Any], score: Optional[Dict[str, Any]]) -> Op
     ratio = score["score"] / float(score["requirements"])
     return {"basis": BASIS, "notice": NOTICE, "score": score["score"], "requirements": score["requirements"],
             "ratio": round(ratio, 4), "threshold": THRESHOLD, "meets_threshold": ratio >= THRESHOLD,
-            "assessed": score.get("assessed"), "unassessed": score.get("unassessed")}
+            "assessed": score.get("assessed"), "unassessed": score.get("unassessed"),
+            "can_pass": score.get("can_pass", True), "blocked_by": list(score.get("blocked_by") or [])}
 
 
 def _later(day: str, days: int) -> str:

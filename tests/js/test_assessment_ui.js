@@ -148,6 +148,29 @@ var tests = {
         assert.ok(/Score now 95 of 110 \(0\.86\)/.test(t) && /at least 0\.80/.test(t) && /not a CMMC status determination/.test(t), t);
         assert.ok(button(v, "Close").length === 1, "the item is not blocked");
     },
+    "the programme banner does not call a score a pass while the system security plan is missing": function () {
+        function banner(programme) {
+            var v = open(["ucm_assess"], { poam: { items: [{ id: "pm_1", control_id: "AC.L2-3.1.3", title: "t", weakness: "w", owner: "bob", due: "2026-12-01",
+                state: "open", overdue: false, milestones: [], eligibility: { eligible: true, reasons: [], basis: "b", notice: "n" } }],
+                counts: { open: 1, in_progress: 0, closed: 0, risk_accepted: 0, overdue: 0 }, total: 1, today: "2026-11-25",
+                programme: Object.assign({ basis: "32 CFR 170.21(a)(2) and (b)", notice: "Information only.", score: 100, requirements: 110, ratio: 0.9091,
+                    threshold: 0.8, meets_threshold: true }, programme) } });
+            openAll(v);
+            var box = find(v, function (n) { return /ucm-state /.test((n.getAttribute("class") || "") + " ") && /Score now/.test(n.textContent); })[0];
+            return { text: v.root.textContent, warn: /ucm-state-warn/.test(box.getAttribute("class")) ? 1 : 0,
+                info: /ucm-state-info/.test(box.getAttribute("class")) ? 1 : 0 };
+        }
+        var blocked = banner({ can_pass: false, blocked_by: ["CA.L2-3.12.4"] });
+        assert.ok(/reaches the threshold, but this is not a pass/.test(blocked.text) && /system security plan/.test(blocked.text) && /CA\.L2-3\.12\.4/.test(blocked.text), blocked.text);
+        assert.strictEqual(blocked.warn, 1, "shown as a warning");
+        var below = banner({ meets_threshold: false, ratio: 0.5, score: 55, can_pass: false, blocked_by: [] });
+        assert.ok(/Not a pass either way/.test(below.text), below.text);
+        var clear = banner({ can_pass: true, blocked_by: [] });
+        assert.ok(!/not a pass/i.test(clear.text) && /Score now 100 of 110/.test(clear.text), clear.text);
+        assert.strictEqual(clear.info, 1);
+        var old = banner({});
+        assert.ok(!/not a pass/i.test(old.text), "an answer without can_pass keeps the old wording");
+    },
     "an eligible item shows no warning": function () {
         var v = open(["ucm_assess"], { poam: { items: [{ id: "pm_1", control_id: "AC.L2-3.1.3", title: "t", weakness: "w", owner: "bob", due: "2026-12-01",
             state: "open", overdue: false, milestones: [], eligibility: { eligible: true, reasons: [], basis: "b", notice: "n" } }],

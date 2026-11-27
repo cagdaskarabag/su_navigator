@@ -86,6 +86,17 @@ class ProgrammeTest(unittest.TestCase):
         self.assertFalse(below["meets_threshold"])
         self.assertEqual((below["threshold"], below["requirements"]), (0.8, 110))
 
+    def test_the_programme_carries_whether_the_result_can_pass(self):
+        """Issue #45: the score alone does not make a pass; the system security plan is a precondition."""
+        blocked = P.programme(CMMC, {"score": 100, "requirements": 110, "can_pass": False, "blocked_by": ["CA.L2-3.12.4"]})
+        self.assertTrue(blocked["meets_threshold"])
+        self.assertIs(blocked["can_pass"], False)
+        self.assertEqual(blocked["blocked_by"], ["CA.L2-3.12.4"])
+        clear = P.programme(CMMC, {"score": 100, "requirements": 110, "can_pass": True, "blocked_by": []})
+        self.assertEqual((clear["can_pass"], clear["blocked_by"]), (True, []))
+        unknown = P.programme(CMMC, {"score": 100, "requirements": 110})
+        self.assertEqual((unknown["can_pass"], unknown["blocked_by"]), (True, []))
+
     def test_no_score_no_programme(self):
         self.assertIsNone(P.programme(CMMC, None))
         self.assertIsNone(P.programme(CMMC, {"score": 0, "requirements": 0}))
