@@ -743,10 +743,10 @@ Filed from the user guide run, as backlog. None is scheduled (see `docs/FEATURE_
 | #46 | Refusal audit limits as a checklist item for the human security review (#32) | Open; checklist |
 | #47 | Maintainer checklist before the beta announcement | Manual repository settings |
 
+Closed by documentation in this beta: the README clone URL and prerequisites, the Splunk trademark notice (README), the beta label (README and FEATURE_STATUS), the user guide notes for #43 and #45.
+
 ## 6. Issues filed from the external code review (27 Nov 2026)
 
 | Issue | Title | Status |
 |---|---|---|
 | #48 | Drift check misses the alert trigger and email message settings | Code change needed; gap documented in SECURITY.md and the operator guide |
-
-Closed by documentation in this beta: the README clone URL and prerequisites, the Splunk trademark notice (README), the beta label (README and FEATURE_STATUS), the user guide notes for #43 and #45.
