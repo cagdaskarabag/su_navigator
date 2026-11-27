@@ -20,6 +20,7 @@ These are repository settings and documentation. Tracked in [#47](https://github
 
 | Item | Issue | Notes |
 |---|---|---|
+| Outbound HTTP follows redirects past the host allowlist and forwards the token | [#49](https://github.com/cagdaskarabag/su_navigator/issues/49) | Found in the external code review and reproduced locally. With the default GitHub hosts the risk is low; higher for a custom provider host. |
 | Drift check misses the alert trigger and email message settings | [#48](https://github.com/cagdaskarabag/su_navigator/issues/48) | Found in the external code review. An edit to `alert.track` or `alert_threshold` in Settings is not reported by Verify. |
 | Run search stays disabled after a zero-row result | [#43](https://github.com/cagdaskarabag/su_navigator/issues/43) | Workaround: Cancel. Most Fenre searches are alert conditions, so this is the common outcome. |
 | Product name and metadata contain a Splunk trademark | [#44](https://github.com/cagdaskarabag/su_navigator/issues/44) | README, repository description and the trademark notice are already fixed in the docs. `app.conf`, `app.manifest` and the export header need a release. |

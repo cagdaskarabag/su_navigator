@@ -16,7 +16,7 @@ Status: 0.9.1 (catalogue, discovery, readiness, selection, SPL validation, deplo
 | Deployment | Saved searches are written with the system token after the capability check and owned by `[deployment] scheduled_owner`, a dedicated `ucm_scheduler` account (D-051). Operators cannot edit or delete them in Splunk (verified on the lab). Disabled first, read back and compared, owner included. Only searches carrying the app's marker are modified. No alert actions. Workflow records are written with the system token after the capability check (D-029). |
 | Reference links | Rendered as links only when absolute `http(s)`; other values are dropped or shown as plain repository paths. |
 | Browser → app API | Splunk Web proxy (`/splunkd/__raw/services/ucm/*`), Splunk session + CSRF form key. All inputs are validated against allowlists; KV queries are built from structured filters, free text is regex-escaped. |
-| App → GitHub | HTTPS only, host allowlist (`api.github.com`, `raw.githubusercontent.com` by default, configurable), TLS verification on, optional proxy / CA bundle, response size caps, bounded retries, rate-limit aware. Refs are limited to `allowed_refs`; a commit SHA must be reachable from an allowed ref (GitHub compare API) before any content is fetched (D-043). |
+| App → GitHub | HTTPS only, host allowlist (`api.github.com`, `raw.githubusercontent.com` by default, configurable), TLS verification on, optional proxy / CA bundle, response size caps, bounded retries, rate-limit aware. **Known gap (issue #49):** redirects are followed without re-checking the allowlist or the scheme, and the `Authorization` header goes with them. Refs are limited to `allowed_refs`; a commit SHA must be reachable from an allowed ref (GitHub compare API) before any content is fetched (D-043). |
 
 ## Capabilities and roles
 
@@ -392,6 +392,11 @@ without failing, because two concurrent writers produce one. A row inserted dire
 into `uc_audit` that names an existing row as its predecessor looks the same. Only
 `admin` and `sc_admin` can write `uc_audit`, and they can rewrite the whole chain
 anyway (D-075).
+
+`tools/ucm_cli.py build-bundle` (the offline ESCU bundle builder) runs on the operator's
+machine, not in Splunk. It follows symlinks in a package directory and does not cap the
+number of archive members or the unpacked size. Run it only on packages you downloaded
+from Splunk. The bundle it writes is validated again when it is imported.
 
 Run status (D-031) is searched with the caller's token, so it never reveals
 scheduler data a user could not search themselves.
