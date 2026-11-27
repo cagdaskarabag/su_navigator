@@ -1,11 +1,14 @@
+import http.server
 import io
+import threading
 import time
 import unittest
 import urllib.error
+import urllib.request
 from email.message import Message
 
 import helpers  # noqa: F401
-from splunk_ucm.content.http import HttpConfig, HttpFetcher
+from splunk_ucm.content.http import HttpConfig, HttpFetcher, _CheckedRedirects
 from splunk_ucm.errors import ProviderError, RateLimitedError
 
 
@@ -106,6 +109,89 @@ class HttpFetcherTest(unittest.TestCase):
         f, _ = fetcher(ScriptedOpener(FakeResponse(b"x" * 200000)))
         with self.assertRaises(ProviderError):
             f.get("https://api.github.com/x", max_bytes=100000)
+
+
+class RedirectTest(unittest.TestCase):
+    """Issue #49: a redirect is checked like the first request and never carries credentials to another host."""
+
+    def handler(self):
+        f, _ = fetcher(ScriptedOpener())
+        return _CheckedRedirects(f.check_url)
+
+    def request(self, url="https://api.github.com/x"):
+        return urllib.request.Request(url, headers={"Authorization": "Bearer SECRET", "User-Agent": "t"})
+
+    def redirect(self, target, url="https://api.github.com/x", code=302):
+        return self.handler().redirect_request(self.request(url), None, code, "Found", Message(), target)
+
+    def test_redirect_to_an_unlisted_host_is_refused(self):
+        for target in ("https://evil.example.com/x", "https://api.github.com.evil.com/x", "https://127.0.0.1:8089/x",
+                       "https://169.254.169.254/latest/meta-data"):
+            with self.assertRaises(ProviderError, msg=target):
+                self.redirect(target)
+
+    def test_redirect_to_plain_http_or_another_scheme_is_refused(self):
+        for target in ("http://api.github.com/x", "http://raw.githubusercontent.com/x", "file:///etc/passwd",
+                       "ftp://api.github.com/x"):
+            with self.assertRaises(ProviderError, msg=target):
+                self.redirect(target)
+
+    def test_a_relative_redirect_stays_on_the_host_and_keeps_the_token(self):
+        new = self.redirect("/other/path")
+        self.assertEqual(new.full_url, "https://api.github.com/other/path")
+        self.assertEqual(new.get_header("Authorization"), "Bearer SECRET")
+
+    def test_redirect_to_another_allowed_host_drops_credentials(self):
+        new = self.redirect("https://raw.githubusercontent.com/o/r/main/f.json")
+        self.assertEqual(new.full_url, "https://raw.githubusercontent.com/o/r/main/f.json")
+        self.assertIsNone(new.get_header("Authorization"))
+        self.assertEqual(new.get_header("User-agent"), "t")
+
+    def test_a_redirect_loop_is_cut_by_urllib(self):
+        self.assertEqual(self.handler().max_redirections, 10)
+
+    def test_the_real_opener_does_not_follow_a_redirect_to_an_internal_server(self):
+        seen = []
+
+        class Target(http.server.BaseHTTPRequestHandler):
+            def do_GET(self):
+                seen.append(self.headers.get("Authorization"))
+                self.send_response(200)
+                self.end_headers()
+
+            def log_message(self, *args):
+                pass
+
+        target = http.server.HTTPServer(("127.0.0.1", 0), Target)
+
+        class Redirector(http.server.BaseHTTPRequestHandler):
+            def do_GET(self):
+                self.send_response(302)
+                self.send_header("Location", "http://127.0.0.1:%d/secret" % target.server_address[1])
+                self.end_headers()
+
+            def log_message(self, *args):
+                pass
+
+        redirector = http.server.HTTPServer(("127.0.0.1", 0), Redirector)
+        for server in (target, redirector):
+            threading.Thread(target=server.serve_forever, daemon=True).start()
+        try:
+            f, _ = fetcher(ScriptedOpener())
+            opener = urllib.request.build_opener(_CheckedRedirects(f.check_url))
+            with self.assertRaises(ProviderError):
+                opener.open(self.request("http://127.0.0.1:%d/start" % redirector.server_address[1]), timeout=5)
+        finally:
+            for server in (target, redirector):
+                server.shutdown()
+                server.server_close()
+        self.assertEqual(seen, [])
+
+    def test_the_default_opener_uses_the_checked_handler(self):
+        f = HttpFetcher(HttpConfig(allowed_hosts=["api.github.com"]))
+        names = [type(h).__name__ for h in f._opener.__self__.handlers]
+        self.assertIn("_CheckedRedirects", names)
+        self.assertNotIn("HTTPRedirectHandler", names)
 
 
 if __name__ == "__main__":

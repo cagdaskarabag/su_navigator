@@ -1,6 +1,7 @@
 """Outbound HTTPS client for content providers.
 
-* https only, host allowlist, TLS verification always on
+* https only, host allowlist (checked again on every redirect), TLS verification always on
+* credentials are dropped when a redirect leaves the host
 * response size cap enforced while streaming
 * retries with exponential backoff + jitter on transient failures; honours
   ``Retry-After`` and GitHub's ``X-RateLimit-Reset`` within a bounded wait
@@ -13,7 +14,7 @@ import time
 import urllib.error
 import urllib.request
 from typing import Callable, Dict, Optional, Sequence, Tuple
-from urllib.parse import urlparse
+from urllib.parse import urljoin, urlparse
 
 from .. import __version__
 from ..errors import ProviderError, RateLimitedError
@@ -46,6 +47,23 @@ class HttpResponse:
     url: str
 
 
+class _CheckedRedirects(urllib.request.HTTPRedirectHandler):
+    """Follow a redirect only to an https URL on the allowlist; never forward credentials to another host."""
+
+    def __init__(self, check: Callable[[str], None]):
+        super().__init__()
+        self._check = check
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        target = urljoin(req.full_url, newurl)
+        self._check(target)
+        redirected = super().redirect_request(req, fp, code, msg, headers, target)
+        if redirected is not None and (urlparse(target).hostname or "").lower() != (urlparse(req.full_url).hostname or "").lower():
+            for name in ("Authorization", "Cookie", "Proxy-Authorization"):
+                redirected.remove_header(name)
+        return redirected
+
+
 class HttpFetcher:
     def __init__(self, config: HttpConfig, sleep: Callable[[float], None] = time.sleep,
                  opener: Optional[Callable[..., object]] = None):
@@ -56,7 +74,7 @@ class HttpFetcher:
 
     def _build_opener(self) -> Callable[..., object]:
         ctx = ssl.create_default_context(cafile=self.config.ca_bundle or None)
-        handlers = [urllib.request.HTTPSHandler(context=ctx)]
+        handlers = [urllib.request.HTTPSHandler(context=ctx), _CheckedRedirects(self.check_url)]
         if self.config.proxy_url:
             handlers.append(urllib.request.ProxyHandler({"https": self.config.proxy_url}))
         else:
