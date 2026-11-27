@@ -335,9 +335,11 @@ that cannot be restricted to the test index are never run.
   `sc_admin`. The REST handler writes it with the system token after checking
   `ucm_deploy` (or `ucm_run_discovery` for drafts), so approvals cannot be
   forged through the KV REST API (verified live: an operator gets 403).
-  Four eyes covers the app's workflow only: the deploying operator owns the
-  saved search and can edit it in Splunk directly. Such edits show as drift
-  (D-029); restrict saved-search write access if that matters.
+  Four eyes covers the app's workflow. The saved searches the app deploys are owned by the
+  scheduler account (D-051), not by the operator, and `ucm_deployment_operator` has no write
+  access to them. `admin`, `sc_admin` and `ucm_admin` can still edit them in Splunk, which is
+  intended; such an edit shows as drift on the next Verify (D-029) but the app does not record
+  who made it (Splunk's `index=_audit` does). Do not give `ucm_admin` to day-to-day operators.
 - `uc_frameworks` and `uc_dashboards`: readable by all app users, writable
   only by `admin` / `sc_admin`; written by the REST handler with the system
   token after the capability check (verified live: viewer and operator get
@@ -345,8 +347,8 @@ that cannot be restricted to the test index are never run.
   system token, so dashboard creators do not need view-write permissions; the
   app only overwrites or deletes views that carry its marker and have a
   record (D-032).
-- `savedsearches` in this app: writable by `admin`, `sc_admin`, `ucm_admin`
-  and `ucm_deployment_operator`.
+- `savedsearches` in this app: writable by `admin`, `sc_admin` and `ucm_admin` only (D-051).
+  Operators cannot edit or delete deployed searches (verified on the lab).
 - `uc_audit`: readable by admins and content managers, writable only by
   `admin` / `sc_admin`. The REST handler appends audit records with the
   request's system token (`passSystemAuth = true`), so users cannot forge or
