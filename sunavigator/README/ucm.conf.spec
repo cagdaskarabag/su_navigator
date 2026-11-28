@@ -235,6 +235,13 @@ refusal_total_per_hour = <integer 1-100000>
 verify_window_seconds = <integer 0-3600>
 * Verify (a deployment, or the audit chain) writes at most one audit row per object per this many seconds, unless the result changed or the audit chain has a problem. 0 writes a row on every call. Default 300.
 
+[features]
+compliance = <boolean>
+* Turns on the assessment, plan of action (POA&M) and evidence snapshot module (D-085). Off by default: the
+  routes answer 404 with code feature_disabled, the Coverage page shows no assessment, and the role
+  ucm_compliance_assessor does nothing. The control catalogues, the ATT&CK matrix and the mapping of use cases to
+  controls are not part of this module and stay on. Turning it off keeps the stored records. Default false.
+
 [retention]
 audit_days = <integer 0-3650>
 * Audit records older than this are deleted by the background worker. 0 keeps them forever. Default 365.

@@ -35,7 +35,7 @@ Status: 0.9.1 (catalogue, discovery, readiness, selection, SPL validation, deplo
 | `ucm_analyst` | `ucm_viewer` | `ucm_run_discovery` |
 | `ucm_content_manager` | `ucm_analyst` | `ucm_manage_content` |
 | `ucm_deployment_operator` | `ucm_analyst` | `ucm_deploy` |
-| `ucm_compliance_assessor` | `ucm_viewer` | `ucm_assess` |
+| `ucm_compliance_assessor` | `ucm_viewer` | `ucm_assess` (inert while `[features] compliance` is off, D-085) |
 | `ucm_scheduler` | none | `search`, `schedule_search`, `get_metadata`, `input_file`, `list_metrics_catalog`, `run_custom_command`; `run_collect` and `run_mcollect` disabled; no `output_file`, `run_dump`, `run_sendalert`; indexes `*`, default `main` (D-068). Owner of deployed searches only; assign it to one account and set `scheduled_owner` (D-051). |
 | `ucm_admin` | content manager + deployment operator | all |
 
@@ -502,3 +502,16 @@ Nothing else is sent. The app talks to the instance's own splunkd for everything
 Known gaps: there is no per-user erasure function; removing a person's name from selections, deployments or
 assessments is a manual KV Store operation, and the audit chain is designed to resist edits. Whether that is
 acceptable is for the operator's privacy officer (docs/LEGAL_COMPLIANCE_ANALYSIS.md, L6).
+
+## Optional module: compliance (D-085)
+
+`[features] compliance` (default `false`) controls the assessment, POA&M and evidence-snapshot module. While it is off the
+server answers every one of its twelve routes with 404 `feature_disabled` before it looks at the caller's capability, so
+no role (administrators included) can read or write through them, and the role `ucm_compliance_assessor` holds a
+capability that opens nothing. The check is in the REST handler, not only the page: the route table wraps each route
+(`api/routes_frameworks.py`, `_compliance_module`, wired in `api/app.py`), and `tests/unit/test_compliance_feature.py` fails when a route that begins with
+`assessment` or `poam` is not in the guarded list. The setting is read from `ucm.conf` on every request, so an
+administrator's change applies without a restart of the handler. Stored records are not touched when the module is off;
+the KV ACLs of the three collections stay as in 0.12.2. The module is a switch for scope and claim surface, not a
+security control: someone with `admin_all_objects` can still read the collections directly.
+

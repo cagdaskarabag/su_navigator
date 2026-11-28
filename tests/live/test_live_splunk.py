@@ -1200,6 +1200,15 @@ def set_conf_value(t, stanza, key, value):
     assert status == 200, (status, content[:300])
 
 
+def set_feature(t, name, value):
+    """Set ``[features] <name>`` in the app's local ucm.conf, creating the stanza on an install that has none."""
+    status, _ = t.request("POST", "/servicesNS/nobody/sunavigator/configs/conf-ucm/features", form={name: value})
+    if status == 404:
+        status, content = t.request("POST", "/servicesNS/nobody/sunavigator/configs/conf-ucm",
+                                    form={"name": "features", name: value})
+    assert status in (200, 201), status
+
+
 def _internalised(record_id, spl):
     """A copy of one fixture record whose search reads only _internal (no macros, no datamodel)."""
     from splunk_ucm.util import git_blob_sha
@@ -2207,6 +2216,8 @@ class LiveAssessmentTest(unittest.TestCase):
     def setUpClass(cls):
         cls.admin = transport()
         cls.kv = KVStore(cls.admin)
+        cls.feature_before = conf_value(cls.admin, "features", "compliance")
+        set_feature(cls.admin, "compliance", "true")
         cls.created = {C.ASSESSMENTS: [], C.POAM: [], C.SNAPSHOTS: []}
         for name, role in ((cls.USER, "ucm_compliance_assessor"), (cls.VIEWER, "ucm_viewer")):
             status, body = cls.admin.request("POST", "/services/authentication/users",
@@ -2225,6 +2236,7 @@ class LiveAssessmentTest(unittest.TestCase):
                 cls.kv.delete(collection, key)
         for name in (cls.USER, cls.VIEWER):
             cls.admin.request("DELETE", "/services/authentication/users/" + name)
+        set_feature(cls.admin, "compliance", cls.feature_before or "false")
 
     assessed = []
 
@@ -2401,6 +2413,9 @@ class LiveCollectionAclTest(unittest.TestCase):
                 self.assertIn(self.kv_status(self.users[role], collection), (403, 404), "%s read by %s" % (collection, role))
 
     def test_the_api_still_serves_what_the_collections_hold(self):
+        before = conf_value(self.admin, "features", "compliance")
+        set_feature(self.admin, "compliance", "true")
+        self.addCleanup(set_feature, self.admin, "compliance", before or "false")
         status, body = api(self.users["ucm_analyst"], "GET", "external")
         self.assertEqual(status, 200, body)
         status, body = api(self.users["ucm_viewer"], "GET", "external")
@@ -2437,3 +2452,44 @@ class LiveBackgroundReindexTest(unittest.TestCase):
                 break
             time.sleep(5)
         self.assertEqual(job["status"], "succeeded", job)
+
+
+@unittest.skipUnless(LIVE, "set UCM_LIVE_SPLUNK=1 to run against a real Splunk instance")
+class LiveComplianceFeatureTest(unittest.TestCase):
+    """0.13.0 (D-085): with [features] compliance off the server refuses the module; with it on the module works."""
+
+    ASSESSOR = "ucm_feat_assessor_" + uuid.uuid4().hex[:6]
+    PW = "T3st!" + uuid.uuid4().hex
+
+    @classmethod
+    def setUpClass(cls):
+        cls.admin = transport()
+        status, body = cls.admin.request("POST", "/services/authentication/users",
+                                         form={"name": cls.ASSESSOR, "password": cls.PW, "roles": "ucm_compliance_assessor"})
+        assert status in (200, 201), (status, body[:300])
+        cls.assessor = transport(cls.ASSESSOR, cls.PW)
+        cls.before = conf_value(cls.admin, "features", "compliance")
+
+    @classmethod
+    def tearDownClass(cls):
+        set_feature(cls.admin, "compliance", cls.before or "false")
+        cls.admin.request("DELETE", "/services/authentication/users/" + cls.ASSESSOR)
+
+    def test_off_refuses_and_on_serves(self):
+        set_feature(self.admin, "compliance", "false")
+        for method, path, query in (("GET", "assessment", {"framework_id": "cmmc-l2"}), ("GET", "poam", {"framework_id": "cmmc-l2"}),
+                                    ("GET", "assessment/snapshots", {"framework_id": "cmmc-l2"})):
+            for t in (self.assessor, self.admin):
+                status, body = api(t, method, path, query)
+                self.assertEqual(status, 404, (path, body))
+                self.assertEqual(body["error"]["code"], "feature_disabled", body)
+        status, body = api(self.assessor, "GET", "frameworks")
+        self.assertEqual(status, 200, body)
+        self.assertEqual(body["features"], {"compliance": False})
+        status, body = api(self.assessor, "GET", "frameworks/catalogue", {"framework_id": "cmmc-l2"})
+        self.assertEqual(status, 200, "the control catalogue stays on")
+        set_feature(self.admin, "compliance", "true")
+        status, body = api(self.assessor, "GET", "assessment", {"framework_id": "cmmc-l2"})
+        self.assertEqual(status, 200, body)
+        status, body = api(self.assessor, "GET", "frameworks")
+        self.assertEqual(body["features"], {"compliance": True})

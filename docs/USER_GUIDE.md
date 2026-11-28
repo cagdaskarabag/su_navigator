@@ -639,7 +639,9 @@ Verified on: SUNavigator 0.11.0, Splunk Enterprise 10.4.3, 2026-11-25
 ## Task: record an assessment and a POA&M item
 <a id="task-record-an-assessment-and-poam-item"></a>
 
-You need the `ucm_assess` capability (role `ucm_compliance_assessor`).
+You need the `ucm_assess` capability (role `ucm_compliance_assessor`). Since 0.13.0 this module is off by default: an
+administrator turns it on with `[features] compliance = true` in `local/ucm.conf` (operator guide, "What changed", 0.13.0).
+Until then the Coverage page shows no assessment, plan or snapshot section. The screenshots below were taken on 0.11.0.
 
 1. **Coverage > Control catalogues > CMMC 2.0 Level 2.** Open a family and open a control.
 2. Choose a status (Implemented, Partially implemented, Planned, Not implemented, Not applicable), add a note and click **Save assessment**.

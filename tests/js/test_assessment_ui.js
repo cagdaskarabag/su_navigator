@@ -39,7 +39,7 @@ function assessment() {
 
 function open(caps, extra) {
     var routes = {
-        frameworks: { definitions: DEFS, coverage: [], use_cases: 0 },
+        frameworks: { definitions: DEFS, coverage: [], use_cases: 0, features: { compliance: true } },
         "frameworks/matrix": { framework_id: "mitre_attack_enterprise", version: "18.1", name: "x", domain: "enterprise", attribution: "", levels: [],
             totals: { techniques: 0, covered: {}, grade_avg: 0 }, tactics: [], remapped: [], unresolved: [] },
         "frameworks/catalogue": CATALOGUE,
@@ -68,6 +68,14 @@ var tests = {
         openAll(v);
         assert.ok(!/Assessment|Plan of action/.test(v.root.textContent));
         assert.ok(!v.calls.some(function (c) { return /^(assessment|poam)/.test(c.path); }));
+    },
+    "with the module turned off nothing about assessment is shown or requested, whatever the role": function () {
+        var v = open(["ucm_assess"], { frameworks: { definitions: DEFS, coverage: [], use_cases: 0, features: { compliance: false } } });
+        openAll(v);
+        assert.ok(!/Assessment|Plan of action|Evidence snapshots/.test(v.root.textContent));
+        assert.strictEqual(button(v, "Assess").length, 0);
+        assert.ok(!v.calls.some(function (c) { return /^(assessment|poam)/.test(c.path); }));
+        assert.ok(/Control catalogues/.test(v.root.textContent), "the control catalogue stays");
     },
     "with the capability the summary, score, blocked requirement, plan items and snapshots are shown": function () {
         var v = open(["ucm_assess"]);

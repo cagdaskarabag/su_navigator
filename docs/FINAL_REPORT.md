@@ -20,7 +20,7 @@ test looked at. It now follows the app version (`0.11.x`), and `tests/unit/test_
 
 ## 2. What was delivered
 
-One row per release; the decision record has the reasoning, the operator guide (`What changed in 0.9.x to 0.12`)
+One row per release; the decision record has the reasoning, the operator guide (`What changed in 0.9.x to 0.13`)
 has the instructions. The same table is in `docs/IMPLEMENTATION_PLAN.md` (WP9).
 
 | Version | Delivered | Record |

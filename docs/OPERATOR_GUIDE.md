@@ -1,10 +1,10 @@
-# SUNavigator 0.12.2 — operator guide
+# SUNavigator 0.13.0 — operator guide
 
 **SUNavigator** is a use-case navigator for Splunk Enterprise. It discovers, assesses,
 selects, validates and deploys monitoring use cases.
 
 This is the install, usage and troubleshooting guide for **SUNavigator
-0.12.2**. It is written for a single Splunk Enterprise instance
+0.13.0**. It is written for a single Splunk Enterprise instance
 (search head + indexer on one host), including a local macOS install. Search
 head clusters with a deployer, Splunk Cloud and Splunk Enterprise Security are **not** validated and not planned
 (no lab; D-078).
@@ -24,7 +24,27 @@ Related documents (design, not how-to):
 
 ---
 
-## What changed in 0.9.x to 0.12
+## What changed in 0.9.x to 0.13
+
+### 0.13.0
+
+0.13.0 turns the compliance module off by default (D-085). It adds no migration and one setting.
+
+- **What is off.** Assessments, the CMMC Level 2 score, POA&M items and evidence snapshots, which were added in 0.10.0.
+  Their routes (`assessment`, `assessment/*`, `poam`, `poam/*`) answer 404 with code `feature_disabled`, even for an
+  administrator; the Coverage page shows no assessment, plan or snapshot section; the role `ucm_compliance_assessor`
+  stays defined and does nothing. **Nothing else changes**: the control catalogues (SP 800-53, 800-171, CSF 2.0, CMMC
+  Level 2), the ATT&CK matrix, the mapping of use cases to controls, regulation evidence packs and the Dashboards
+  pages all work as before.
+- **If you used it.** Set `[features] compliance = true` in `local/ucm.conf` and restart; the module comes back with
+  its data. Turning it off never deletes a record. Run `tools/usage_census.py` first to see whether anyone used it
+  (it prints counts only).
+- **Why.** The module is about a sixth of the browser code and carries claims ("score", "evidence", "POA&M") that
+  go beyond a use-case navigator; the maintainers decided to hide it and measure use before deciding whether to move it
+  to its own app (`docs/STRATEGY_ROADMAP.md`, phase 2). It is not removed, and it is not developed further.
+- **Dashboards are frozen.** No change in behaviour; no new work.
+- **README and front page.** The front page no longer lists assessment and POA&M among the app's results; the
+  disclaimer stays.
 
 ### 0.12.2
 
@@ -177,7 +197,7 @@ an external product review and starts the scope work in `docs/STRATEGY_ROADMAP.m
 upgrade.
 
 - **Who.** Give the user the role `ucm_compliance_assessor` (or `ucm_admin`). Without the capability `ucm_assess` the
-  Coverage page shows no assessment at all.
+  Coverage page shows no assessment at all. Since 0.13.0 the module must also be turned on: `[features] compliance = true`.
 - **Assess (Coverage, Control catalogues).** Each control has **Assess** or **Edit**. Choose a status and say why (the
   reason is required). The row shows the status, who and when are kept, and **History** lists earlier answers.
 - **Per objective.** For SP 800-171 Rev. 3 the dialog lists the assessment objectives. Mark each met, not met or not
@@ -780,7 +800,7 @@ searches have **no script alert actions**. Email and webhook actions exist only 
 an administrator has listed permitted destinations in `[actions]` and the approver has acknowledged
 them (0.9.5, D-072); the default alert mode only writes to Splunk's Triggered Alerts.
 
-**Not in 0.12.2:** PDF export of coverage, a bundled regulation-control
+**Not in 0.13.0:** PDF export of coverage, a bundled regulation-control
 catalogue, SHC validation with a deployer and indexer peers, Splunk Cloud
 vetting submission, and any Enterprise Security output mode (all three dropped for lack of a lab, D-078;
 0.9.1 only reads ES and ESCU state and hands off, §5.2b).
@@ -794,7 +814,7 @@ vetting submission, and any Enterprise Security output mode (all three dropped f
 | Splunk | Enterprise 10.x (validated on 10.2.9 in development; tested by operators on 10.4.3 Darwin arm64). Python 3.9 or 3.13 in Splunk. |
 | KV Store | Must reach `status: ready`. The app stores catalogue, inventory, readiness, selections, deployments and audit in KV collections. |
 | Role | First-time setup needs `admin` (or `sc_admin` on Cloud). |
-| Disk | The 0.12.2 package is a few megabytes. Category 9 of Fenre is about 120 records; the full Fenre corpus is tens of thousands of records. |
+| Disk | The 0.13.0 package is a few megabytes. Category 9 of Fenre is about 120 records; the full Fenre corpus is tens of thousands of records. |
 | Network | Optional. Remote sync needs HTTPS to `api.github.com` and `raw.githubusercontent.com`. Offline import needs none. |
 | Browser | Splunk Web. The app is a set of Simple XML views plus JavaScript under `/en-US/app/sunavigator/`. |
 
@@ -811,7 +831,7 @@ Placeholders used below:
 
 ```bash
 ./tools/package.sh
-# writes dist/sunavigator-0.12.2.tar.gz
+# writes dist/sunavigator-0.13.0.tar.gz
 ```
 
 The tarball has a single top-level folder `sunavigator/`
@@ -829,11 +849,11 @@ then fails in the UI with `500 Internal Server Error` even though splunkd is
 still unpacking. Use the CLI:
 
 ```bash
-$SPLUNK_HOME/bin/splunk install app /path/to/sunavigator-0.12.2.tar.gz \
+$SPLUNK_HOME/bin/splunk install app /path/to/sunavigator-0.13.0.tar.gz \
   -auth "$SPLUNK_USER:$SPLUNK_PASSWORD"
 # first install: omit -update
 # upgrade of an existing copy:
-$SPLUNK_HOME/bin/splunk install app /path/to/sunavigator-0.12.2.tar.gz \
+$SPLUNK_HOME/bin/splunk install app /path/to/sunavigator-0.13.0.tar.gz \
   -update 1 -auth "$SPLUNK_USER:$SPLUNK_PASSWORD"
 
 $SPLUNK_HOME/bin/splunk restart
@@ -1912,6 +1932,9 @@ $SPLUNK_HOME/bin/splunk restart
 # or, for the ucm stanza only, the app declares reload.ucm = simple
 ```
 
+Optional modules (since 0.13.0) are switched in `[features]`; the only one is `compliance` (default `false`): assessments,
+CMMC score, POA&M and evidence snapshots (added in 0.10.0). See "What changed", 0.13.0.
+
 Common stanzas:
 
 | Stanza / key | Default | When to change |
@@ -1976,7 +1999,7 @@ app. Do the steps in this order:
    $SPLUNK_HOME/bin/splunk restart
    ```
 
-4. **Install SUNavigator 0.12.2** as in §3.2. The first install omits
+4. **Install SUNavigator 0.13.0** as in §3.2. The first install omits
    `-update`, because `sunavigator` is a new app ID.
 5. **Re-create the GitHub token** if you use one (§3.6). It must be stored in
    realm `sunavigator`. The 0.7.0 token in realm `splunk_use_case_manager` is
@@ -2357,7 +2380,7 @@ Full table: [ARCHITECTURE.md §6](ARCHITECTURE.md).
 
 ---
 
-## 12. Known limitations (0.12.2)
+## 12. Known limitations (0.13.0)
 
 Each item says where to read more and ends with its tracking: an issue number on GitHub, a draft
 (`N-nn`) in `docs/ISSUES_PENDING.md` that has not been filed yet, or "no issue" for a limit that is
@@ -2499,7 +2522,7 @@ by design.
 
 ## 13. Quick start checklist
 
-1. `splunk install app sunavigator-0.12.2.tar.gz` then `splunk restart`.
+1. `splunk install app sunavigator-0.13.0.tar.gz` then `splunk restart`.
 2. `splunk show kvstore-status` → `ready` (macOS: §9.2 if stuck on `starting`).
 3. Open **SUNavigator → Administration**; all platform pills green.
 4. **Check provider for categories** → tick **9** → **Synchronize**, **or**

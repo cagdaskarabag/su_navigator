@@ -893,7 +893,7 @@ function ucmViewMain($, ucm) {
             renderFrameworks(frameworksBox, data);
             ucm.rawGet("services/authentication/current-context").done(function (ctxData) {
                 var caps = (((ctxData.entry || [])[0] || {}).content || {}).capabilities || [];
-                canAssess = caps.indexOf("ucm_assess") >= 0;
+                canAssess = caps.indexOf("ucm_assess") >= 0 && !!(data.features && data.features.compliance);
             }).always(function () { renderCatalogues(cataloguesBox, allDefs); });
         }).fail(failBox(toolbar, "Could not load frameworks."));
         ucm.get("frameworks/matrix", query({ framework_id: state.framework_id, version: state.version }))

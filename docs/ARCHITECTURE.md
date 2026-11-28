@@ -13,7 +13,7 @@ Splunk Web (Simple XML 1.1 + app JS)          Background (modular input)
         │                                                    │
         ▼                                                    ▼
   lib/splunk_ucm ──────────────── application services ──────────────────
-   api/        request routing, input validation, JSON responses
+   api/        request context and route table (app.py), handlers by domain (routes_*.py)
    content/    ContentProvider ABC, FenreJsonProvider, OfflineBundleProvider,
                validation (schema subset + safety), normalizer, SyncService
    catalog/    CatalogQueryService (filters → KV query, paging), detail view

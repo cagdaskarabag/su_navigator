@@ -87,6 +87,8 @@ Checked against `main` at `65d00a9` on 28 Nov 2026.
 
 ### Phase 2: 0.13, prune to the wedge
 
+*Status: built in 0.13.0 (D-085): the flag, the server refusal, the UI hiding, the front-page wording. Dashboards stay as they are (S2, frozen). The gate below is the maintainer's.*
+
 * `[features] compliance` (default off): hides the assessment, POA&M and snapshot pages and their routes (the server
   must refuse them too, not only the UI), and the `ucm_compliance_assessor` role stays defined but inert.
   ATT&CK coverage and control mapping stay on.

@@ -32,11 +32,11 @@ Legend: **Working** = built and checked on the lab. **Built, limited** = works, 
 | Control tests | A fixture is replayed through a deployed search on a test index; verdicts pass, fail, content error, not runnable | §6.6a, D-054, D-064 |
 | Coverage | MITRE ATT&CK matrix and regulatory coverage with gap lists | §6.7, D-074 |
 | Control catalogues | NIST SP 800-53 Rev. 5.2.0, SP 800-171 Rev. 3, CSF 2.0; unmapped controls visible | D-076 |
-| Assessments | Status per control with who, when and why; per-objective results for SP 800-171 Rev. 3; history | D-077 |
-| CMMC Level 2 score | DoD methodology v1.2.1 scoring (110 at best, -203 at worst), best possible score | D-077 |
-| POA&M | Plan items with owner, due date, milestones, closing and risk acceptance; overdue flag | D-077 |
+| Assessments (off by default since 0.13.0) | Status per control with who, when and why; per-objective results for SP 800-171 Rev. 3; history. Turn on with `[features] compliance = true` | D-077, D-085 |
+| CMMC Level 2 score (off by default) | DoD methodology v1.2.1 scoring (110 at best, -203 at worst), best possible score | D-077, D-085 |
+| POA&M (off by default) | Plan items with owner, due date, milestones, closing and risk acceptance; overdue flag | D-077, D-085 |
 | POA&M eligibility note | Information only, from 32 CFR 170.21; never blocks an item or changes a score | D-080 |
-| Evidence snapshots | Frozen assessment with SHA-256; download checks the hash | D-077 |
+| Evidence snapshots (off by default) | Frozen assessment with SHA-256; download checks the hash | D-077, D-085 |
 | Audit trail | Hash-chained audit rows; "Verify audit chain" reports edited or missing rows | D-075 |
 | Refused requests | Refused governance requests are recorded under rate limits; listed on Content administration | D-080 |
 | Dashboards | Domain dashboards and generated dashboards, create, regenerate, delete | §6.8 |
@@ -116,7 +116,7 @@ Found while writing the user guide. None changes data or exposes anything; all a
 - Which pages you used, and which you could not work out without help.
 - Whether the deployment and approval flow matches how your team works.
 - Whether the readiness result matches what you know about your data.
-- Whether the compliance pages (coverage, control catalogues, assessments, POA&M) answer a question you have.
+- Whether the coverage pages and control catalogues answer a question you have, and whether you would turn the assessment and POA&M module on (`[features] compliance`, off by default since 0.13.0).
 - Anything in the "Not working" or "Nice to have" lists that blocks you.
 
 Use the **SUNavigator feedback** issue form. Include the SUNavigator version, your Splunk version and the role you

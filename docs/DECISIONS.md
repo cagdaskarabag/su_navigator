@@ -2520,3 +2520,31 @@ as drift.
   worker is not changed: it logs the failure and tries again the next minute.
 * Evidence: `tests/unit/test_collection_acl.py`, `test_reindex_job.py`, `test_notices_inventory.py`, `test_no_sse.py`,
   `test_usage_census.py`, `tests/js/test_scheduler.js`, `tests/live/test_live_splunk.py`.
+
+## D-085 Compliance module off by default
+*0.13.0.*
+
+* **Context.** The product review and the maintainer's own judgement agree that the assessment, CMMC score, POA&M and
+  snapshot features (D-077, 0.10.0) go beyond a use-case navigator and carry claims with legal weight (D-077, D-079). They
+  are about 9% of the backend and 16% of the browser code. Decision S1 (28 Nov 2026): hide the module, measure its use,
+  decide later whether to move it to its own app or retire it. S2: the dashboards are frozen. Nothing is removed.
+* **Change.** `[features] compliance = false` in `default/ucm.conf`. `Context.require_feature` raises `FeatureDisabled`
+  (404, code `feature_disabled`); the router wraps the twelve routes of the module (`assessment`, `assessment/*`,
+  `poam`, `poam/*`), so the refusal comes before the capability check and applies to administrators too. `GET frameworks`
+  returns `features.compliance`; the Coverage page requests no assessment data and shows no assessment, plan or snapshot
+  section unless it is true. Control catalogues, the ATT&CK matrix, the mapping of use cases to controls and regulation
+  evidence packs are not part of the module and are unchanged. The role stays and is inert.
+* **Upgrade.** Instances that recorded assessments will see them disappear from the page until an administrator sets
+  `compliance = true`; the data stays. This is stated in the operator guide, the feature status and the README.
+* **Not decided here.** Whether to extract or retire the module. The gate is the usage census
+  (`tools/usage_census.py`, counts only) on the instances of the people who tried the app; the decision is the
+  maintainer's.
+* **Tests.** `tests/unit/test_compliance_feature.py`, `tests/js/test_assessment_ui.js`, live `LiveComplianceFeatureTest`;
+  the live assessment classes switch the module on for their run and restore the setting.
+
+* **Phase 3, code layout (same release).** `api/app.py` held 1,111 lines: the request context, the router and every handler.
+  The handlers moved, unchanged, to `api/routes_content.py`, `routes_environment.py`, `routes_deployment.py`,
+  `routes_frameworks.py` and `routes_dashboards.py`; the shared request, response, router and capability names are in
+  `api/base.py`; `api/app.py` keeps `Context` and the route table (227 lines). `build_router()` yields the same 81 routes
+  as 0.12.2 (checked against the committed version); every test passes unchanged except that the compliance routes are
+  wrapped. Nothing outside `api/` changed.
