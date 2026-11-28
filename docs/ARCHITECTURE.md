@@ -166,9 +166,9 @@ All collections are app-scoped (`nobody` owner) and replicated in SHC.
 | `uc_control_fixtures` | `cf_<catalog key>` | shared | REST (system token), import only | Control-test fixture: sourcetype, host, `min_count`, raw positive and negative text, import `batch` (D-054). |
 | `uc_deployments` | `dep_<catalog key>` | shared | REST (system token), worker | Workflow `state`, `revisions[]` (frozen SPL, schedule, parse result, submitter, approver, deploy time), `deployed_revision`, `live` (status, drift, owner, next run), `history[]` (last 100), `override` (reason, by, at, expires_at, blocked_by, reminded_at), `override_active`, `enable_request`, `outcome` and `outcome_value`, `revision_log[]` (stubs of trimmed revisions), `version`. |
 | `uc_frameworks` | `fw_<id>_<version>` / `active_<id>` | shared | REST (system token) | Imported framework definitions (`ucm.framework/1` ATT&CK, `ucm.framework/2` control catalogues, D-076) and the active version per framework. Bundled versions are files, not documents. |
-| `uc_assessments` | `as_<sha256(framework, control)[:40]>` | shared | REST (system token), `ucm_assess` | Assessed state of one control: `status`, `derived`, `complete`, `note`, `objectives[]` (`id`, `result`, `note`, `by`, `at`; a list because KV field names cannot contain dots), `assessed_by/at`, `first_assessed_by/at`, `version`, `history[]` (last 20) (D-077). |
-| `uc_poam` | `pm_<uuid>` | shared | REST (system token), `ucm_assess` | Plan item: `control_id`, `title`, `weakness`, `owner`, `due`, `state`, `milestones[]`, `created_*`, `updated_*`, `closed_*`, `close_note`, `history[]` (D-077). |
-| `uc_assessment_snapshots` | `sn_<uuid>` | shared | REST (system token), `ucm_assess` | Immutable snapshot: `content_json` (canonical JSON), `sha256`, `size`, `label`, `created_by/at`. Never updated or deleted by the app (D-077). |
+| `uc_assessments` | `as_<sha256(framework, control)[:40]>` | shared | none since 0.14.0 (retired, D-086); read by administrators | Assessed state of one control: `status`, `derived`, `complete`, `note`, `objectives[]` (`id`, `result`, `note`, `by`, `at`; a list because KV field names cannot contain dots), `assessed_by/at`, `first_assessed_by/at`, `version`, `history[]` (last 20) (D-077). |
+| `uc_poam` | `pm_<uuid>` | shared | none since 0.14.0 (retired, D-086); read by administrators | Plan item: `control_id`, `title`, `weakness`, `owner`, `due`, `state`, `milestones[]`, `created_*`, `updated_*`, `closed_*`, `close_note`, `history[]` (D-077). |
+| `uc_assessment_snapshots` | `sn_<uuid>` | shared | none since 0.14.0 (retired, D-086); read by administrators | Immutable snapshot: `content_json` (canonical JSON), `sha256`, `size`, `label`, `created_by/at`. Never updated or deleted by the app (D-077). |
 | `uc_dashboards` | `dash_<view name>` | shared | REST (system token) | Generated view record: template, params, label, XML hash, created/updated by. |
 
 Accelerated fields (`collections.conf`): `uc_catalog` on `category_key`,
@@ -265,14 +265,6 @@ Downgrades are not supported (D-033).
 | `GET ucm/frameworks/clause` | read | Use cases of one clause (`framework`, `clause`) with readiness, deployment and mapping substance. |
 | `GET ucm/frameworks/evidence` | read | Deterministic evidence pack (`framework`, optional `clause`, `format=json\|csv`): `content`, `sha256`, `filename`, `meta`. |
 | `GET ucm/frameworks/catalogue` | read | A control catalogue (`framework_id`, optional `version`) with every control, its best level, use cases, ancestor roll-ups, totals, and the mapped clauses that match no control (D-076). |
-| `GET ucm/assessment` | `ucm_assess` | Assessments of a catalogue (`framework_id`, optional `version`), `summary`, and `score` for catalogues with `scoring` (D-077). |
-| `GET ucm/assessment/control` | `ucm_assess` | One control with its objectives and its assessment (`control_id`). |
-| `POST ucm/assessment` | `ucm_assess` | Set the assessment of a control: `status` or `objectives`, and `note`. |
-| `POST ucm/assessment/clear` | `ucm_assess` | Remove an assessment (`note` required). |
-| `GET ucm/poam` | `ucm_assess` | Plan items (`framework_id`, `state`, `control_id`, `overdue=1`, paging) with counts. |
-| `POST ucm/poam`, `poam/update`, `poam/close`, `poam/reopen` | `ucm_assess` | Create, change, close (`resolution` = `closed` or `risk_accepted`) and reopen a plan item. |
-| `POST ucm/assessment/snapshot` | `ucm_assess` | Take an evidence snapshot (`label`). |
-| `GET ucm/assessment/snapshots`, `GET ucm/assessment/snapshot` | `ucm_assess` | List snapshots; fetch one (`id`) with `content`, `sha256` and an `integrity` check. |
 | `POST ucm/frameworks/import` | `ucm_manage_content` | Import a `ucm.framework/1` or `ucm.framework/2` definition (JSON body). |
 | `POST ucm/frameworks/activate` | `ucm_manage_content` | Choose the active version (`framework_id`, `version`). |
 | `GET ucm/operations` | read (scheduler logs need `_internal`) | Run status of deployed searches (`hours` = 1, 4, 24, 72 or 168): `health` (`operational`, `no_runs`, `unhealthy`, `failing_dispatch`, `disabled`, `unknown`), run counts, `dispatch_errors`, `last_error`, `last_skip_reason`, `p90_run_time`, `max_run_time`, `cadence_seconds` and `advisories` (H001–H004, D-069). |

@@ -19,7 +19,7 @@ class NoSplunkd(SplunkdTransport):
 
 
 def make_ctx(store, caps, config=None, user="alice"):
-    ctx = Context(NoSplunkd(), None, user, store=store, audit_store=store, config=config or AppConfig({"features": {"compliance": "true"}}),
+    ctx = Context(NoSplunkd(), None, user, store=store, audit_store=store, config=config or AppConfig({}),
                   provider_factory=lambda *a: helpers.fenre_provider(helpers.FakeGitHub()))
     ctx._caps = list(caps)
     return ctx

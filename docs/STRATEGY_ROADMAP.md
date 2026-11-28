@@ -56,7 +56,7 @@ Checked against `main` at `65d00a9` on 28 Nov 2026.
 
 | # | Decision | Recommendation |
 |---|---|---|
-| S1 | Does the compliance suite (assessments, POA&M, snapshots, CMMC score) stay in this app? | Hide behind `[features] compliance = false` in 0.13, run the census, then extract to a separate app or retire. Do not delete yet. |
+| S1 | Does the compliance suite (assessments, POA&M, snapshots, CMMC score) stay in this app? | Hide behind `[features] compliance = false` in 0.13, run the census, then extract to a separate app or retire. Do not delete yet. **Decided 28 Nov 2026: retire (D-086). Done in 0.14.0.** |
 | S2 | Dashboard generation | Freeze (253 lines, no maintenance cost). Decide with the census. |
 | S3 | Scheduler default `*` | Keep, but make the install checklist and the first-run banner name it, and keep the readiness refusal. Shipping narrow breaks every first deployment for the sake of a default an administrator has to review anyway. |
 | S4 | What to hand the Splunk team | The app plus a dossier (phase 4): what is validated, what is not, an acceptance test per topology. |
@@ -87,7 +87,7 @@ Checked against `main` at `65d00a9` on 28 Nov 2026.
 
 ### Phase 2: 0.13, prune to the wedge
 
-*Status: built in 0.13.0 (D-085): the flag, the server refusal, the UI hiding, the front-page wording. Dashboards stay as they are (S2, frozen). The gate below is the maintainer's.*
+*Status: built in 0.13.0 (D-085): the flag, the server refusal, the UI hiding, the front-page wording. Superseded by phase 2 retirement in 0.14.0 (D-086). Dashboards stay as they are (S2, frozen).*
 
 * `[features] compliance` (default off): hides the assessment, POA&M and snapshot pages and their routes (the server
   must refuse them too, not only the UI), and the `ucm_compliance_assessor` role stays defined but inert.
@@ -99,6 +99,8 @@ Checked against `main` at `65d00a9` on 28 Nov 2026.
   people did, extract anyway but keep the data export so they can move.
 
 ### Phase 2b: extraction (after the gate)
+
+*Status: not needed. The maintainer chose retirement over extraction (D-086, 0.14.0), so nothing is moved to a separate app. The records stay in the collections and can be exported with `tools/compliance_export.py`.*
 
 * Move `frameworks/assessment*`, `poam*`, `evidence*`, their pages, routes, collections and role into a separate
   optional app that talks to this one only through its REST API (mappings and readiness read-only). Stop

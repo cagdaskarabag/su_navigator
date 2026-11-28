@@ -98,7 +98,7 @@ public distribution and on the handover.
 | Fenre use cases | MIT (copyright notice and licence text must accompany copies) | schema shipped in the app with licence; sample records only in `tests/` | Keep the licence file next to every copy; the repository's own `docs/upstream/` quotes Fenre SPL in findings, which is a copy and should carry the notice |
 | MITRE ATT&CK | MITRE's terms of use: free use with the copyright notice and licence retained | `frameworks/data/mitre_attack_enterprise-20.1.json`, with an attribution key | Check the attribution is shown in the UI, not only in the file |
 | NIST SP 800-53, 800-171, CSF, OSCAL catalogues | U.S. Government work, not subject to copyright in the United States; NIST asks for attribution | `frameworks/data/controls/` (about 245 KB) | Foreign-copyright status and the attribution request are for L1. Would leave the core app if the compliance suite is extracted (STRATEGY_ROADMAP phase 2b) |
-| CMMC Level 2 mapping | DoD publication; the scoring and POA&M rules touch 32 CFR 170 | `cmmc-l2-2.0.json`, `poam_rules.py` | D-077 already decided the app records coverage, not certification. A wording review is L5 |
+| CMMC Level 2 mapping | DoD publication; the scoring and POA&M rules touch 32 CFR 170 | `cmmc-l2-2.0.json` (`poam_rules.py` was removed in 0.14.0) | D-077 already decided the app records coverage, not certification. A wording review is L5 |
 | Splunk CIM (data models) | Splunk General Terms | read at run time for the populated check | Mode A only; nothing copied |
 | Splunk, ES, ESCU, SSE, MITRE, NIST, CMMC names | Trademarks of their owners | UI and documentation | Nominative use; `NOTICE` carries the Splunk notice |
 
@@ -108,7 +108,7 @@ public distribution and on the handover.
 |---|---|---|
 | Ownership and employment (L4) | The maintainer is employed by a company that owns Splunk. Who owns the code written outside working hours, under which agreement can it be licensed under Apache-2.0 and later handed over, and is outside work disclosed or approved? | Employer's policies and counsel; not a technical question. **Do this before the handover.** |
 | Copyright holder | `NOTICE` says "the SUNavigator contributors". If anyone besides the maintainer has contributed, a contribution policy (DCO or CLA) is needed for a handover. | `git shortlog`, `CONTRIBUTING.md` |
-| Compliance claims (L5) | The app computes a CMMC score, POA&M items and evidence snapshots. Claims about "evidence" or "compliance" carry legal weight (D-077). | Resolved mostly by STRATEGY_ROADMAP phase 2; wording review for what remains |
+| Compliance claims (L5) | Until 0.13.0 the app computed a CMMC score, POA&M items and evidence snapshots. 0.14.0 retired them (D-086); the records are kept. Claims about "evidence" or "compliance" carry legal weight (D-077). | Resolved mostly by STRATEGY_ROADMAP phase 2; wording review for what remains |
 | Data protection (L6) | What personal data does the app hold (user names in the audit log, assessment authors), where, for how long, and what leaves the instance (outbound requests to GitHub and the provider hosts)? | A one-page data map from `docs/SECURITY.md` section on data; the app has no telemetry |
 | Security disclosure | Vulnerability reporting route exists; private vulnerability reporting is a repository setting (#47). | ROADMAP.md |
 | Export controls | The app contains no encryption of its own; it uses SHA-256 hashing. Counsel to confirm nothing further is needed. | L5 |

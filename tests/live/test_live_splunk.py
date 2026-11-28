@@ -1200,13 +1200,6 @@ def set_conf_value(t, stanza, key, value):
     assert status == 200, (status, content[:300])
 
 
-def set_feature(t, name, value):
-    """Set ``[features] <name>`` in the app's local ucm.conf, creating the stanza on an install that has none."""
-    status, _ = t.request("POST", "/servicesNS/nobody/sunavigator/configs/conf-ucm/features", form={name: value})
-    if status == 404:
-        status, content = t.request("POST", "/servicesNS/nobody/sunavigator/configs/conf-ucm",
-                                    form={"name": "features", name: value})
-    assert status in (200, 201), status
 
 
 def _internalised(record_id, spl):
@@ -2204,187 +2197,27 @@ class LiveControlCatalogueTest(unittest.TestCase):
         self.assertEqual(body["catalogue"]["version_label"], "Edition nine")
 
 
-@unittest.skipUnless(LIVE, "set UCM_LIVE_SPLUNK=1 to run against a real Splunk instance")
-class LiveAssessmentTest(unittest.TestCase):
-    """D-077: assessments, POA&M and snapshots on the real KV Store, behind the ucm_assess capability."""
-
-    USER = "ucm_test_assessor_" + uuid.uuid4().hex[:6]
-    VIEWER = "ucm_test_viewer_" + uuid.uuid4().hex[:6]
-    PW = "T3st!" + uuid.uuid4().hex
-
-    @classmethod
-    def setUpClass(cls):
-        cls.admin = transport()
-        cls.kv = KVStore(cls.admin)
-        cls.feature_before = conf_value(cls.admin, "features", "compliance")
-        set_feature(cls.admin, "compliance", "true")
-        cls.created = {C.ASSESSMENTS: [], C.POAM: [], C.SNAPSHOTS: []}
-        for name, role in ((cls.USER, "ucm_compliance_assessor"), (cls.VIEWER, "ucm_viewer")):
-            status, body = cls.admin.request("POST", "/services/authentication/users",
-                                             form={"name": name, "password": cls.PW, "roles": role})
-            assert status in (200, 201), (status, body[:300])
-        cls.assessor = transport(cls.USER, cls.PW)
-        cls.viewer = transport(cls.VIEWER, cls.PW)
-
-    @classmethod
-    def tearDownClass(cls):
-        from splunk_ucm.frameworks.assessment import assessment_key
-        for fw, control in getattr(cls, "assessed", []):
-            cls.kv.delete(C.ASSESSMENTS, assessment_key(fw, control))
-        for collection, keys in cls.created.items():
-            for key in keys:
-                cls.kv.delete(collection, key)
-        for name in (cls.USER, cls.VIEWER):
-            cls.admin.request("DELETE", "/services/authentication/users/" + name)
-        set_feature(cls.admin, "compliance", cls.feature_before or "false")
-
-    assessed = []
-
-    def objective_control(self):
-        status, cat = api(self.admin, "GET", "frameworks/catalogue", {"framework_id": "nist-800-171"})
-        self.assertEqual(status, 200, cat)
-        return next(r for r in cat["controls"] if r.get("objective_count"))
-
-    def test_capability_and_roles_are_installed(self):
-        status, content = self.admin.request("GET", "/services/authorization/roles/ucm_compliance_assessor", {"output_mode": "json"})
-        self.assertEqual(status, 200)
-        self.assertIn("ucm_assess", json.loads(content)["entry"][0]["content"]["capabilities"])
-        for t in (self.viewer,):
-            for path in ("assessment", "poam", "assessment/snapshots"):
-                self.assertEqual(api(t, "GET", path, {"framework_id": "cmmc-l2"})[0], 403, path)
-            self.assertEqual(api(t, "POST", "assessment", body={"framework_id": "cmmc-l2", "control_id": "AC.L2-3.1.1"})[0], 403)
-        self.assertEqual(api(self.assessor, "GET", "assessment", {"framework_id": "cmmc-l2"})[0], 200)
-
-    def test_cmmc_score_starts_at_the_methodology_floor_and_rises(self):
-        status, body = api(self.assessor, "GET", "assessment", {"framework_id": "cmmc-l2"})
-        self.assertEqual(status, 200, body)
-        score = body["score"]
-        self.assertEqual((score["start"], score["points_lost"] + score["score"]), (110, 110), score)
-        self.assertEqual(score["all_assessed"], score["complete"])
-        self.assertIn("can_pass", score)
-        before = score["score"]
-        status, out = api(self.assessor, "POST", "assessment", body={"framework_id": "cmmc-l2", "control_id": "AC.L2-3.1.1",
-                                                                  "status": "implemented", "note": "Live test: verified"})
-        self.assertEqual(status, 200, out)
-        LiveAssessmentTest.assessed.append(("cmmc-l2", "AC.L2-3.1.1"))
-        self.assertGreater(out["score"]["score"], before)
-        self.assertEqual(out["assessment"]["assessed_by"], self.USER)
-        status, out = api(self.assessor, "POST", "assessment/clear", body={"framework_id": "cmmc-l2", "control_id": "AC.L2-3.1.1", "note": "Live test: done"})
-        self.assertEqual(status, 200, out)
-        self.assertEqual(out["score"]["score"], before)
-
-    def test_objective_results_round_trip_with_dotted_ids_and_derive_the_status(self):
-        row = self.objective_control()
-        status, res = api(self.assessor, "GET", "assessment/control", {"framework_id": "nist-800-171", "control_id": row["id"]})
-        self.assertEqual(status, 200, res)
-        ids = [o["id"] for o in res["control"]["objectives"]]
-        self.assertGreater(len(ids), 0)
-        self.assertTrue(any("." in i for i in ids), ids)
-        LiveAssessmentTest.assessed.append(("nist-800-171", row["id"]))
-        status, out = api(self.assessor, "POST", "assessment", body={
-            "framework_id": "nist-800-171", "control_id": row["id"], "note": "Live test: all met",
-            "objectives": {i: {"result": "met", "note": ""} for i in ids}})
-        self.assertEqual(status, 200, out)
-        self.assertEqual((out["assessment"]["status"], out["assessment"]["complete"]), ("implemented", True))
-        status, out = api(self.assessor, "POST", "assessment", body={
-            "framework_id": "nist-800-171", "control_id": row["id"], "note": "Live test: one fails",
-            "objectives": {ids[0]: {"result": "not_met", "note": ""}}})
-        self.assertEqual((out["assessment"]["status"], out["assessment"]["complete"]), ("partially_implemented", True), out)
-        self.assertEqual([h["status"] for h in out["assessment"]["history"]], ["implemented"])
-        status, stored = api(self.assessor, "GET", "assessment/control", {"framework_id": "nist-800-171", "control_id": row["id"]})
-        self.assertEqual(stored["assessment"]["objectives"][ids[0]]["result"], "not_met")
-        self.assertEqual(stored["assessment"]["first_assessed_by"], self.USER)
-        status, out = api(self.assessor, "POST", "assessment", body={
-            "framework_id": "nist-800-171", "control_id": row["id"], "note": "ok", "objectives": {ids[0]: {"result": "not_applicable", "note": ""}}})
-        self.assertEqual(status, 400, out)
-
-    def test_poam_lifecycle_and_overdue(self):
-        status, out = api(self.assessor, "POST", "poam", body={
-            "framework_id": "cmmc-l2", "control_id": "AC.L2-3.1.2", "title": "Live plan", "weakness": "Live test weakness", "owner": "bob",
-            "due": "2020-01-01", "milestones": [{"text": "First step", "due": "2019-12-01"}]})
-        self.assertEqual(status, 200, out)
-        item = out["item"]
-        self.created[C.POAM].append(item["id"])
-        self.assertTrue(item["overdue"])
-        status, listing = api(self.assessor, "GET", "poam", {"framework_id": "cmmc-l2", "overdue": "1"})
-        self.assertIn(item["id"], [i["id"] for i in listing["items"]])
-        self.assertFalse(item["eligibility"]["eligible"], item["eligibility"])
-        self.assertEqual(item["eligibility"]["point_value"], 5)
-        self.assertIn("not a CMMC status", item["eligibility"]["notice"])
-        status, out = api(self.assessor, "POST", "poam", body={
-            "framework_id": "cmmc-l2", "control_id": "AC.L2-3.1.20", "title": "Excluded", "weakness": "Live test weakness",
-            "owner": "bob", "due": "2031-01-01"})
-        self.assertEqual(status, 200, out)
-        self.created[C.POAM].append(out["item"]["id"])
-        self.assertIn("excluded", " ".join(out["item"]["eligibility"]["reasons"]))
-        self.assertEqual(api(self.assessor, "POST", "poam/update", body={"id": item["id"], "due": "2031-01-01"})[0], 400)
-        status, out = api(self.assessor, "POST", "poam/update", body={"id": item["id"], "due": "2031-01-01", "note": "Vendor delay"})
-        self.assertEqual((status, out["item"]["overdue"]), (200, False), out)
-        self.assertEqual(api(self.assessor, "POST", "poam/close", body={"id": item["id"], "resolution": "risk_accepted", "note": "short"})[0], 400)
-        status, out = api(self.assessor, "POST", "poam/close", body={"id": item["id"], "resolution": "closed", "note": "Done and tested"})
-        self.assertEqual((status, out["item"]["state"]), (200, "closed"), out)
-        status, out = api(self.assessor, "POST", "poam/reopen", body={"id": item["id"], "note": "Regression found"})
-        self.assertEqual((status, out["item"]["state"]), (200, "open"), out)
-        self.assertEqual([h["action"] for h in out["item"]["history"]], ["created", "updated", "closed", "reopened"])
-
-    def refused_rows(self, prefix="refused."):
-        _, audit = api(self.admin, "GET", "audit", {"prefix": prefix, "limit": "200"})
-        return [e for e in audit["events"] if e["actor"] == self.VIEWER]
-
-    def test_refusals_are_audited_once_and_capped(self):
-        body = {"framework_id": "cmmc-l2", "control_id": "AC.L2-3.1.1", "status": "implemented", "note": "Live test: no right"}
-        for _ in range(3):
-            self.assertEqual(api(self.viewer, "POST", "assessment", body=body)[0], 403)
-        rows = self.refused_rows()
-        self.assertEqual(len(rows), 1, rows)
-        self.assertEqual((rows[0]["outcome"], rows[0]["details"]["status"], rows[0]["object_id"]), ("refused", 403, "AC.L2-3.1.1"), rows[0])
-        self.assertNotIn("Live test: no right", json.dumps(rows[0]))
-        for n in range(30):
-            api(self.viewer, "POST", "poam", body={"framework_id": "cmmc-l2", "control_id": "AC.L2-3.1.%d" % (n + 100)})
-        rows = self.refused_rows()
-        limited = [r for r in rows if r["action"] == "refused.rate_limited"]
-        self.assertEqual(len(limited), 1, [r["action"] for r in rows])
-        self.assertEqual(len(rows), 21, len(rows))
-        self.assertEqual(limited[0]["details"]["scope"], "actor")
-        status, out = api(self.admin, "POST", "audit/verify")
-        self.assertTrue(out["ok"], out)
-
-    def test_snapshot_is_stored_hashed_and_verifiable(self):
-        status, out = api(self.assessor, "POST", "assessment/snapshot", body={"framework_id": "cmmc-l2", "label": "Live snapshot"})
-        self.assertEqual(status, 200, out)
-        snap = out["snapshot"]
-        self.created[C.SNAPSHOTS].append(snap["id"])
-        status, got = api(self.assessor, "GET", "assessment/snapshot", {"id": snap["id"]})
-        self.assertEqual(status, 200, got)
-        self.assertTrue(got["integrity"]["ok"], got["integrity"])
-        self.assertEqual(hashlib.sha256(got["content"].encode("utf-8")).hexdigest(), snap["sha256"])
-        content = json.loads(got["content"])
-        self.assertEqual((content["format"], content["created_by"], content["label"]), ("ucm.assessment.snapshot/1", self.USER, "Live snapshot"))
-        status, listing = api(self.assessor, "GET", "assessment/snapshots", {"framework_id": "cmmc-l2"})
-        self.assertIn(snap["id"], [s["id"] for s in listing["items"]])
-
-    def test_audit_chain_is_intact_after_all_assessment_writes(self):
-        status, out = api(self.admin, "POST", "audit/verify")
-        self.assertEqual(status, 200, out)
-        self.assertTrue(out["ok"], out)
 
 
 @unittest.skipUnless(LIVE, "set UCM_LIVE_SPLUNK=1 to run against a real Splunk instance")
 class LiveCollectionAclTest(unittest.TestCase):
-    """0.12.2: the collections that only the app writes are not readable through the KV Store REST by ordinary roles."""
+    """0.12.2 and 0.14.0 (D-086): the collections only the app writes are not readable through the KV Store REST by
+    ordinary roles; the records of the retired module are readable by administrators only."""
 
     ANALYST = "ucm_acl_analyst_" + uuid.uuid4().hex[:6]
-    ASSESSOR = "ucm_acl_assessor_" + uuid.uuid4().hex[:6]
     VIEWER = "ucm_acl_viewer_" + uuid.uuid4().hex[:6]
     PW = "T3st!" + uuid.uuid4().hex
     KV = "/servicesNS/nobody/sunavigator/storage/collections/data/"
     # Splunk answers 404 for an object the role may not see, 403 where it knows the object and refuses.
+    CLOSED = (403, 404)
+    APP_WRITTEN = ("uc_field_profile", "uc_event_check", "uc_external_matches")
+    RETIRED = ("uc_assessments", "uc_poam", "uc_assessment_snapshots")
 
     @classmethod
     def setUpClass(cls):
         cls.admin = transport()
         cls.users = {}
-        for name, role in ((cls.ANALYST, "ucm_analyst"), (cls.ASSESSOR, "ucm_compliance_assessor"), (cls.VIEWER, "ucm_viewer")):
+        for name, role in ((cls.ANALYST, "ucm_analyst"), (cls.VIEWER, "ucm_viewer")):
             status, _ = cls.admin.request("POST", "/services/authentication/users",
                                           form={"name": name, "password": cls.PW, "roles": role})
             assert status in (200, 201), status
@@ -2392,7 +2225,7 @@ class LiveCollectionAclTest(unittest.TestCase):
 
     @classmethod
     def tearDownClass(cls):
-        for name in (cls.ANALYST, cls.ASSESSOR, cls.VIEWER):
+        for name in (cls.ANALYST, cls.VIEWER):
             cls.admin.request("DELETE", "/services/authentication/users/" + name)
 
     def kv_status(self, t, collection):
@@ -2400,28 +2233,46 @@ class LiveCollectionAclTest(unittest.TestCase):
         return status
 
     def test_app_written_collections_are_closed_to_ordinary_roles(self):
-        for collection in ("uc_field_profile", "uc_event_check", "uc_external_matches"):
+        for collection in self.APP_WRITTEN:
             self.assertEqual(self.kv_status(self.admin, collection), 200, collection)
             for role, t in self.users.items():
-                self.assertIn(self.kv_status(t, collection), (403, 404), "%s read by %s" % (collection, role))
+                self.assertIn(self.kv_status(t, collection), self.CLOSED, "%s read by %s" % (collection, role))
 
-    def test_assessment_collections_are_open_to_assessors_only(self):
-        for collection in ("uc_assessments", "uc_poam", "uc_assessment_snapshots"):
+    def test_records_of_the_retired_module_are_for_administrators_only(self):
+        for collection in self.RETIRED:
             self.assertEqual(self.kv_status(self.admin, collection), 200, collection)
-            self.assertEqual(self.kv_status(self.users["ucm_compliance_assessor"], collection), 200, collection)
-            for role in ("ucm_viewer", "ucm_analyst"):
-                self.assertIn(self.kv_status(self.users[role], collection), (403, 404), "%s read by %s" % (collection, role))
+            for role, t in self.users.items():
+                self.assertIn(self.kv_status(t, collection), self.CLOSED, "%s read by %s" % (collection, role))
 
     def test_the_api_still_serves_what_the_collections_hold(self):
-        before = conf_value(self.admin, "features", "compliance")
-        set_feature(self.admin, "compliance", "true")
-        self.addCleanup(set_feature, self.admin, "compliance", before or "false")
         status, body = api(self.users["ucm_analyst"], "GET", "external")
         self.assertEqual(status, 200, body)
         status, body = api(self.users["ucm_viewer"], "GET", "external")
         self.assertEqual(status, 403, body)
-        status, body = api(self.users["ucm_compliance_assessor"], "GET", "assessment", {"framework_id": "cmmc-l2"})
-        self.assertEqual(status, 200, body)
+
+
+@unittest.skipUnless(LIVE, "set UCM_LIVE_SPLUNK=1 to run against a real Splunk instance")
+class LiveRetiredRecordsExportTest(unittest.TestCase):
+    """0.14.0 (D-086): the export tool reads the retired collections as an administrator and checks every snapshot."""
+
+    def test_export_reads_every_record_and_checks_snapshots(self):
+        import importlib.util
+        spec = importlib.util.spec_from_file_location("compliance_export", os.path.join(helpers.ROOT, "tools", "compliance_export.py"))
+        tool = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(tool)
+        out = tool.export(KVStore(transport()))
+        self.assertEqual(out["format"], tool.FORMAT)
+        self.assertEqual(sorted(out["records"]), ["assessments", "poam", "snapshots"])
+        self.assertEqual(out["counts"]["snapshots_failing_check"], 0, out["snapshot_integrity"])
+        self.assertEqual(len(out["snapshot_integrity"]), out["counts"]["snapshots"])
+
+
+@unittest.skipUnless(LIVE, "set UCM_LIVE_SPLUNK=1 to run against a real Splunk instance")
+class LiveAuditChainTest(unittest.TestCase):
+    def test_audit_chain_is_intact(self):
+        status, out = api(transport(), "POST", "audit/verify")
+        self.assertEqual(status, 200, out)
+        self.assertTrue(out["ok"], out)
 
 
 @unittest.skipUnless(LIVE, "set UCM_LIVE_SPLUNK=1 to run against a real Splunk instance")
@@ -2454,42 +2305,3 @@ class LiveBackgroundReindexTest(unittest.TestCase):
         self.assertEqual(job["status"], "succeeded", job)
 
 
-@unittest.skipUnless(LIVE, "set UCM_LIVE_SPLUNK=1 to run against a real Splunk instance")
-class LiveComplianceFeatureTest(unittest.TestCase):
-    """0.13.0 (D-085): with [features] compliance off the server refuses the module; with it on the module works."""
-
-    ASSESSOR = "ucm_feat_assessor_" + uuid.uuid4().hex[:6]
-    PW = "T3st!" + uuid.uuid4().hex
-
-    @classmethod
-    def setUpClass(cls):
-        cls.admin = transport()
-        status, body = cls.admin.request("POST", "/services/authentication/users",
-                                         form={"name": cls.ASSESSOR, "password": cls.PW, "roles": "ucm_compliance_assessor"})
-        assert status in (200, 201), (status, body[:300])
-        cls.assessor = transport(cls.ASSESSOR, cls.PW)
-        cls.before = conf_value(cls.admin, "features", "compliance")
-
-    @classmethod
-    def tearDownClass(cls):
-        set_feature(cls.admin, "compliance", cls.before or "false")
-        cls.admin.request("DELETE", "/services/authentication/users/" + cls.ASSESSOR)
-
-    def test_off_refuses_and_on_serves(self):
-        set_feature(self.admin, "compliance", "false")
-        for method, path, query in (("GET", "assessment", {"framework_id": "cmmc-l2"}), ("GET", "poam", {"framework_id": "cmmc-l2"}),
-                                    ("GET", "assessment/snapshots", {"framework_id": "cmmc-l2"})):
-            for t in (self.assessor, self.admin):
-                status, body = api(t, method, path, query)
-                self.assertEqual(status, 404, (path, body))
-                self.assertEqual(body["error"]["code"], "feature_disabled", body)
-        status, body = api(self.assessor, "GET", "frameworks")
-        self.assertEqual(status, 200, body)
-        self.assertEqual(body["features"], {"compliance": False})
-        status, body = api(self.assessor, "GET", "frameworks/catalogue", {"framework_id": "cmmc-l2"})
-        self.assertEqual(status, 200, "the control catalogue stays on")
-        set_feature(self.admin, "compliance", "true")
-        status, body = api(self.assessor, "GET", "assessment", {"framework_id": "cmmc-l2"})
-        self.assertEqual(status, 200, body)
-        status, body = api(self.assessor, "GET", "frameworks")
-        self.assertEqual(body["features"], {"compliance": True})

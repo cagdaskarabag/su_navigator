@@ -2524,6 +2524,9 @@ as drift.
 ## D-085 Compliance module off by default
 *0.13.0.*
 
+* **Superseded by D-086 (0.14.0).** The module was retired. The switch, the wrapped routes and the role described
+  below no longer exist.
+
 * **Context.** The product review and the maintainer's own judgement agree that the assessment, CMMC score, POA&M and
   snapshot features (D-077, 0.10.0) go beyond a use-case navigator and carry claims with legal weight (D-077, D-079). They
   are about 9% of the backend and 16% of the browser code. Decision S1 (28 Nov 2026): hide the module, measure its use,
@@ -2548,3 +2551,33 @@ as drift.
   `api/base.py`; `api/app.py` keeps `Context` and the route table (227 lines). `build_router()` yields the same 81 routes
   as 0.12.2 (checked against the committed version); every test passes unchanged except that the compliance routes are
   wrapped. Nothing outside `api/` changed.
+
+## D-086 Compliance module retired: assessments, CMMC score, POA&M and evidence snapshots
+*0.14.0.*
+
+* **Context.** Decision S1 (28 Nov 2026) was to hide the module (D-085), measure its use, then extract it or retire it.
+  The maintainer's answer on 28 Nov 2026 was to retire it. The census on the lab (`tools/usage_census.py`, counts only)
+  had 23 compliance audit rows against 1,300 content and 1,337 deployment rows. That is lab traffic, not evidence of use
+  by other people, and the decision does not rest on it. The claims with legal weight (D-077, D-079) stay out of the app.
+* **Change.** Removed: the twelve assessment, POA&M and snapshot routes; `ucm/assessment*` and `ucm/poam*` in
+  `web.conf`; the capability `ucm_assess` and the role `ucm_compliance_assessor` in `authorize.conf`; the `[features]`
+  switch and `FeatureDisabled`; the CMMC score, assessment and POA&M code (`frameworks/assessment.py`,
+  `frameworks/poam_rules.py`); the assessment, plan and snapshot pages in `ucm_coverage.js`; their refusal prefixes and
+  their mentions in the README, the front page and the guides.
+* **Kept.** The collections `uc_assessments`, `uc_poam` and `uc_assessment_snapshots` are defined and keep their
+  records. Nothing in the app writes to them. Their KV ACLs (0.12.2) stay: only `admin`, `sc_admin` and `ucm_admin` read.
+  The control catalogues, the mapping of use cases to controls, the ATT&CK matrix and the regulation evidence packs are
+  not part of the module and are unchanged. Dashboards are unchanged (S2, frozen).
+* **Export.** `tools/compliance_export.py` reads the three collections as JSON (format `sunavigator.compliance-export/1`),
+  keeps each snapshot's stored text byte for byte and checks its SHA-256. It exits with 1 if a snapshot fails. It uses only
+  the REST API and the admin credentials, so it works without the removed code.
+* **Upgrade.** Nothing is migrated. Users lose the pages. A user whose only role was `ucm_compliance_assessor` can still
+  sign in, but has no UCM access: on the lab (0.14.0) the platform route answered 502 `storage_error` to that user, because
+  splunkd refused the read with 403 and the app maps every splunkd error on storage to 502 (`storage/transport.py`). The
+  same path applies to any user without a UCM role. Splunk logs an ERROR for the missing role at each sign-in. The
+  operator should give such users `ucm_viewer`. Whether a 403 for that case should be mapped to 403 is open.
+* **Not decided here.** Deleting the collections or their records. That is not planned; any later decision needs an
+  export-then-delete design (D-079).
+* **Tests.** `tests/unit/test_retirement.py` (routes, roles, capabilities, expose stanzas, module files and browser
+  endpoints must not return), `tests/unit/test_compliance_export.py`; the live suite has `LiveRetiredRecordsExportTest`
+  and the rewritten `LiveCollectionAclTest`.

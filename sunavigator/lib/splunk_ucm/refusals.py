@@ -21,7 +21,7 @@ from .util import epoch_now
 
 log = get_logger(__name__)
 
-GOVERNED_PREFIXES = ("deployment/", "assessment", "poam", "frameworks/import", "frameworks/activate",
+GOVERNED_PREFIXES = ("deployment/", "frameworks/import", "frameworks/activate",
                      "dashboards/create", "dashboards/delete", "controltest/import", "sync", "import", "mappings",
                      "catalog/reindex")
 REFUSED_STATUSES = (400, 403, 409)

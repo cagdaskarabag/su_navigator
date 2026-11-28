@@ -1,4 +1,4 @@
-"""Every KV collection has its own access stanza, and the restricted ones are reached only with the system token (0.12.2)."""
+"""Every KV collection has its own access stanza, and the restricted ones are reached only with the system token (0.12.2, D-086)."""
 
 import os
 import re
@@ -41,8 +41,6 @@ class StanzaTest(unittest.TestCase):
             self.assertNotIn("*", readers, name)
             self.assertEqual(writers, ["admin", "sc_admin"], name)
             self.assertIn("ucm_admin", readers, name)
-        for name in (C.ASSESSMENTS, C.POAM, C.SNAPSHOTS):
-            self.assertIn("ucm_compliance_assessor", access(name)[0], name)
 
 
 class NoDirectReadStore(InMemoryStore):

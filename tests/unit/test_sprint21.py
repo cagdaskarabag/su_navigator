@@ -155,17 +155,16 @@ class RefusedActionsAreAuditedTest(unittest.TestCase):
     def test_the_rows_stay_in_the_hash_chain(self):
         ctx = refused_ctx(self.store)
         call(ctx, "POST", "deployment/approve", body={"id": UC})
-        call(ctx, "POST", "assessment", body={"framework_id": "cmmc-l2", "control_id": "AC.L2-3.1.1"})
+        call(ctx, "POST", "frameworks/import", body={"framework_id": "x"})
         verdict = AuditService(self.store).verify_chain()
         self.assertTrue(verdict["ok"], verdict)
         self.assertEqual(verdict["chained"], 2)
 
-    def test_assessment_poam_and_admin_routes_count(self):
+    def test_admin_routes_are_refused_and_counted(self):
         ctx = refused_ctx(self.store)
-        for path in ("assessment", "assessment/clear", "poam", "poam/close", "frameworks/import", "import",
-                     "catalog/reindex", "mappings", "sync", "dashboards/create"):
+        for path in ("frameworks/import", "import", "catalog/reindex", "mappings", "sync", "dashboards/create"):
             self.assertEqual(call(ctx, "POST", path, body={"id": path})[0], 403, path)
-        self.assertEqual(len(self.rows()), 10)
+        self.assertEqual(len(self.rows()), 6)
 
     def test_other_requests_are_not_audited(self):
         ctx = refused_ctx(self.store)
@@ -286,8 +285,9 @@ class RefusedActionsAreAuditedTest(unittest.TestCase):
 
     def test_governed_matches_only_post_to_the_listed_routes(self):
         self.assertTrue(governed("POST", "deployment/enable"))
-        self.assertTrue(governed("post", "assessment/snapshot"))
-        self.assertTrue(governed("POST", "poam/update"))
+        self.assertTrue(governed("post", "frameworks/import"))
+        self.assertTrue(governed("POST", "dashboards/create"))
+        self.assertFalse(governed("POST", "assessment/snapshot"))
         self.assertFalse(governed("GET", "deployment/enable"))
         self.assertFalse(governed("POST", "selections"))
         self.assertFalse(governed("POST", "validate"))

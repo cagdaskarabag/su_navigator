@@ -12,7 +12,7 @@ Contents
 2. [Ten-minute quick start](#quick-start)
 3. [Ideas you need first (glossary)](#glossary)
 4. One chapter per page: [Home](#page-home), [Overview](#page-overview), [Content Catalogue](#page-catalogue), [use case page](#page-use-case), [Data Inventory](#page-data-inventory), [Readiness](#page-readiness), [Backlog](#page-backlog), [Deployments](#page-deployments), [Control tests](#page-control-tests), [Coverage](#page-coverage), [Dashboards](#page-dashboards), [Content Administration](#page-content-administration)
-5. Task chapters: [find use cases that fit my data](#task-find-use-cases-for-my-data), [understand why a use case is not ready](#task-understand-why-a-use-case-is-not-ready), [deploy as a team of one](#task-deploy-as-a-team-of-one), [deploy as a team of two](#task-deploy-as-two-people), [handle a blocked enable](#task-handle-a-blocked-enable), [tune a noisy search](#task-tune-a-noisy-search), [prove a search works with a control test](#task-control-test), [see my MITRE coverage](#task-see-mitre-coverage), [record an assessment and a POA&M item](#task-record-an-assessment-and-poam-item), [take an evidence snapshot](#task-take-an-evidence-snapshot), [give a colleague read-only access](#task-give-read-only-access), [verify the audit trail](#task-verify-the-audit-trail), [move a catalogue into an air-gapped Splunk](#task-air-gapped)
+5. Task chapters: [find use cases that fit my data](#task-find-use-cases-for-my-data), [understand why a use case is not ready](#task-understand-why-a-use-case-is-not-ready), [deploy as a team of one](#task-deploy-as-a-team-of-one), [deploy as a team of two](#task-deploy-as-two-people), [handle a blocked enable](#task-handle-a-blocked-enable), [tune a noisy search](#task-tune-a-noisy-search), [prove a search works with a control test](#task-control-test), [see my MITRE coverage](#task-see-mitre-coverage), [give a colleague read-only access](#task-give-read-only-access), [verify the audit trail](#task-verify-the-audit-trail), [move a catalogue into an air-gapped Splunk](#task-air-gapped)
 6. [Roles and permissions](#roles-and-permissions)
 7. [Settings an administrator may change](#settings)
 8. [Troubleshooting](#troubleshooting)
@@ -40,7 +40,6 @@ Who does what. The app uses seven Splunk roles. Each role grants one or two app 
 | `ucm_analyst` | Viewer, plus run discovery, validate SPL, assess readiness, start a draft |
 | `ucm_content_manager` | Analyst, plus synchronize, import and reindex content, and verify the audit chain |
 | `ucm_deployment_operator` | Analyst, plus submit, approve, deploy, enable, roll back and retire deployments |
-| `ucm_compliance_assessor` | Viewer, plus record assessments, plan items (POA&M) and evidence snapshots |
 | `ucm_scheduler` | The account that owns and runs the deployed saved searches. Nobody signs in as this role |
 | `ucm_admin` | All of the above |
 
@@ -95,9 +94,6 @@ Verified on: SUNavigator 0.11.0, Splunk Enterprise 10.4.3, 2026-11-25
 | Outcome | Your judgement after deployment: `Needs tuning` or `Waiting on data` | Use case page, Deployments |
 | Coverage: mapped, covered, gap | Mapped: a use case is linked to a technique or control. Covered: that use case is also data ready, deployed or enabled. Gap: nothing mapped or nothing deployed | Coverage |
 | Control catalogue | A list of controls (NIST CSF, SP 800-53, SP 800-171, CMMC Level 2) | Coverage |
-| Assessment | Your recorded status for one control (Implemented, Partially implemented, Planned, Not implemented, Not applicable) | Coverage |
-| POA&M | Plan of action and milestones: a plan item for a weak control | Coverage |
-| Snapshot | A saved, hashed copy of an assessment you can download and check later | Coverage |
 
 Verified on: SUNavigator 0.11.0, Splunk Enterprise 10.4.3, 2026-11-25
 
@@ -396,11 +392,9 @@ Verified on: SUNavigator 0.11.0, Splunk Enterprise 10.4.3, 2026-11-25
 
 ![A control family opened](images/user-guide/73-control-family-open.png)
 
-For assessments, plan items and snapshots see the tasks [record an assessment](#task-record-an-assessment-and-poam-item) and [take an evidence snapshot](#task-take-an-evidence-snapshot).
+**What the app does not do.** It does not certify anything and it does not score a control against a standard. See [limits](#limits).
 
-**What the app does not do.** It does not certify anything. The CMMC score and the plan-item note are information only. The page says: "Information only: this is not a CMMC status determination." See [limits](#limits).
-
-**Common mistakes.** Reading "covered" as "assessed". Coverage comes from deployed content. An assessment is a statement you record.
+**Common mistakes.** Reading "covered" as "assessed". Coverage comes from deployed content. Only a person can say a control is met.
 
 Verified on: SUNavigator 0.11.0, Splunk Enterprise 10.4.3, 2026-11-25
 
@@ -636,54 +630,12 @@ Verified on: SUNavigator 0.11.0, Splunk Enterprise 10.4.3, 2026-11-25
 
 Verified on: SUNavigator 0.11.0, Splunk Enterprise 10.4.3, 2026-11-25
 
-## Task: record an assessment and a POA&M item
-<a id="task-record-an-assessment-and-poam-item"></a>
+## Assessments, plan items and snapshots (retired)
 
-You need the `ucm_assess` capability (role `ucm_compliance_assessor`). Since 0.13.0 this module is off by default: an
-administrator turns it on with `[features] compliance = true` in `local/ucm.conf` (operator guide, "What changed", 0.13.0).
-Until then the Coverage page shows no assessment, plan or snapshot section. The screenshots below were taken on 0.11.0.
-
-1. **Coverage > Control catalogues > CMMC 2.0 Level 2.** Open a family and open a control.
-2. Choose a status (Implemented, Partially implemented, Planned, Not implemented, Not applicable), add a note and click **Save assessment**.
-
-   ![The assessment form](images/user-guide/74-assessment-form.png)
-
-   ![The assessment form filled in](images/user-guide/75-assessment-form-filled.png)
-
-3. The score (CMMC scoring) updates. I recorded IA.L2-3.5.3 Implemented, IA.L2-3.5.2 Partially implemented and IA.L2-3.5.4 Not implemented, and the score moved from -203 to -198 of 110.
-
-   ![CMMC score after three assessments](images/user-guide/76-cmmc-score-after-assessing.png)
-
-4. Under **Plan of action and milestones**, click **Add a plan item**. Enter control id, title, what is weak, owner, due date and milestones (one per line; a date at the start gives that milestone a due date). Click **Add plan item**. A plan item records how and when a weakness will be fixed. It does not change the control's status.
-
-   ![The plan item form filled in](images/user-guide/77-poam-form-filled.png)
-
-5. The list shows state `Open` with actions **Start**, **Close**, **Accept risk**. The section header shows the eligibility note: "32 CFR 170.21(a)(2) and (b). Closeout must be within 180 days of the status date. Information only: this is not a CMMC status determination." and the score threshold (needs at least 0.80 for a plan of action for Conditional Level 2 status; the score was -1.80).
-
-   ![A plan item with the eligibility note](images/user-guide/78-poam-item-eligibility.png)
-
-   This screenshot shows an item that is eligible, so no flag is visible. An item that is not eligible (for example one with more than 1 point, or one of the six requirements excluded by 170.21) is flagged in the same section. The programme banner shows the score against the threshold; when the score reaches the threshold but the system security plan is still missing, the banner is a warning and says the result is not a pass (0.11.1, issue #45).
-
-SP 800-171 Rev. 3 per-objective results: *Not verified on this Splunk.* I recorded assessments for CMMC controls only.
-
-Verified on: SUNavigator 0.11.0, Splunk Enterprise 10.4.3, 2026-11-25
-
-## Task: take an evidence snapshot
-<a id="task-take-an-evidence-snapshot"></a>
-
-1. On **Coverage**, click **Take a snapshot** and give an optional label.
-
-   ![Take a snapshot dialog](images/user-guide/79-snapshot-dialog.png)
-
-2. The snapshot appears under *Evidence snapshots*.
-
-   ![The list of snapshots](images/user-guide/80-snapshot-list.png)
-
-3. Click **Download** to get a JSON file. The page recomputes the SHA-256 and says "Integrity check passed" with the hash. Record the hash somewhere outside Splunk.
-
-   ![Download shows Integrity check passed](images/user-guide/81-snapshot-integrity-check.png)
-
-Verified on: SUNavigator 0.11.0, Splunk Enterprise 10.4.3, 2026-11-25
+Version 0.14.0 retires the assessment, CMMC score, plan of action (POA&M) and evidence-snapshot pages (D-086). The
+control catalogues, the mapping of use cases to controls and the ATT&CK matrix stay on **Coverage**. Records made
+earlier are kept. An administrator exports them as JSON with `tools/compliance_export.py` (operator guide, "What
+changed", 0.14.0); the screenshots of the retired pages were taken on 0.11.0 and are not shown here.
 
 ## Task: give a colleague read-only access
 <a id="task-give-read-only-access"></a>
@@ -725,15 +677,14 @@ Verified on: SUNavigator 0.11.0, Splunk Enterprise 10.4.3, 2026-11-25
 
 I signed in as one user per role, read each page, and called seven API routes from each session. The routes test a capability without changing data: they return 403 when the capability is missing and 400 (missing id or body) when it is present. This table is what the app did on this Splunk.
 
-| Ability | viewer | analyst | content manager | operator | assessor | scheduler | admin |
+| Ability | viewer | analyst | content manager | operator | scheduler | admin |
 |---|---|---|---|---|---|---|---|
-| See every page and the catalogue | yes | yes | yes | yes | yes | yes | yes |
-| Bookmark, select, defer | yes | yes | yes | yes | yes | yes | yes |
-| Run discovery, validate SPL, preview, start a draft | no | yes | yes | yes | no | no | yes |
-| Fetch the provider manifest, sync, import, reindex | no | no | yes | no | no | no | yes |
-| Save an assessment, plan item, snapshot | no | no | no | no | yes | no | yes |
-| Enable, approve, deploy (`ucm_deploy`) | no | no | no | yes | no | no | yes |
-| Verify the audit chain | no | no | yes | no | no | no | yes |
+| See every page and the catalogue | yes | yes | yes | yes | yes | yes |
+| Bookmark, select, defer | yes | yes | yes | yes | yes | yes |
+| Run discovery, validate SPL, preview, start a draft | no | yes | yes | yes | no | yes |
+| Fetch the provider manifest, sync, import, reindex | no | no | yes | no | no | yes |
+| Enable, approve, deploy (`ucm_deploy`) | no | no | no | yes | no | yes |
+| Verify the audit chain | no | no | yes | no | no | yes |
 
 Notes from the run:
 
@@ -804,7 +755,7 @@ Known small defects found while writing this guide are filed as issues: a refuse
 
 - No Enterprise Security output mode. The Platform card says behaviour with ES installed is unvalidated (no ES lab).
 - Not validated on Splunk Cloud or on a search head cluster. This guide covers a single Splunk Enterprise instance.
-- Not a CMMC status tool and not a certification tool. Scores and notes are information only.
+- Not a CMMC status tool and not a certification tool. The assessment, CMMC score, POA&M and snapshot features were retired in 0.14.0.
 - Searches are advice, not proof. Readiness says what could be checked. A deployed search can run and return nothing.
 - Inventory is not per user: discovery runs under the app's system session.
 - Email and webhook alert actions, SP 800-171 Rev. 3 objective results, a Blocked use case, side-effect refusals, a real bundle import and a KV Store outage were not verified.
@@ -821,7 +772,7 @@ This reproduces the screenshots. Use a test Splunk, not a production one.
 
 1. Install the app and load content (categories 1 and 9).
 2. Create indexes `os`, `sun_demo` and `ucm_controltest`.
-3. Create users `sunguide_viewer`, `sunguide_analyst`, `sunguide_content`, `sunguide_operator`, `sunguide_operator2`, `sunguide_assessor`, `sunguide_scheduler`, `sunguide_admin` with the roles in the [roles table](#what-sunavigator-is). Give each a random password and keep the passwords out of git.
+3. Create users `sunguide_viewer`, `sunguide_analyst`, `sunguide_content`, `sunguide_operator`, `sunguide_operator2`, `sunguide_scheduler`, `sunguide_admin` with the roles in the [roles table](#what-sunavigator-is). Give each a random password and keep the passwords out of git.
 4. Set `[deployment] scheduled_owner = sunguide_scheduler` in `local/ucm.conf`, then reload.
 5. Generate data with [`docs/user-guide-assets/sun_demo_generator.py`](user-guide-assets/sun_demo_generator.py): `base` writes linux_secure, cpu, vmstat, a stale df source, Windows security events (source `demo:winsec`), auditd and syslog; `burst` sends 30 failed SSH logins from the documentation address 203.0.113.50.
 6. Run discovery and re-assess all.

@@ -18,7 +18,6 @@ CAP_MANAGE_CONTENT = "ucm_manage_content"
 CAP_ADMIN = "ucm_admin"
 CAP_RUN_DISCOVERY = "ucm_run_discovery"
 CAP_DEPLOY = "ucm_deploy"
-CAP_ASSESS = "ucm_assess"
 
 
 @dataclasses.dataclass

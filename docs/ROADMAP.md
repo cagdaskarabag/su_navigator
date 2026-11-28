@@ -2,7 +2,7 @@
 
 Status: 0.12.1 beta. The code freeze was lifted by the maintainer on 27 Nov 2026; the maintainer decides what goes into each release. Every item links to its issue. Nothing here is a promise of a date.
 
-What the beta is for: finding out which parts people use (readiness and governed deployment, or the compliance pages),
+What the beta is for: finding out which parts people use (readiness and governed deployment; the compliance pages were retired in 0.14.0),
 and what breaks on their Splunk. Feedback goes through the [feedback form](https://github.com/cagdaskarabag/su_navigator/issues/new?template=feedback.yml).
 
 ## Direction (proposal of 28 Nov 2026)

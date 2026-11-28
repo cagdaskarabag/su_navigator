@@ -27,7 +27,7 @@ from ..deployment.controltest import DEFAULT_TEST_INDEX, splunk_runner
 from ..deployment.savedsearch import SavedSearchClient
 from ..deployment.service import DeploymentService
 from ..deployment.worker import settings_from_config as deployment_settings
-from ..errors import FeatureDisabled, PermissionDenied
+from ..errors import PermissionDenied
 from ..platform.search import SearchClient
 from ..readiness.principal import SchedulerAccess, read_principal
 from ..readiness.service import ReadinessService
@@ -41,7 +41,7 @@ from ..storage.kvstore import DocumentStore, KVStore
 from ..storage.transport import SplunkdTransport
 # Re-exported: callers import the capability names, Request and Response from here.
 from .base import (
-    CAP_ADMIN, CAP_ASSESS, CAP_DEPLOY, CAP_MANAGE_CONTENT, CAP_RUN_DISCOVERY, Request, Response, Router)  # noqa: F401
+    CAP_ADMIN, CAP_DEPLOY, CAP_MANAGE_CONTENT, CAP_RUN_DISCOVERY, Request, Response, Router)  # noqa: F401
 from .routes_content import (
     get_catalog, get_catalog_facets, get_usecase, get_external, post_external, get_categories, get_sync,
     post_sync, get_manifest, post_import, post_reindex, get_reindex, get_platform, get_audit,
@@ -56,9 +56,7 @@ from .routes_deployment import (
     get_deployments, post_controltest_import, get_deployments_export, get_deployment_diff,
     get_deployment, _deployment_action, DEPLOYMENT_ACTIONS)
 from .routes_frameworks import (
-    get_frameworks, get_framework_catalogue, _compliance_module, get_assessment, get_assessment_control,
-    post_assessment, post_assessment_clear, get_poam, post_poam, _poam_action, post_assessment_snapshot,
-    get_assessment_snapshots, get_assessment_snapshot, get_framework_matrix, get_framework_navigator,
+    get_frameworks, get_framework_catalogue, get_framework_matrix, get_framework_navigator,
     get_framework_technique, get_framework_controls, get_framework_clause, get_framework_evidence,
     post_framework_import, post_framework_activate, get_operations)
 from .routes_dashboards import (
@@ -94,11 +92,6 @@ class Context:
         if self._caps is None:
             self._caps = PlatformProbe(self.user_transport).user_capabilities()
         return self._caps
-
-    def require_feature(self, name: str) -> None:
-        if not self.config.get_bool("features", name, False):
-            raise FeatureDisabled("this module is turned off ([features] %s in ucm.conf)" % name,
-                                  {"feature": name})
 
     def require(self, capability: str) -> None:
         if capability not in self.capabilities():
@@ -222,18 +215,6 @@ def build_router() -> Router:
     router.add("GET", "frameworks/navigator", get_framework_navigator)
     router.add("GET", "frameworks/controls", get_framework_controls)
     router.add("GET", "frameworks/catalogue", get_framework_catalogue)
-    router.add("GET", "assessment", _compliance_module(get_assessment))
-    router.add("GET", "assessment/control", _compliance_module(get_assessment_control))
-    router.add("POST", "assessment", _compliance_module(post_assessment))
-    router.add("POST", "assessment/clear", _compliance_module(post_assessment_clear))
-    router.add("POST", "assessment/snapshot", _compliance_module(post_assessment_snapshot))
-    router.add("GET", "assessment/snapshots", _compliance_module(get_assessment_snapshots))
-    router.add("GET", "assessment/snapshot", _compliance_module(get_assessment_snapshot))
-    router.add("GET", "poam", _compliance_module(get_poam))
-    router.add("POST", "poam", _compliance_module(post_poam))
-    router.add("POST", "poam/update", _compliance_module(_poam_action("update")))
-    router.add("POST", "poam/close", _compliance_module(_poam_action("close")))
-    router.add("POST", "poam/reopen", _compliance_module(_poam_action("reopen")))
     router.add("GET", "frameworks/clause", get_framework_clause)
     router.add("GET", "frameworks/evidence", get_framework_evidence)
     router.add("POST", "frameworks/import", post_framework_import)

@@ -32,15 +32,11 @@ Legend: **Working** = built and checked on the lab. **Built, limited** = works, 
 | Control tests | A fixture is replayed through a deployed search on a test index; verdicts pass, fail, content error, not runnable | §6.6a, D-054, D-064 |
 | Coverage | MITRE ATT&CK matrix and regulatory coverage with gap lists | §6.7, D-074 |
 | Control catalogues | NIST SP 800-53 Rev. 5.2.0, SP 800-171 Rev. 3, CSF 2.0; unmapped controls visible | D-076 |
-| Assessments (off by default since 0.13.0) | Status per control with who, when and why; per-objective results for SP 800-171 Rev. 3; history. Turn on with `[features] compliance = true` | D-077, D-085 |
-| CMMC Level 2 score (off by default) | DoD methodology v1.2.1 scoring (110 at best, -203 at worst), best possible score | D-077, D-085 |
-| POA&M (off by default) | Plan items with owner, due date, milestones, closing and risk acceptance; overdue flag | D-077, D-085 |
-| POA&M eligibility note | Information only, from 32 CFR 170.21; never blocks an item or changes a score | D-080 |
-| Evidence snapshots (off by default) | Frozen assessment with SHA-256; download checks the hash | D-077, D-085 |
+| Assessments, CMMC score, POA&M and evidence snapshots | Retired in 0.14.0 (D-086). The records are kept and can be exported with `tools/compliance_export.py` | D-077, D-085, D-086 |
 | Audit trail | Hash-chained audit rows; "Verify audit chain" reports edited or missing rows | D-075 |
 | Refused requests | Refused governance requests are recorded under rate limits; listed on Content administration | D-080 |
 | Dashboards | Domain dashboards and generated dashboards, create, regenerate, delete | §6.8 |
-| Roles | Viewer, analyst, content manager, deployment operator, assessor, scheduler, admin; denied actions return 403 | §4 |
+| Roles | Viewer, analyst, content manager, deployment operator, scheduler, admin; denied actions return 403 | §4 |
 | Packaging | AppInspect `cloud` tag: 0 errors, 0 failures (4 warnings) | D-019 |
 | Tests | 1074 unit tests and Node tests of the browser code; lab live suite 78 tests OK, 2 skipped | `docs/IMPLEMENTATION_PLAN.md` |
 
@@ -89,9 +85,6 @@ Found while writing the user guide. None changes data or exposes anything; all a
 | Search head cluster with a deployer and indexer peers | No lab. Not validated and not planned | D-078, issue #2 (closed) |
 | Enterprise Security 8 output (findings, risk) | Not implemented; ES-installed behaviour is mocked only | D-078, issues #4, #27 (closed) |
 | CMMC conditional status | Not built: no status, no 180-day clock, no closeout record | D-079, D-080 |
-| Assessment objectives for SP 800-53 and CMMC | No verified machine-readable source in the pinned content | D-079 |
-| Signed snapshots | Needs a key custody and rotation decision | D-079 |
-| Deleting snapshots | Left out on purpose so evidence cannot be removed from the app | D-079 |
 | CIM field reference and field-level checks | Needs `Splunk_SA_CIM` on a lab | issue #31 |
 | Add Macro button | Decided: a help section instead | D-072, issue #10 (closed) |
 
@@ -116,7 +109,7 @@ Found while writing the user guide. None changes data or exposes anything; all a
 - Which pages you used, and which you could not work out without help.
 - Whether the deployment and approval flow matches how your team works.
 - Whether the readiness result matches what you know about your data.
-- Whether the coverage pages and control catalogues answer a question you have, and whether you would turn the assessment and POA&M module on (`[features] compliance`, off by default since 0.13.0).
+- Whether the coverage pages and control catalogues answer a question you have.
 - Anything in the "Not working" or "Nice to have" lists that blocks you.
 
 Use the **SUNavigator feedback** issue form. Include the SUNavigator version, your Splunk version and the role you

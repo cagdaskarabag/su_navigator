@@ -35,6 +35,12 @@ has the instructions. The same table is in `docs/IMPLEMENTATION_PLAN.md` (WP9).
 | 0.9.9 | NIST SP 800-53 Rev. 5.2.0, SP 800-171 Rev. 3 and CSF 2.0 catalogues; unmapped controls visible | D-076 |
 | 0.10.0 | Assessed state, assessment objectives, CMMC Level 2 score, POA&M, evidence snapshots | D-077 |
 | 0.11.0 | Stabilisation: fail-closed browser guard, access gap and override second look, audited refusals, POA&M eligibility note, upgrade notice | D-080 |
+| 0.11.1 | Redirect checks, drift coverage, control-test scoping and small fixes (#43 to #50) | D-081 |
+| 0.12.0 | Hardening release: the eleven low-severity items of issue #51 | D-082 |
+| 0.12.1 | Subsearches that write are not parsed; control-test sourcetype note; lint rule L006 | D-083 |
+| 0.12.2 | KV ACLs for six collections, background Reindex, scheduler reach note, ESCU bundle notices, usage census, SSE guard | D-084 |
+| 0.13.0 | Compliance module off by default (`[features] compliance`); API handlers split by domain | D-085 |
+| 0.14.0 | Compliance module retired: routes, UI, role and capability removed; records kept; export tool | D-086 |
 
 ## 2a. Sprint 21 in short (0.11.0, D-080)
 
@@ -51,9 +57,9 @@ refusals were treated as one); it is fixed and tested. A human review of the sec
 | Item | Why | Where it stands |
 |---|---|---|
 | CMMC conditional status and POA&M eligibility (32 CFR 170) | It is a legal-weight certification claim. The app records coverage and assessments, not certification, and a status would carry legal weight. The eCFR text of 170.21 was read for 0.11.0 and an informational eligibility note on POA&M items was built from it (D-080); the conditional status, the 180-day clock and the closeout record were not. | Status left as is; not planned (D-079). Eligibility note: built, D-080 |
-| Assessment objectives for SP 800-53 and CMMC | The pinned NIST OSCAL content carries objectives only for SP 800-171 Rev. 3. The 800-53A and 800-171A Rev. 2 objectives exist as PDF and spreadsheet; transcribing them by hand risks errors in compliance data. | Left as is; not planned (D-079) |
-| Signing snapshots | Needs a decision on key custody and rotation; Splunk has no key store for it. The SHA-256 of each snapshot, recorded outside Splunk, covers part of the need. | Left as is; not planned (D-079) |
-| Deleting snapshots | Left out on purpose, so evidence cannot be removed from the app. Retention would need an export-then-delete design. | Left as is; not planned (D-079) |
+| Assessment objectives for SP 800-53 and CMMC | The pinned NIST OSCAL content carries objectives only for SP 800-171 Rev. 3. The 800-53A and 800-171A Rev. 2 objectives exist as PDF and spreadsheet; transcribing them by hand risks errors in compliance data. | Not built; the assessment module was retired in 0.14.0 (D-086) |
+| Signing snapshots | Needs a decision on key custody and rotation; Splunk has no key store for it. The SHA-256 of each snapshot, recorded outside Splunk, covers part of the need. | Moot: the snapshot feature was retired in 0.14.0 (D-086) |
+| Deleting snapshots | Left out on purpose, so evidence cannot be removed from the app. Retention would need an export-then-delete design. | Moot: the snapshot feature was retired in 0.14.0 (D-086); the records are kept |
 | CIM field reference, field presence, acceleration freshness | Needs a lab with `Splunk_SA_CIM` and a populated, accelerated model; the lab has neither. | Issue #31, unscheduled backlog |
 | Re-run of the 94 control-test fixtures with add-ons | The fixtures name add-ons the lab does not have (see section 5). | Skipped (D-079); issue #23 is still to be closed as not planned |
 | Splunk Cloud, SHC with a deployer, ES 8 | No lab, and none will be provided (D-078). | Dropped; issues #2, #3, #4, #18, #27 (closed) |

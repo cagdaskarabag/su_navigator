@@ -1,10 +1,10 @@
-# SUNavigator 0.13.0 — operator guide
+# SUNavigator 0.14.0 — operator guide
 
 **SUNavigator** is a use-case navigator for Splunk Enterprise. It discovers, assesses,
 selects, validates and deploys monitoring use cases.
 
 This is the install, usage and troubleshooting guide for **SUNavigator
-0.13.0**. It is written for a single Splunk Enterprise instance
+0.14.0**. It is written for a single Splunk Enterprise instance
 (search head + indexer on one host), including a local macOS install. Search
 head clusters with a deployer, Splunk Cloud and Splunk Enterprise Security are **not** validated and not planned
 (no lab; D-078).
@@ -24,11 +24,45 @@ Related documents (design, not how-to):
 
 ---
 
-## What changed in 0.9.x to 0.13
+## What changed in 0.9.x to 0.14
+
+The assessment, CMMC score, POA&M and evidence-snapshot module, added in 0.10.0, was **retired in 0.14.0** (D-086). The
+sections under "0.10.0", "0.11.0" and "0.13.0" describe how it worked when each release shipped; 0.14.0 removes it.
+
+### 0.14.0
+
+0.14.0 retires the assessment, POA&M and evidence-snapshot module (D-086). It adds no migration and removes one setting.
+The maintainer decided on 28 Nov 2026 to retire the module rather than extract it, after the module had been hidden
+behind `[features] compliance` in 0.13.0.
+
+- **What is removed.** The CMMC Level 2 score, assessments of controls (including per-objective results), plan of action
+  and milestones (POA&M) with its eligibility note, and evidence snapshots. Their routes (`assessment`, `assessment/*`,
+  `poam`, `poam/*`) no longer exist: a request for one answers 404 `not_found`. The Coverage page no longer shows an
+  assessment, plan or snapshot section. The capability `ucm_assess` and the role `ucm_compliance_assessor` are removed
+  from `authorize.conf`, and the `[features] compliance` switch with them. A user who still holds the role keeps nothing
+  it could use.
+- **What stays.** The control catalogues (NIST SP 800-53 Rev. 5.2.0, SP 800-171 Rev. 3, CSF 2.0 and CMMC Level 2, as
+  reference catalogues), the mapping of use cases to controls, the ATT&CK matrix, the regulation evidence packs (CSV and
+  JSON) and the Dashboards. The CMMC data file still holds its point values; the app no longer uses them.
+- **Your records are kept.** The collections `uc_assessments`, `uc_poam` and `uc_assessment_snapshots` still hold their
+  records and stay defined. Nothing writes to them any more. Only `admin`, `sc_admin` and `ucm_admin` can read them
+  through the KV Store REST API.
+- **Export the records.** `tools/compliance_export.py --url https://<splunk>:8089 --user admin --insecure --out export.json`
+  (password in `UCM_SPLUNK_PASSWORD`) writes every assessment, plan item and snapshot as JSON. Each snapshot's stored text
+  is kept byte for byte and its SHA-256 is checked; the tool exits with 1 if one fails. The export does not need the removed
+  code, so it works on 0.14.0 and later.
+- **Upgrade.** Nothing to migrate. Users who used the module lose the pages; the records stay in place. A user whose only
+  role was `ucm_compliance_assessor` signs in but has no UCM access: the app answers 502 `storage_error`, and Splunk logs an
+  ERROR for the missing role at each sign-in. Give such a user `ucm_viewer` (or another UCM role) to restore access.
+- **Wording.** The README and the front page no longer mention assessments or POA&M; the disclaimer covers readiness and
+  coverage.
+- **Tests.** `tests/unit/test_retirement.py` fails if a route, role, capability, UI call or expose stanza of the module comes
+  back. `tests/unit/test_compliance_export.py` covers the export.
 
 ### 0.13.0
 
-0.13.0 turns the compliance module off by default (D-085). It adds no migration and one setting.
+0.13.0 turns the compliance module off by default (D-085). It adds no migration and one setting. **Retired in 0.14.0 (D-086):**
+the switch is gone and the module with it.
 
 - **What is off.** Assessments, the CMMC Level 2 score, POA&M items and evidence snapshots, which were added in 0.10.0.
   Their routes (`assessment`, `assessment/*`, `poam`, `poam/*`) answer 404 with code `feature_disabled`, even for an
@@ -197,7 +231,7 @@ an external product review and starts the scope work in `docs/STRATEGY_ROADMAP.m
 upgrade.
 
 - **Who.** Give the user the role `ucm_compliance_assessor` (or `ucm_admin`). Without the capability `ucm_assess` the
-  Coverage page shows no assessment at all. Since 0.13.0 the module must also be turned on: `[features] compliance = true`.
+  Coverage page shows no assessment at all. Retired in 0.14.0.
 - **Assess (Coverage, Control catalogues).** Each control has **Assess** or **Edit**. Choose a status and say why (the
   reason is required). The row shows the status, who and when are kept, and **History** lists earlier answers.
 - **Per objective.** For SP 800-171 Rev. 3 the dialog lists the assessment objectives. Mark each met, not met or not
@@ -831,7 +865,7 @@ Placeholders used below:
 
 ```bash
 ./tools/package.sh
-# writes dist/sunavigator-0.13.0.tar.gz
+# writes dist/sunavigator-0.14.0.tar.gz
 ```
 
 The tarball has a single top-level folder `sunavigator/`
@@ -849,11 +883,11 @@ then fails in the UI with `500 Internal Server Error` even though splunkd is
 still unpacking. Use the CLI:
 
 ```bash
-$SPLUNK_HOME/bin/splunk install app /path/to/sunavigator-0.13.0.tar.gz \
+$SPLUNK_HOME/bin/splunk install app /path/to/sunavigator-0.14.0.tar.gz \
   -auth "$SPLUNK_USER:$SPLUNK_PASSWORD"
 # first install: omit -update
 # upgrade of an existing copy:
-$SPLUNK_HOME/bin/splunk install app /path/to/sunavigator-0.13.0.tar.gz \
+$SPLUNK_HOME/bin/splunk install app /path/to/sunavigator-0.14.0.tar.gz \
   -update 1 -auth "$SPLUNK_USER:$SPLUNK_PASSWORD"
 
 $SPLUNK_HOME/bin/splunk restart
@@ -1932,9 +1966,6 @@ $SPLUNK_HOME/bin/splunk restart
 # or, for the ucm stanza only, the app declares reload.ucm = simple
 ```
 
-Optional modules (since 0.13.0) are switched in `[features]`; the only one is `compliance` (default `false`): assessments,
-CMMC score, POA&M and evidence snapshots (added in 0.10.0). See "What changed", 0.13.0.
-
 Common stanzas:
 
 | Stanza / key | Default | When to change |
@@ -1999,7 +2030,7 @@ app. Do the steps in this order:
    $SPLUNK_HOME/bin/splunk restart
    ```
 
-4. **Install SUNavigator 0.13.0** as in §3.2. The first install omits
+4. **Install SUNavigator 0.14.0** as in §3.2. The first install omits
    `-update`, because `sunavigator` is a new app ID.
 5. **Re-create the GitHub token** if you use one (§3.6). It must be stored in
    realm `sunavigator`. The 0.7.0 token in realm `splunk_use_case_manager` is
@@ -2380,7 +2411,7 @@ Full table: [ARCHITECTURE.md §6](ARCHITECTURE.md).
 
 ---
 
-## 12. Known limitations (0.13.0)
+## 12. Known limitations (0.14.0)
 
 Each item says where to read more and ends with its tracking: an issue number on GitHub, a draft
 (`N-nn`) in `docs/ISSUES_PENDING.md` that has not been filed yet, or "no issue" for a limit that is
@@ -2476,8 +2507,8 @@ by design.
 
 - Refused governance requests are audited under limits (§7, D-080). A refused attempt is evidence of an
   attempt only; once a limit is reached, further refusals in that hour are not recorded individually.
-- The POA&M eligibility note for CMMC Level 2 (32 CFR 170.21) is information. The app has no conditional
-  status, no 180-day clock and no closeout record (D-079, D-080). No issue: by design.
+- The CMMC score, POA&M and evidence snapshots were retired in 0.14.0 (D-086). The app has no conditional status, no
+  180-day clock and no closeout record (D-079, D-080). No issue: by design.
 - Default four-eyes blocks a single `admin` from approving their own draft (§4). No issue: by design.
 - `admin` and `sc_admin` can edit deployed searches in Settings; the
   app reports drift and does not repair it (§4, D-051). The scheduler account must
@@ -2522,7 +2553,7 @@ by design.
 
 ## 13. Quick start checklist
 
-1. `splunk install app sunavigator-0.13.0.tar.gz` then `splunk restart`.
+1. `splunk install app sunavigator-0.14.0.tar.gz` then `splunk restart`.
 2. `splunk show kvstore-status` → `ready` (macOS: §9.2 if stuck on `starting`).
 3. Open **SUNavigator → Administration**; all platform pills green.
 4. **Check provider for categories** → tick **9** → **Synchronize**, **or**

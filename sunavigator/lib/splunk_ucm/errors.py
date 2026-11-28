@@ -30,13 +30,6 @@ class NotFoundError(UcmError):
     http_status = 404
 
 
-class FeatureDisabled(UcmError):
-    """The route belongs to an optional module that the administrator has not turned on."""
-
-    code = "feature_disabled"
-    http_status = 404
-
-
 class PermissionDenied(UcmError):
     code = "permission_denied"
     http_status = 403

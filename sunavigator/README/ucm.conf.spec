@@ -224,8 +224,8 @@ require_suppression = <boolean>
 
 [audit]
 refusals = <boolean>
-* Write an audit row (refused.<route>, outcome refused) when a governance request is refused: deployment, assessment,
-* POA&M, catalogue import and administration routes; client errors 400, 403 and 409 only. Default true. D-080.
+* Write an audit row (refused.<route>, outcome refused) when a governance request is refused: deployment,
+* catalogue import and administration routes; client errors 400, 403 and 409 only. Default true. D-080.
 refusal_window_seconds = <integer 0-3600>
 * The same refusal (same user, route, object and error code) is written once per this many seconds. Default 300.
 refusal_actor_per_hour = <integer 1-1000>
@@ -234,13 +234,6 @@ refusal_total_per_hour = <integer 1-100000>
 * Most refusal rows written per hour by all users together. Default 200.
 verify_window_seconds = <integer 0-3600>
 * Verify (a deployment, or the audit chain) writes at most one audit row per object per this many seconds, unless the result changed or the audit chain has a problem. 0 writes a row on every call. Default 300.
-
-[features]
-compliance = <boolean>
-* Turns on the assessment, plan of action (POA&M) and evidence snapshot module (D-085). Off by default: the
-  routes answer 404 with code feature_disabled, the Coverage page shows no assessment, and the role
-  ucm_compliance_assessor does nothing. The control catalogues, the ATT&CK matrix and the mapping of use cases to
-  controls are not part of this module and stay on. Turning it off keeps the stored records. Default false.
 
 [retention]
 audit_days = <integer 0-3650>

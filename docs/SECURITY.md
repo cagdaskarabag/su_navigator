@@ -26,7 +26,6 @@ Status: 0.9.1 (catalogue, discovery, readiness, selection, SPL validation, deplo
 | `ucm_manage_content` | Remote sync, provider manifest check, offline import, catalogue reindex, audit read, framework import and activation. |
 | `ucm_run_discovery` | Queue discovery jobs; create and delete **local** source mappings; run readiness assessments (full or single). |
 | `ucm_deploy` | Approve, reject, deploy, enable, disable, roll back, retire and control-test deployments; create and delete generated dashboards. Drafting, submitting and **Verify** (a read-only comparison of the live saved search with the approved revision, which records the result and an audit row, at most one per deployment in each `[audit] verify_window_seconds` unless the result changed) also accept `ucm_run_discovery`. |
-| `ucm_assess` | Read and write assessments, plan items (POA&M) and evidence snapshots; reading them needs it too (D-077). |
 | `ucm_admin` | Audit read; app administration in later WPs. |
 
 | Role | Imports | Capabilities |
@@ -35,7 +34,6 @@ Status: 0.9.1 (catalogue, discovery, readiness, selection, SPL validation, deplo
 | `ucm_analyst` | `ucm_viewer` | `ucm_run_discovery` |
 | `ucm_content_manager` | `ucm_analyst` | `ucm_manage_content` |
 | `ucm_deployment_operator` | `ucm_analyst` | `ucm_deploy` |
-| `ucm_compliance_assessor` | `ucm_viewer` | `ucm_assess` (inert while `[features] compliance` is off, D-085) |
 | `ucm_scheduler` | none | `search`, `schedule_search`, `get_metadata`, `input_file`, `list_metrics_catalog`, `run_custom_command`; `run_collect` and `run_mcollect` disabled; no `output_file`, `run_dump`, `run_sendalert`; indexes `*`, default `main` (D-068). Owner of deployed searches only; assign it to one account and set `scheduled_owner` (D-051). |
 | `ucm_admin` | content manager + deployment operator | all |
 
@@ -346,7 +344,7 @@ writes; keep it separate from production indexes and set its retention. A search
 - Collections only the app writes and only administrators need to read directly (`uc_field_profile`,
   `uc_event_check`, `uc_external_matches`; since 0.12.2, D-084): readable by `admin`, `sc_admin` and `ucm_admin`
   like `uc_audit`; the API serves their content to the roles with the capability. The assessment collections
-  (`uc_assessments`, `uc_poam`, `uc_assessment_snapshots`) also read for `ucm_compliance_assessor`. Before 0.12.2 these
+  (`uc_assessments`, `uc_poam`, `uc_assessment_snapshots`; retired in 0.14.0, D-086) are read by the administrators only. Before 0.12.2 these
   six had no stanza and inherited the app-wide `read : [ * ]`. Measured live: other roles get 404 from the KV REST and
   the API still answers. A test fails when any collection in `collections.conf` has no stanza.
 - `uc_deployments`: readable by all app users, writable only by `admin` /
@@ -489,7 +487,7 @@ For a privacy or procurement review. The app has no telemetry and makes no reque
 | Audit rows (who did what, when, to which object) | `uc_audit`; the same events in `var/log/splunk/sunavigator.log`, which Splunk indexes into `_internal` | Splunk user name | `[retention] audit_days` (365); the log follows the `_internal` retention |
 | Job rows (sync, discovery, readiness, import, reindex) | `uc_sync_state` and the job collections | Name of the user who requested the job | The newest `[retention] job_history` (50) per kind |
 | Selections, validation, control-test and deployment revisions | `uc_selections`, `uc_validation`, `uc_deployments` | Names of the user who selected, requested, approved or enabled | Until deleted; no purge |
-| Assessments, POA&M items, evidence snapshots | `uc_assessments`, `uc_poam`, `uc_assessment_snapshots` | Names of the assessor and the creator of a snapshot; free text typed by the assessor | Until deleted; no purge |
+| Assessments, POA&M items, evidence snapshots (retired in 0.14.0, D-086; nothing writes them) | `uc_assessments`, `uc_poam`, `uc_assessment_snapshots` | Names of the assessor and the creator of a snapshot; free text typed by the assessor | Until deleted; no purge; export with `tools/compliance_export.py` |
 | External-match decisions | `uc_external_matches` | Name of the user who decided | Until deleted; no purge |
 | Dashboards | `uc_dashboards` | Name of the owner | Until deleted |
 | GitHub token (optional) | Splunk `storage/passwords`, realm `sunavigator` | None (a credential) | Until removed |
@@ -503,15 +501,12 @@ Known gaps: there is no per-user erasure function; removing a person's name from
 assessments is a manual KV Store operation, and the audit chain is designed to resist edits. Whether that is
 acceptable is for the operator's privacy officer (docs/LEGAL_COMPLIANCE_ANALYSIS.md, L6).
 
-## Optional module: compliance (D-085)
+## Retired module: compliance (D-085, D-086)
 
-`[features] compliance` (default `false`) controls the assessment, POA&M and evidence-snapshot module. While it is off the
-server answers every one of its twelve routes with 404 `feature_disabled` before it looks at the caller's capability, so
-no role (administrators included) can read or write through them, and the role `ucm_compliance_assessor` holds a
-capability that opens nothing. The check is in the REST handler, not only the page: the route table wraps each route
-(`api/routes_frameworks.py`, `_compliance_module`, wired in `api/app.py`), and `tests/unit/test_compliance_feature.py` fails when a route that begins with
-`assessment` or `poam` is not in the guarded list. The setting is read from `ucm.conf` on every request, so an
-administrator's change applies without a restart of the handler. Stored records are not touched when the module is off;
-the KV ACLs of the three collections stay as in 0.12.2. The module is a switch for scope and claim surface, not a
-security control: someone with `admin_all_objects` can still read the collections directly.
-
+The assessment, CMMC score, POA&M and evidence-snapshot module was switched off by default in 0.13.0 (D-085) and
+retired in 0.14.0 (D-086). The routes, the role `ucm_compliance_assessor`, the capability `ucm_assess`, the `[features]`
+switch and the browser code are gone, so no role can reach the module through the REST API or the UI. The
+collections `uc_assessments`, `uc_poam` and `uc_assessment_snapshots` are kept, with no writer in the app and the
+administrator-only read ACL from 0.12.2. `tools/compliance_export.py` reads them for an administrator and checks each
+snapshot's SHA-256. `tests/unit/test_retirement.py` fails if any part of the module comes back. Retirement is not a
+security control on the records: someone with `admin_all_objects` can still read the collections directly.

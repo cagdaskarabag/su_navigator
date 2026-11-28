@@ -46,7 +46,6 @@ DEFAULTS: Dict[str, Dict[str, str]] = {
     "actions": {"enabled": "true", "email_domains": "", "webhook_hosts": "", "webhook_allow_http": "false",
                 "max_recipients": "10", "require_suppression": "true"},
     "retention": {"audit_days": "365", "job_history": "50", "interval_hours": "24"},
-    "features": {"compliance": "false"},
 }
 
 _TRUE = {"1", "true", "t", "yes", "y", "on"}
