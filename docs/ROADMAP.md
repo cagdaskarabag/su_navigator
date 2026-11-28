@@ -5,6 +5,13 @@ Status: 0.12.1 beta. The code freeze was lifted by the maintainer on 27 Nov 2026
 What the beta is for: finding out which parts people use (readiness and governed deployment, or the compliance pages),
 and what breaks on their Splunk. Feedback goes through the [feedback form](https://github.com/cagdaskarabag/su_navigator/issues/new?template=feedback.yml).
 
+## Direction (proposal of 28 Nov 2026)
+
+After an external product review the proposal is to narrow the app to the detection-readiness and governance wedge, and to
+settle the legal position on ESCU and SSE content before anything is distributed. Not decided yet:
+[STRATEGY_ROADMAP.md](STRATEGY_ROADMAP.md) (phases and decisions S1 to S5) and
+[LEGAL_COMPLIANCE_ANALYSIS.md](LEGAL_COMPLIANCE_ANALYSIS.md) (verified licence facts, open questions, work plan).
+
 ## Before the beta is announced (maintainer)
 
 These are repository settings and documentation. Tracked in [#47](https://github.com/cagdaskarabag/su_navigator/issues/47).
