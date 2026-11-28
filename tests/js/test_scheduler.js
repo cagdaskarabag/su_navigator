@@ -54,6 +54,14 @@ var tests = {
         assert.ok(/Discovery scans internal indexesno/.test(t), t);
         assert.ok(/include_internal = false/.test(t), t);
     },
+    "scheduler card names the wide index reach and drops the note when it is narrowed": function () {
+        var wide = ucm.schedulerCard(view()).textContent;
+        assert.ok(/every index that is not internal/.test(wide) && /Narrow the role/.test(wide), wide);
+        var narrow = ucm.schedulerCard(view({ all_indexes_access: false })).textContent;
+        assert.ok(!/every index that is not internal/.test(narrow), narrow);
+        var unread = ucm.schedulerCard(view({ status: "unreadable", all_indexes_access: null, internal_access: null })).textContent;
+        assert.ok(!/every index that is not internal/.test(unread), unread);
+    },
     "scheduler card with internal access says yes and omits the warning": function () {
         var t = ucm.schedulerCard(view({ internal_access: true, discovery_include_internal: true })).textContent;
         assert.ok(/internal indexes \(_internal, _audit\)yes/.test(t), t);

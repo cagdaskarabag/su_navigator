@@ -2481,3 +2481,42 @@ as drift.
   ESCU, GitHub rate limit) and no longer depends on earlier runs (scheduler-visibility refusal count, evidence-pack timestamps).
 * Evidence: `tests/unit/test_parse_guard.py`, `test_controltest_sourcetype.py`, `test_spl_lint.py`,
   `tests/live/test_live_splunk.py`, `docs/upstream/FENRE_UPSTREAM_REPORT.md`.
+
+## D-084 Patch: close the confirmed review items, name the scheduler reach, background Reindex, never touch SSE
+*0.12.2.*
+
+* **Context.** An external product review (Antigravity, 28 Nov 2026) was checked claim by claim (`docs/STRATEGY_ROADMAP.md`
+  section 2.1). Confirmed: six collections without an ACL stanza, `developmentStatus: Alpha`, `srchIndexesAllowed = *`
+  on the scheduler role, GRC scope larger in claims than in code. Refuted: the `web.conf` claim (a live GET through Splunk
+  Web to a POST-only path gets Splunk Web's 405, so the narrow `expose` stanzas hold). The maintainer decided on the open
+  questions the same day.
+* **S1, compliance suite: hide, then decide.** The assessment, POA&M and snapshot features stay in the code and go behind
+  `[features] compliance` (default off) in 0.13.0, with the server refusing the routes. The usage census
+  (`tools/usage_census.py`) is the evidence for the later extract-or-retire decision. That decision is the maintainer's
+  and is not taken here.
+* **S2, dashboards: frozen.** No new work. No change in 0.12.2.
+* **S3, scheduler reach: keep `*`, name it.** `ucm_scheduler` keeps `srchIndexesAllowed = *` because a first deployment
+  needs index reach and readiness already refuses a use case the account cannot read. The install checklist (operator
+  guide 3.5a) tells the administrator to narrow it, and the scheduler card says "can search every index" while it is
+  `*`.
+* **S4, handover: nothing yet.** No handover documents are written until the maintainer has spoken to his team.
+* **S5, Splunk Security Essentials: never.** SSE is licensed under the Splunk General Terms and has no public source.
+  No code reads, stores, bundles, parses or depends on it, no fixture contains it and no dependency lists it.
+  `tests/unit/test_no_sse.py` fails on a reference in code, configuration or fixtures; documentation may name it only to
+  say it is excluded. This is not revisited without the maintainer.
+* **Fixes.** Stanzas in `default.meta` for `uc_field_profile`, `uc_event_check`, `uc_external_matches` (admin, `sc_admin`,
+  `ucm_admin` read; admin and `sc_admin` write) and `uc_assessments`, `uc_poam`, `uc_assessment_snapshots` (the same plus
+  `ucm_compliance_assessor` read), with a test that fails when a collection has none. `ExternalMatchService` uses the
+  app's own store. Reindex can run as a worker job (`reindex::current`): `POST catalog/reindex?background=1`, `GET
+  catalog/reindex`; one at a time, a running job older than 30 minutes is shown as failed; the inline form stays. The
+  ESCU bundle builder writes a `notices` block (Apache-2.0 text, source package and version, change statement,
+  non-endorsement). `app.manifest` says Beta.
+* **Checks.** `tests/unit/test_notices_inventory.py` fails on a bundled data file without a recorded origin. Live:
+  `LiveCollectionAclTest` (other roles are refused by the KV REST, the API still serves analysts and assessors) and
+  `LiveBackgroundReindexTest`.
+* **Not reproduced.** Issue #41: with discovery running, the API answered within 0.02 s on a single-host 10.2.9 lab. On
+  that lab the background worker had failed with HTTP 401 on and off since 24 Nov (splunkd refused the session key it hands a
+  scripted input; the cause is not established, it looks like an effect of the suspended lab VM); a restart restored it. The
+  worker is not changed: it logs the failure and tries again the next minute.
+* Evidence: `tests/unit/test_collection_acl.py`, `test_reindex_job.py`, `test_notices_inventory.py`, `test_no_sse.py`,
+  `test_usage_census.py`, `tests/js/test_scheduler.js`, `tests/live/test_live_splunk.py`.

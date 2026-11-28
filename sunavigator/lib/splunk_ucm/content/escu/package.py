@@ -172,6 +172,37 @@ def _record(stanza: str, settings: Dict[str, str], domain_slug: str) -> Tuple[Op
     return raw, ""
 
 
+_APACHE_URL = "https://www.apache.org/licenses/LICENSE-2.0"
+_APP_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))))
+
+
+def _license_text() -> str:
+    """The Apache-2.0 text shipped with the app (``LICENSE`` in the app root), or "" when it is not there."""
+    try:
+        with open(os.path.join(_APP_ROOT, "LICENSE"), encoding="utf-8") as handle:
+            return handle.read()
+    except OSError:
+        return ""
+
+
+def bundle_notices(provider_version: str, enriched: bool) -> Dict[str, Any]:
+    """What Apache-2.0 section 4 asks a redistributor of ESCU content to carry (docs/LEGAL_COMPLIANCE_ANALYSIS.md, L2a)."""
+    components = [{"component": "Splunk ES Content Update (DA-ESS-ContentUpdate) %s" % provider_version,
+                   "copyright": "Copyright Splunk Inc.", "license": "Apache-2.0", "license_url": _APACHE_URL}]
+    if enriched:
+        components.append({"component": "splunk/security_content (https://github.com/splunk/security_content)",
+                           "copyright": "Copyright Splunk Inc.", "license": "Apache-2.0", "license_url": _APACHE_URL})
+    return {
+        "components": components,
+        "changes": "SUNavigator read the saved searches and metadata of this package and rewrote them into the "
+                   "ucm-content-bundle format: fields were renamed, normalised and merged, and the detection text "
+                   "was otherwise kept. These records are not the files Splunk published.",
+        "not_endorsed": "SUNavigator is an independent project. It is not made, sponsored or endorsed by Splunk. "
+                        "Splunk is a trademark of Splunk LLC.",
+        "license_text": _license_text(),
+    }
+
+
 def build_bundle(source: str, enricher: Optional[Callable[[Dict[str, Any]], Dict[str, Any]]] = None,
                  extra_ref: str = "") -> Tuple[Dict[str, Any], Dict[str, Any]]:
     """``enricher`` adds optional fields to each record (see ``enrich.py``); ``extra_ref`` is appended to ``source_ref``."""
@@ -218,6 +249,7 @@ def build_bundle(source: str, enricher: Optional[Callable[[Dict[str, Any]], Dict
         "source_ref": package["source_ref"] + (("+" + extra_ref) if extra_ref else ""),
         "schema": ESCU_SCHEMA, "categories": categories, "records": ordered,
     }
+    bundle["notices"] = bundle_notices(bundle["provider_version"], bool(extra_ref))
     report = {"provider_version": bundle["provider_version"], "source_ref": bundle["source_ref"],
               "stanzas": len(stanzas), "records": len(ordered), "skipped": dict(sorted(skipped.items())),
               "categories": {c["slug"]: c["metadata"]["useCaseCount"] for c in categories}}

@@ -343,6 +343,12 @@ writes; keep it separate from production indexes and set its retention. A search
   forge readiness, validation evidence, inventory or jobs through the KV REST
   API (D-039; verified live: an analyst gets 403). Workers also check every
   queued job's structure before running it and fail malformed jobs.
+- Collections only the app writes and only administrators need to read directly (`uc_field_profile`,
+  `uc_event_check`, `uc_external_matches`; since 0.12.2, D-084): readable by `admin`, `sc_admin` and `ucm_admin`
+  like `uc_audit`; the API serves their content to the roles with the capability. The assessment collections
+  (`uc_assessments`, `uc_poam`, `uc_assessment_snapshots`) also read for `ucm_compliance_assessor`. Before 0.12.2 these
+  six had no stanza and inherited the app-wide `read : [ * ]`. Measured live: other roles get 404 from the KV REST and
+  the API still answers. A test fails when any collection in `collections.conf` has no stanza.
 - `uc_deployments`: readable by all app users, writable only by `admin` /
   `sc_admin`. The REST handler writes it with the system token after checking
   `ucm_deploy` (or `ucm_run_discovery` for drafts), so approvals cannot be
@@ -461,3 +467,38 @@ remove power or add a refusal.
 | Splunk's parser runs subsearches | A search with a side-effect command (`outputlookup`, `collect`, `sendemail`, `delete`, `script` ...) inside a `[ ... ]` subsearch is no longer sent to `search/parser`. Before, validation and deployment wrote the lookup or sent the mail during the parse, as the signed-in user (found on Splunk 10.4.3). Not an escalation: the job ran with that user's rights. |
 | Still open | A macro whose body holds such a subsearch is expanded by Splunk during the parse and runs. The policy then refuses the use case, but the write has happened. Macros are created by administrators. |
 | Correction | The 0.12.0 note that the item 6 live test "runs nothing" was wrong for subsearches; the test now asserts the refusal. |
+
+## Patch 0.12.2 (D-084)
+
+| Finding | What changed |
+|---|---|
+| Six collections inherited app-wide read | Stanzas in `default.meta` (see Storage ACLs). Confirmed by the external review and fixed; a test covers every collection. |
+| `web.conf` `ucm/*` and the narrow stanzas | Probed live (10.2.9): a GET through Splunk Web to a POST-only path (`ucm/poam/update`) gets Splunk Web's own 405 and never reaches the handler. The narrow `expose` stanzas are enforced. The review's claim that they were redundant was wrong. |
+| External-match reads | `ExternalMatchService` now uses the app's own store (`ctx.records()`), like the other app-written collections. |
+| Reindex | A background job (`uc_sync_state`, key `reindex::current`): `catalog/reindex?background=1` queues, the worker runs, `GET catalog/reindex` reports. Needs `ucm_manage_content`; one job at a time; audited as `content.reindex.queued` and `content.reindex`. |
+| Scheduler reach | `ucm_scheduler` keeps `srchIndexesAllowed = *`, now named in the install checklist and the scheduler card. |
+| ESCU redistribution | The offline bundle carries the Apache-2.0 notice, a change statement and a non-endorsement line (`notices`). |
+| Splunk Security Essentials | The app never reads, stores, bundles or depends on it (D-084); a test fails on any reference in code, configuration or fixtures. |
+
+## Data the app holds (data map)
+
+For a privacy or procurement review. The app has no telemetry and makes no request to any host except the ones below.
+
+| What | Where | Personal data | How long |
+|---|---|---|---|
+| Audit rows (who did what, when, to which object) | `uc_audit`; the same events in `var/log/splunk/sunavigator.log`, which Splunk indexes into `_internal` | Splunk user name | `[retention] audit_days` (365); the log follows the `_internal` retention |
+| Job rows (sync, discovery, readiness, import, reindex) | `uc_sync_state` and the job collections | Name of the user who requested the job | The newest `[retention] job_history` (50) per kind |
+| Selections, validation, control-test and deployment revisions | `uc_selections`, `uc_validation`, `uc_deployments` | Names of the user who selected, requested, approved or enabled | Until deleted; no purge |
+| Assessments, POA&M items, evidence snapshots | `uc_assessments`, `uc_poam`, `uc_assessment_snapshots` | Names of the assessor and the creator of a snapshot; free text typed by the assessor | Until deleted; no purge |
+| External-match decisions | `uc_external_matches` | Name of the user who decided | Until deleted; no purge |
+| Dashboards | `uc_dashboards` | Name of the owner | Until deleted |
+| GitHub token (optional) | Splunk `storage/passwords`, realm `sunavigator` | None (a credential) | Until removed |
+
+What leaves the instance: HTTPS requests to the content provider's host (by default `api.github.com` and
+`raw.githubusercontent.com`; the optional token is sent as an authorization header) to fetch use-case content and
+the schema. The request carries the repository path and the app's user agent, no user name and no record content.
+Nothing else is sent. The app talks to the instance's own splunkd for everything else.
+
+Known gaps: there is no per-user erasure function; removing a person's name from selections, deployments or
+assessments is a manual KV Store operation, and the audit chain is designed to resist edits. Whether that is
+acceptable is for the operator's privacy officer (docs/LEGAL_COMPLIANCE_ANALYSIS.md, L6).

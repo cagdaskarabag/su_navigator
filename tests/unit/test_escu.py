@@ -47,6 +47,23 @@ class PackageTest(unittest.TestCase):
         self.assertNotIn(RETIRED, json.dumps(bundle))
         self.assertTrue(bundle["source_ref"].startswith("local:"))
 
+    def test_bundle_carries_the_licence_notice_the_apache_terms_ask_for(self):
+        bundle, _ = build_bundle(FIXTURE)
+        parse_bundle(bundle)
+        notices = bundle["notices"]
+        self.assertEqual([c["license"] for c in notices["components"]], ["Apache-2.0"])
+        self.assertIn("6.11.1-fixture", notices["components"][0]["component"])
+        self.assertIn("not the files Splunk published", notices["changes"])
+        self.assertIn("not made, sponsored or endorsed by Splunk", notices["not_endorsed"])
+        with open(os.path.join(os.path.dirname(__file__), "..", "..", "sunavigator", "LICENSE"), encoding="utf-8") as handle:
+            self.assertEqual(notices["license_text"], handle.read())
+        self.assertNotIn("Essentials", json.dumps(notices))
+
+    def test_enriched_bundle_names_the_second_source(self):
+        bundle, _ = build_bundle(FIXTURE, extra_ref="sc:abc")
+        self.assertEqual(len(bundle["notices"]["components"]), 2)
+        self.assertIn("splunk/security_content", bundle["notices"]["components"][1]["component"])
+
     def test_output_is_deterministic(self):
         first, _ = build_bundle(FIXTURE)
         second, _ = build_bundle(FIXTURE)

@@ -2355,3 +2355,85 @@ class LiveAssessmentTest(unittest.TestCase):
         status, out = api(self.admin, "POST", "audit/verify")
         self.assertEqual(status, 200, out)
         self.assertTrue(out["ok"], out)
+
+
+@unittest.skipUnless(LIVE, "set UCM_LIVE_SPLUNK=1 to run against a real Splunk instance")
+class LiveCollectionAclTest(unittest.TestCase):
+    """0.12.2: the collections that only the app writes are not readable through the KV Store REST by ordinary roles."""
+
+    ANALYST = "ucm_acl_analyst_" + uuid.uuid4().hex[:6]
+    ASSESSOR = "ucm_acl_assessor_" + uuid.uuid4().hex[:6]
+    VIEWER = "ucm_acl_viewer_" + uuid.uuid4().hex[:6]
+    PW = "T3st!" + uuid.uuid4().hex
+    KV = "/servicesNS/nobody/sunavigator/storage/collections/data/"
+    # Splunk answers 404 for an object the role may not see, 403 where it knows the object and refuses.
+
+    @classmethod
+    def setUpClass(cls):
+        cls.admin = transport()
+        cls.users = {}
+        for name, role in ((cls.ANALYST, "ucm_analyst"), (cls.ASSESSOR, "ucm_compliance_assessor"), (cls.VIEWER, "ucm_viewer")):
+            status, _ = cls.admin.request("POST", "/services/authentication/users",
+                                          form={"name": name, "password": cls.PW, "roles": role})
+            assert status in (200, 201), status
+            cls.users[role] = transport(name, cls.PW)
+
+    @classmethod
+    def tearDownClass(cls):
+        for name in (cls.ANALYST, cls.ASSESSOR, cls.VIEWER):
+            cls.admin.request("DELETE", "/services/authentication/users/" + name)
+
+    def kv_status(self, t, collection):
+        status, _ = t.request("GET", self.KV + collection, {"output_mode": "json", "limit": "1"})
+        return status
+
+    def test_app_written_collections_are_closed_to_ordinary_roles(self):
+        for collection in ("uc_field_profile", "uc_event_check", "uc_external_matches"):
+            self.assertEqual(self.kv_status(self.admin, collection), 200, collection)
+            for role, t in self.users.items():
+                self.assertIn(self.kv_status(t, collection), (403, 404), "%s read by %s" % (collection, role))
+
+    def test_assessment_collections_are_open_to_assessors_only(self):
+        for collection in ("uc_assessments", "uc_poam", "uc_assessment_snapshots"):
+            self.assertEqual(self.kv_status(self.admin, collection), 200, collection)
+            self.assertEqual(self.kv_status(self.users["ucm_compliance_assessor"], collection), 200, collection)
+            for role in ("ucm_viewer", "ucm_analyst"):
+                self.assertIn(self.kv_status(self.users[role], collection), (403, 404), "%s read by %s" % (collection, role))
+
+    def test_the_api_still_serves_what_the_collections_hold(self):
+        status, body = api(self.users["ucm_analyst"], "GET", "external")
+        self.assertEqual(status, 200, body)
+        status, body = api(self.users["ucm_viewer"], "GET", "external")
+        self.assertEqual(status, 403, body)
+        status, body = api(self.users["ucm_compliance_assessor"], "GET", "assessment", {"framework_id": "cmmc-l2"})
+        self.assertEqual(status, 200, body)
+
+
+@unittest.skipUnless(LIVE, "set UCM_LIVE_SPLUNK=1 to run against a real Splunk instance")
+class LiveBackgroundReindexTest(unittest.TestCase):
+    """0.12.2 (#25): Reindex runs in the worker; the request returns at once and a second one is refused while it runs."""
+
+    def test_reindex_runs_in_the_background(self):
+        admin = transport()
+        deadline = time.time() + 120
+        while time.time() < deadline:
+            _, cur = api(admin, "GET", "catalog/reindex")
+            if not cur["job"] or cur["job"]["status"] in ("succeeded", "failed"):
+                break
+            time.sleep(3)
+        started = time.time()
+        status, body = api(admin, "POST", "catalog/reindex", body={}, query={"background": "1"})
+        self.assertEqual(status, 200, body)
+        self.assertLess(time.time() - started, 10, "the request must not wait for the reindex")
+        self.assertIn(body["job"]["status"], ("queued", "running"))
+        status, again = api(admin, "POST", "catalog/reindex", body={}, query={"background": "1"})
+        self.assertEqual(status, 409, again)
+        job = body["job"]
+        deadline = time.time() + 240
+        while time.time() < deadline:
+            _, cur = api(admin, "GET", "catalog/reindex")
+            job = cur["job"]
+            if job["status"] in ("succeeded", "failed"):
+                break
+            time.sleep(5)
+        self.assertEqual(job["status"], "succeeded", job)

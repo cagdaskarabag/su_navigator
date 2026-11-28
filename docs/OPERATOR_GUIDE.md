@@ -1,10 +1,10 @@
-# SUNavigator 0.12.1 — operator guide
+# SUNavigator 0.12.2 — operator guide
 
 **SUNavigator** is a use-case navigator for Splunk Enterprise. It discovers, assesses,
 selects, validates and deploys monitoring use cases.
 
 This is the install, usage and troubleshooting guide for **SUNavigator
-0.12.1**. It is written for a single Splunk Enterprise instance
+0.12.2**. It is written for a single Splunk Enterprise instance
 (search head + indexer on one host), including a local macOS install. Search
 head clusters with a deployer, Splunk Cloud and Splunk Enterprise Security are **not** validated and not planned
 (no lab; D-078).
@@ -25,6 +25,38 @@ Related documents (design, not how-to):
 ---
 
 ## What changed in 0.9.x to 0.12
+
+### 0.12.2
+
+0.12.2 is a patch release (D-084). It adds no migration and one metadata change (below). It closes the confirmed items of
+an external product review and starts the scope work in `docs/STRATEGY_ROADMAP.md`.
+
+- **Three collections are closed to the KV Store REST.** `uc_field_profile`, `uc_event_check` and `uc_external_matches`
+  are written only by the app, but a role that could read the app could read them through
+  `/servicesNS/nobody/sunavigator/storage/collections/data/...`. They now read like `uc_audit`: `admin`, `sc_admin` and
+  `ucm_admin`. The assessment collections (`uc_assessments`, `uc_poam`, `uc_assessment_snapshots`) also read for
+  `ucm_compliance_assessor`. Measured live: a viewer, an analyst and an assessor get 404 from the KV REST for the first
+  three, a viewer gets 404 for the assessment ones, and the app's own API still answers analysts (`GET external`) and
+  assessors. A site that overrides these ACLs in `local.meta` keeps its override. A new test fails when a collection has
+  no ACL stanza.
+- **Reindex runs in the background.** Content administration, Reindex used to hold one request open for the whole
+  rebuild. It now queues a job (`POST catalog/reindex?background=1`), the worker runs it and the page polls
+  (`GET catalog/reindex`). A second Reindex while one is queued or running is refused (409), and a job that has run for
+  more than 30 minutes is shown as failed. The request without `background=1` still runs inline, for scripts (#25).
+- **The external-match store is read with the app's own token**, like the other collections that only the app writes.
+- **The scheduler card names its reach.** When `ucm_scheduler` holds `srchIndexesAllowed = *` (the shipped value) the card
+  says so and tells the administrator to narrow the role to the indexes the deployed use cases read. See "Before you
+  deploy" in §3.5a. Readiness still refuses to call a use case ready when the account cannot read its index.
+- **The ESCU bundle carries its licence.** A bundle built by `tools/ucm_cli.py build-escu-bundle` now has a `notices` block:
+  the Apache-2.0 licence text, the source package and version, the statement that SUNavigator rewrote the records, and
+  that the project is not endorsed by Splunk. The importer ignores it (Apache-2.0 section 4; legal analysis L2a).
+- **App status is Beta** in `app.manifest` (it was Alpha).
+- **Tools.** `tools/usage_census.py` counts audit rows per module (counts only; no names, ids or content) so the
+  maintainers can see which modules are used. The tests now also fail on a new bundled data file without a recorded origin
+  and on any reference to Splunk Security Essentials in code, configuration or fixtures (D-084).
+- **Not reproduced.** Issue #41 (web and API slow during a discovery run): on a single-host 10.2.9 lab the API answered in
+  at most 0.02 s while a discovery job over the internal indexes ran (12 s there). The report concerned a larger
+  instance; the issue stays open until someone with one can measure.
 
 ### 0.12.1
 
@@ -748,7 +780,7 @@ searches have **no script alert actions**. Email and webhook actions exist only 
 an administrator has listed permitted destinations in `[actions]` and the approver has acknowledged
 them (0.9.5, D-072); the default alert mode only writes to Splunk's Triggered Alerts.
 
-**Not in 0.12.1:** PDF export of coverage, a bundled regulation-control
+**Not in 0.12.2:** PDF export of coverage, a bundled regulation-control
 catalogue, SHC validation with a deployer and indexer peers, Splunk Cloud
 vetting submission, and any Enterprise Security output mode (all three dropped for lack of a lab, D-078;
 0.9.1 only reads ES and ESCU state and hands off, §5.2b).
@@ -762,7 +794,7 @@ vetting submission, and any Enterprise Security output mode (all three dropped f
 | Splunk | Enterprise 10.x (validated on 10.2.9 in development; tested by operators on 10.4.3 Darwin arm64). Python 3.9 or 3.13 in Splunk. |
 | KV Store | Must reach `status: ready`. The app stores catalogue, inventory, readiness, selections, deployments and audit in KV collections. |
 | Role | First-time setup needs `admin` (or `sc_admin` on Cloud). |
-| Disk | The 0.12.1 package is a few megabytes. Category 9 of Fenre is about 120 records; the full Fenre corpus is tens of thousands of records. |
+| Disk | The 0.12.2 package is a few megabytes. Category 9 of Fenre is about 120 records; the full Fenre corpus is tens of thousands of records. |
 | Network | Optional. Remote sync needs HTTPS to `api.github.com` and `raw.githubusercontent.com`. Offline import needs none. |
 | Browser | Splunk Web. The app is a set of Simple XML views plus JavaScript under `/en-US/app/sunavigator/`. |
 
@@ -779,7 +811,7 @@ Placeholders used below:
 
 ```bash
 ./tools/package.sh
-# writes dist/sunavigator-0.12.1.tar.gz
+# writes dist/sunavigator-0.12.2.tar.gz
 ```
 
 The tarball has a single top-level folder `sunavigator/`
@@ -797,11 +829,11 @@ then fails in the UI with `500 Internal Server Error` even though splunkd is
 still unpacking. Use the CLI:
 
 ```bash
-$SPLUNK_HOME/bin/splunk install app /path/to/sunavigator-0.12.1.tar.gz \
+$SPLUNK_HOME/bin/splunk install app /path/to/sunavigator-0.12.2.tar.gz \
   -auth "$SPLUNK_USER:$SPLUNK_PASSWORD"
 # first install: omit -update
 # upgrade of an existing copy:
-$SPLUNK_HOME/bin/splunk install app /path/to/sunavigator-0.12.1.tar.gz \
+$SPLUNK_HOME/bin/splunk install app /path/to/sunavigator-0.12.2.tar.gz \
   -update 1 -auth "$SPLUNK_USER:$SPLUNK_PASSWORD"
 
 $SPLUNK_HOME/bin/splunk restart
@@ -857,6 +889,21 @@ You need `status : ready` on **This member**. `starting` for more than a
 couple of minutes means the app cannot read or write its collections; the
 Administration page will show `kvstore/status: unavailable` and
 `Synchronization state: KV get failed`. See §9.2.
+
+### 3.5a Before you deploy: the scheduler account
+
+Deployed use cases run as one dedicated account, `ucm_scheduler` (§7). The shipped role gives it
+`srchIndexesAllowed = *` so that a first deployment can read whatever the use case needs; it is an
+explicit choice, not an oversight (D-084). It means every saved search the app deploys can read every index on the
+instance. Before the first deployment:
+
+1. Create the account and assign `ucm_scheduler` to it, and set `[deployment] scheduled_owner` (§7).
+2. In **Settings, Roles, ucm_scheduler**, replace `*` with the indexes the use cases you will deploy read. Readiness
+   shows, per use case, which indexes the account cannot read.
+3. Open Administration: the scheduler card says "can search every index" while `*` is still there.
+
+Search filters (`srchFilter`) on the role narrow the events further. A site that wants no index narrowing at all can
+keep `*`; the card then keeps the note so the choice stays visible.
 
 ### 3.6 Optional GitHub token
 
@@ -1121,7 +1168,7 @@ Use the release package from the Splunk ES Content Update release (the
 a login for anonymous downloads, so take the package from the release asset.
 
 ```bash
-python3 tools/ucm_cli.py build-escu-bundle \
+python3 tools/tools/ucm_cli.py build-escu-bundle \
   --package /path/to/DA-ESS-ContentUpdate-latest.tar.gz --output /tmp/escu_bundle.json
 curl -k -u "$SPLUNK_USER:$SPLUNK_PASSWORD" -H "Content-Type: application/json" \
   --data-binary @/tmp/escu_bundle.json https://127.0.0.1:8089/services/ucm/import
@@ -1929,7 +1976,7 @@ app. Do the steps in this order:
    $SPLUNK_HOME/bin/splunk restart
    ```
 
-4. **Install SUNavigator 0.12.1** as in §3.2. The first install omits
+4. **Install SUNavigator 0.12.2** as in §3.2. The first install omits
    `-update`, because `sunavigator` is a new app ID.
 5. **Re-create the GitHub token** if you use one (§3.6). It must be stored in
    realm `sunavigator`. The 0.7.0 token in realm `splunk_use_case_manager` is
@@ -2310,7 +2357,7 @@ Full table: [ARCHITECTURE.md §6](ARCHITECTURE.md).
 
 ---
 
-## 12. Known limitations (0.12.1)
+## 12. Known limitations (0.12.2)
 
 Each item says where to read more and ends with its tracking: an issue number on GitHub, a draft
 (`N-nn`) in `docs/ISSUES_PENDING.md` that has not been filed yet, or "no issue" for a limit that is
@@ -2348,7 +2395,8 @@ by design.
 - Twin links compare the primary SPL after whitespace is normalised, so a search rewritten
   with the same meaning is not linked, and a link does not prove the records are otherwise
   equal (D-066). Wave, analytic-story and data-source filters need Reindex after an upgrade
-  from 0.8.x; Reindex is synchronous (about 5 ms per use case) and blocks one REST call
+  from 0.8.x; Reindex takes about 5 ms per use case; since 0.12.2 the page runs it in the worker
+  and polls, and `POST catalog/reindex` without `background=1` still blocks one REST call
   (#25). Twin comparison is by design (no issue).
 - Free-text search is a substring match over a precomputed field (no ranking, only
   the first 1,500 characters of the description). Coverage is computed on read (about
@@ -2451,7 +2499,7 @@ by design.
 
 ## 13. Quick start checklist
 
-1. `splunk install app sunavigator-0.12.1.tar.gz` then `splunk restart`.
+1. `splunk install app sunavigator-0.12.2.tar.gz` then `splunk restart`.
 2. `splunk show kvstore-status` → `ready` (macOS: §9.2 if stuck on `starting`).
 3. Open **SUNavigator → Administration**; all platform pills green.
 4. **Check provider for categories** → tick **9** → **Synchronize**, **or**

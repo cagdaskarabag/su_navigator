@@ -228,21 +228,49 @@ function ucmViewMain($, ucm) {
 
     function reindexSection() {
         var message = el("div", {});
+        function pollReindex(initial) {
+            ucm.get("catalog/reindex").done(function (res) {
+                var job = res && res.job;
+                if (job && (job.status === "queued" || job.status === "running")) {
+                    ucm.clear(message).appendChild(el("div", { "class": "ucm-loading", text: job.status === "queued"
+                        ? "Reindex queued. The background worker starts it within about a minute." : "Reindexing…" }));
+                    setTimeout(function () { pollReindex(false); }, 5000);
+                    button.disabled = true;
+                    return;
+                }
+                if (initial) { return; }
+                button.disabled = false;
+                if (job && job.status === "succeeded") {
+                    var r = job.result || {};
+                    ucm.clear(message).appendChild(ucm.stateBox("info", "Reindex finished.", "Re-derived " + (r.reindexed || 0) +
+                        " summaries, skipped " + (r.skipped || 0) + "."));
+                    loadHint();
+                } else if (job && job.status === "failed") {
+                    ucm.clear(message).appendChild(ucm.stateBox("error", "Reindex failed.", job.error || "unknown error"));
+                } else {
+                    ucm.clear(message);
+                }
+            }).fail(function (err) {
+                if (initial) { return; }
+                button.disabled = false;
+                ucm.clear(message).appendChild(ucm.stateBox("error", "Reindex status unavailable.", err.message));
+            });
+        }
         var button = el("button", { "class": "btn", type: "button", text: "Reindex catalogue summaries", onclick: function () {
             ucm.confirmAction("Reindex the catalogue?",
-                "Every summary is re-derived from the stored records, without any download. It takes about 5 seconds per 1,000 use cases. " +
+                "Every summary is re-derived from the stored records, without any download. It runs in the background worker and takes about 5 seconds per 1,000 use cases. " +
                 "Selections, readiness and deployments are not changed.", "Reindex", function () {
                     button.disabled = true;
-                    ucm.clear(message).appendChild(el("div", { "class": "ucm-loading", text: "Reindexing…" }));
-                    ucm.post("catalog/reindex", {}).done(function (res) {
-                        ucm.clear(message).appendChild(ucm.stateBox("info", "Reindex finished.", "Re-derived " + (res.reindexed || 0) +
-                            " summaries, skipped " + (res.skipped || 0) + "."));
-                        loadHint();
+                    ucm.clear(message).appendChild(el("div", { "class": "ucm-loading", text: "Reindex queued…" }));
+                    ucm.post("catalog/reindex", {}, { background: "1" }).done(function () {
+                        pollReindex(false);
                     }).fail(function (err) {
-                        ucm.clear(message).appendChild(ucm.stateBox("error", "Reindex failed.", err.message));
-                    }).always(function () { button.disabled = false; });
+                        ucm.clear(message).appendChild(ucm.stateBox("error", "Reindex could not start.", err.message));
+                        button.disabled = false;
+                    });
                 });
         } });
+        pollReindex(true);
         return el("div", { "class": "ucm-section" }, el("h3", { text: "Catalogue summaries" }), reindexBox,
             el("div", { "class": "ucm-sub", text: "Reindex re-derives the searchable summaries and the catalogue facets from the stored records. " +
                 "Run it after an upgrade that adds filters. It needs the ucm_content_manager role." }),

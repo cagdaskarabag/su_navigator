@@ -68,3 +68,25 @@ access = read : [ * ], write : [ admin, sc_admin ]
 # the system token after its capability check (D-054).
 [collections/uc_control_fixtures]
 access = read : [ * ], write : [ admin, sc_admin ]
+
+# Per-environment evidence, assessments and match proposals (0.12.2). The REST handler reads and writes
+# them with the system token after its own capability check, so no role needs the KV Store REST API to
+# reach them. Without a stanza they would inherit read : [ * ] from [] and any signed-in user could read
+# them directly (assessment and POA&M text, event values, names of saved searches in other apps).
+[collections/uc_field_profile]
+access = read : [ admin, sc_admin, ucm_admin ], write : [ admin, sc_admin ]
+
+[collections/uc_event_check]
+access = read : [ admin, sc_admin, ucm_admin ], write : [ admin, sc_admin ]
+
+[collections/uc_external_matches]
+access = read : [ admin, sc_admin, ucm_admin ], write : [ admin, sc_admin ]
+
+[collections/uc_assessments]
+access = read : [ admin, sc_admin, ucm_admin, ucm_compliance_assessor ], write : [ admin, sc_admin ]
+
+[collections/uc_poam]
+access = read : [ admin, sc_admin, ucm_admin, ucm_compliance_assessor ], write : [ admin, sc_admin ]
+
+[collections/uc_assessment_snapshots]
+access = read : [ admin, sc_admin, ucm_admin, ucm_compliance_assessor ], write : [ admin, sc_admin ]

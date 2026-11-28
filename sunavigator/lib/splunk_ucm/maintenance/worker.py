@@ -5,6 +5,7 @@ from typing import Any, Callable, Dict, Optional
 
 from ..audit import AuditService
 from ..config import AppConfig
+from ..content.reindex_job import ReindexJobs
 from ..storage import collections as C
 from ..storage.kvstore import DocumentStore
 from ..util import epoch_now, utc_now
@@ -23,6 +24,7 @@ class MaintenanceWorker:
         self.migrations = MigrationRunner(store, lambda: self._iso())
         self.retention = RetentionService(store, settings_from_config(config), epoch)
         self.audit = AuditService(store)
+        self.reindex_jobs = ReindexJobs(store, now)
 
     def _iso(self) -> str:
         return self.now().strftime("%Y-%m-%dT%H:%M:%SZ")
@@ -46,6 +48,9 @@ class MaintenanceWorker:
             for r in results:
                 self.audit.record("system", "app.migration", "app", r["id"], details=r["details"])
             return {"action": "ran", "job": "migrations", "applied": [r["id"] for r in results]}
+        job = self.reindex_jobs.run_queued(self.audit)
+        if job is not None:
+            return {"action": "ran", "job": "reindex", "status": job["status"], "result": job.get("result")}
         if not self.retention_due():
             return {"action": "idle"}
         totals = self.retention.purge()

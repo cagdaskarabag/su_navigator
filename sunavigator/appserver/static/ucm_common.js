@@ -841,6 +841,10 @@ define(["jquery", "splunk.util"], function ($, splunkUtil) {
             card.appendChild(el("div", { "class": "ucm-sub", text: "Deployed searches that read _internal or _audit would run as this account, return no events and still report success. " +
                 "A role needs _* (or the index name) in srchIndexesAllowed; * does not include internal indexes." }));
         }
+        if (s.status === "ok" && s.all_indexes_access === true) {
+            card.appendChild(el("div", { "class": "ucm-sub", text: "This account can search every index that is not internal (srchIndexesAllowed contains *), which is the default of the ucm_scheduler role. " +
+                "Deployed searches run with that reach. Narrow the role to the indexes your approved use cases read if you want least privilege; readiness then shows what a search cannot see." }));
+        }
         if (s.has_filter) {
             card.appendChild(el("div", { "class": "ucm-sub", text: "A search filter (srchFilter) applies to this account and can hide events even where an index is searchable." }));
         }

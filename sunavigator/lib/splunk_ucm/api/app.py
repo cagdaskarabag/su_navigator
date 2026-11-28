@@ -21,6 +21,7 @@ from ..content.importer import BundleImportService
 from ..content.fenre.provider import check_ref_name, parse_allowed_refs
 from ..content.registry import remote_provider
 from ..content.reindex import ReindexService
+from ..content.reindex_job import ReindexJobs
 from ..content.sync import SyncService, SyncSettings, new_job
 from ..discovery.external import ExternalMatchService
 from ..discovery.health import environment_health
@@ -318,7 +319,7 @@ def get_usecase(ctx: Context, req: Request) -> Response:
 def _external_for(ctx: Context, use_case_id: str) -> Dict[str, Any]:
     """Accepted and proposed matches for one use case; search names only for people who may manage discovery."""
     key = key_from_id(use_case_id)
-    service = ExternalMatchService(ctx.store, ctx.audit)
+    service = ExternalMatchService(ctx.records(), ctx.audit)
     accepted = service.for_content(key) if key else []
     out: Dict[str, Any] = {"enabled": sum(1 for m in accepted if m["enabled"]), "accepted": len(accepted),
                            "proposed": service.proposals_for(key) if key else 0, "matches": None}
@@ -329,14 +330,14 @@ def _external_for(ctx: Context, use_case_id: str) -> Dict[str, Any]:
 
 def get_external(ctx: Context, req: Request) -> Response:
     ctx.require(CAP_RUN_DISCOVERY)
-    return Response(200, ExternalMatchService(ctx.store, ctx.audit).list(
+    return Response(200, ExternalMatchService(ctx.records(), ctx.audit).list(
         req.arg("state"), _int(req.arg("offset"), 0, "offset"), _int(req.arg("count"), 50, "count")))
 
 
 def post_external(ctx: Context, req: Request) -> Response:
     ctx.require(CAP_RUN_DISCOVERY)
     body = req.json()
-    row = ExternalMatchService(ctx.store, ctx.audit).decide(
+    row = ExternalMatchService(ctx.records(), ctx.audit).decide(
         ctx.user, str(body.get("id") or ""), str(body.get("decision") or ""), str(body.get("content_key") or ""))
     return Response(200, {"match": row})
 
@@ -416,9 +417,18 @@ def post_import(ctx: Context, req: Request) -> Response:
 
 def post_reindex(ctx: Context, req: Request) -> Response:
     ctx.require(CAP_MANAGE_CONTENT)
+    if req.arg("background") == "1":
+        job = ReindexJobs(ctx.records()).enqueue(ctx.user, req.arg("category") or "")
+        ctx.audit.record(ctx.user, "content.reindex.queued", "catalog", req.arg("category") or "*")
+        return Response(200, {"job": job})
     result = ReindexService(ctx.store).reindex(req.arg("category") or None)
     ctx.audit.record(ctx.user, "content.reindex", "catalog", req.arg("category") or "*", details=result)
     return Response(200, result)
+
+
+def get_reindex(ctx: Context, req: Request) -> Response:
+    ctx.require(CAP_MANAGE_CONTENT)
+    return Response(200, {"job": ReindexJobs(ctx.records()).current()})
 
 
 def get_platform(ctx: Context, req: Request) -> Response:
@@ -766,7 +776,7 @@ def _levels(ctx: Context, req: Request) -> Tuple[Dict[str, Dict[str, Any]], Opti
     domain = req.arg("domain")
     if domain and domain not in DASHBOARD_DOMAINS:
         raise ValidationError("invalid domain")
-    elsewhere = ExternalMatchService(ctx.store, ctx.audit).elsewhere()
+    elsewhere = ExternalMatchService(ctx.records(), ctx.audit).elsewhere()
     return CoverageService(ctx.store).use_case_levels(operational, domain, elsewhere), health
 
 
@@ -1024,6 +1034,7 @@ def build_router() -> Router:
     router.add("GET", "provider/manifest", get_manifest)
     router.add("POST", "import", post_import)
     router.add("POST", "catalog/reindex", post_reindex)
+    router.add("GET", "catalog/reindex", get_reindex)
     router.add("GET", "platform", get_platform)
     router.add("GET", "audit", get_audit)
     router.add("POST", "audit/verify", post_audit_verify)

@@ -1,13 +1,13 @@
 # SUNavigator
 
-> **Beta.** SUNavigator 0.12.1 is released for public testing. It is validated on Splunk Enterprise 10.2.9 and was walked through on 10.4.3 (see the [User Guide](docs/USER_GUIDE.md)). Expect rough edges: the known issues are listed in [FEATURE_STATUS.md](docs/FEATURE_STATUS.md), the open work in [ROADMAP.md](docs/ROADMAP.md). Send feedback with the [feedback form](https://github.com/cagdaskarabag/su_navigator/issues/new?template=feedback.yml).
+> **Beta.** SUNavigator 0.12.2 is released for public testing. It is validated on Splunk Enterprise 10.2.9 and was walked through on 10.4.3 (see the [User Guide](docs/USER_GUIDE.md)). Expect rough edges: the known issues are listed in [FEATURE_STATUS.md](docs/FEATURE_STATUS.md), the open work in [ROADMAP.md](docs/ROADMAP.md). Send feedback with the [feedback form](https://github.com/cagdaskarabag/su_navigator/issues/new?template=feedback.yml).
 >
 > SUNavigator is an aid for your own review. Its readiness, coverage, assessment and POA&M results are not an audit and not a CMMC status determination. See the [Trademark notice](#trademark-notice) and [Licence](#licence-and-third-party-attributions).
 
 [![Version](https://img.shields.io/badge/version-0.12.x-blue.svg)](docs/OPERATOR_GUIDE.md#what-changed-in-09x-to-012)
 [![Splunk Compatibility](https://img.shields.io/badge/splunk-Enterprise%2010.x%20%7C%20Cloud%2C%20SHC%2C%20ES%3A%20not%20validated-orange.svg)](docs/OPERATOR_GUIDE.md#2-requirements)
 [![Python Support](https://img.shields.io/badge/python-3.9%20%7C%203.13-brightgreen.svg)](docs/DECISIONS.md#d-005-stdlib-only-python-compatible-with-39313)
-[![Tests](https://img.shields.io/badge/unit%20tests-1136%20passed-success.svg)](tests/)
+[![Tests](https://img.shields.io/badge/unit%20tests-1156%20passed-success.svg)](tests/)
 [![AppInspect](https://img.shields.io/badge/Splunk%20AppInspect-Clean-brightgreen.svg)](docs/DECISIONS.md#d-019-packaging-constraints-from-appinspect)
 
 **SUNavigator** is a native Splunk application for Splunk Enterprise (the package passes AppInspect, but nothing runs on Splunk Cloud, on a search head cluster with a deployer, or with Splunk Enterprise Security installed; see [Support statement](#support-statement)) that bridges the gap between external security detection catalogues and live production environments. It empowers SOC and detection engineering teams to **discover**, **assess**, **backlog**, **validate**, and **safely deploy** monitoring use cases with built-in four-eyes governance.
@@ -132,7 +132,7 @@ Package the production `.tar.gz` bundle from this repository:
 git clone https://github.com/cagdaskarabag/su_navigator.git
 cd su_navigator
 ./tools/package.sh
-# Output: dist/sunavigator-0.12.1.tar.gz
+# Output: dist/sunavigator-0.12.2.tar.gz
 ```
 
 ### CLI Installation (Recommended)
@@ -140,7 +140,7 @@ cd su_navigator
 Splunk Web's UI upload times out on packages over standard browser HTTP limits. Install via the Splunk CLI:
 
 ```bash
-$SPLUNK_HOME/bin/splunk install app dist/sunavigator-0.12.1.tar.gz \
+$SPLUNK_HOME/bin/splunk install app dist/sunavigator-0.12.2.tar.gz \
   -auth "$SPLUNK_USER:$SPLUNK_PASSWORD"
 
 $SPLUNK_HOME/bin/splunk restart
@@ -280,7 +280,7 @@ su_navigator/
 │   └── appserver/static/         # Simple XML JS modules and styles
 ├── tools/                        # Development, packaging, and bundle CLI tools
 ├── tests/                        # Automated test suites
-│   ├── unit/                     # 1136 mocked unit tests (runs without Splunk)
+│   ├── unit/                     # 1156 mocked unit tests (runs without Splunk)
 │   ├── js/                       # Node tests of the browser modules (run by the unit suite when Node is present)
 │   ├── fixtures/readiness/       # Readiness regression corpus and its baseline
 │   └── live/                     # Integration tests against live Splunk instances

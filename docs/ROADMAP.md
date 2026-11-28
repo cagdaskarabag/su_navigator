@@ -40,7 +40,7 @@ The defects of the external code review and the small fixes #43 to #45 are fixed
 
 | Item | Issue | Notes |
 |---|---|---|
-| Web and API unresponsive during a discovery run on 10.4.3 | [#41](https://github.com/cagdaskarabag/su_navigator/issues/41) | Not reproduced. Needs a report with logs. |
+| Web and API unresponsive during a discovery run on 10.4.3 | [#41](https://github.com/cagdaskarabag/su_navigator/issues/41) | Not reproduced (0.12.2: API 0.02 s at most during a 12 s discovery on a single-host 10.2.9). Needs a report with logs from a large instance. |
 | Wrong or misleading wording and layout (provider message, audit-chain refusal, enable note, kvstore "unknown") | [#34](https://github.com/cagdaskarabag/su_navigator/issues/34), [#35](https://github.com/cagdaskarabag/su_navigator/issues/35), [#38](https://github.com/cagdaskarabag/su_navigator/issues/38), [#37](https://github.com/cagdaskarabag/su_navigator/issues/37) | Cosmetic. |
 
 ## Security
@@ -58,7 +58,7 @@ The defects of the external code review and the small fixes #43 to #45 are fixed
 
 ## Scale and reliability
 
-- Background Reindex ([#25](https://github.com/cagdaskarabag/su_navigator/issues/25)). Reindex is synchronous; it works on the lab but is fragile behind proxies and with large catalogues.
+- Background Reindex ([#25](https://github.com/cagdaskarabag/su_navigator/issues/25)). Done in 0.12.2: the page queues a job, the worker runs it, the page polls. Close the issue after your own check.
 - Counts above the KV bound ([#24](https://github.com/cagdaskarabag/su_navigator/issues/24)).
 
 ## Coverage and validation
